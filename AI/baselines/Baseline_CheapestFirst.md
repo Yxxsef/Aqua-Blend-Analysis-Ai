@@ -72,7 +72,7 @@ Demand supplied: 500.0 / 500 ML required → feasible, 0 ML unmet.
 
 Comparison with equal-blend baseline (Task 1): cheapest-first totals $195,200 AUD vs. $199,500 AUD for equal-blend on the same configuration, a $4,300 saving, since cheapest-first fully exhausts the two lowest-cost sources before touching the most expensive one.
 
-> Note on example values: as in Task 1, `capacity_ML` and `cost_per_ML` are illustrative placeholders, not the confirmed official toy-model configuration. Task 5 will re-run this rule against the official config once available.
+> Note on example values: as in the equal-blend baseline, capacity_ML and cost_per_ML are illustrative placeholders, not the confirmed official toy-model configuration. This rule will be re-run against the official config once it becomes available.
 
 ## 4. Checklist
 
