@@ -60,8 +60,6 @@ The heuristic respects the following constraints:
 
 ### Demand Requirement
 
-Total water demand:
-
 ```
 Demand = 100 ML
 ```
@@ -138,8 +136,6 @@ Reason: Available water supply is insufficient to satisfy total demand.
 ```
 
 Example:
-
-If demand is 200 ML but total available supply is only 150 ML:
 
 ```
 Demand = 200 ML
