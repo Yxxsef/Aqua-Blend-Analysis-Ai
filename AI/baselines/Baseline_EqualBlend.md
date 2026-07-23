@@ -67,7 +67,7 @@ Final result:
 
 Demand supplied: 500.0 / 500 ML required → feasible, 0 ML unmet.
 
-> Note on example values: `capacity_ML` and `cost_per_ML` above are illustrative placeholders consistent with the toy model's documented scope (3 named Melbourne Water reservoirs, reservoirs treated as lowest-cost tier). They are not the confirmed official toy-model configuration values. Task 5 (hand-validation against the official config) is where these get replaced with the real confirmed figures once available.
+> Note on example values: capacity_ML and cost_per_ML above are illustrative placeholders consistent with the toy model's documented scope (3 named Melbourne Water reservoirs, reservoirs treated as lowest-cost tier). They are not the confirmed official toy-model configuration values. These will be replaced with the real confirmed figures once the official config becomes available.
 
 ## 4. Checklist
 
