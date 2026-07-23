@@ -1,0 +1,12 @@
+{
+  "demand_zones": [
+    {
+      "zone_id": "toy_demand_zone_1",
+      "required_volume_ML": 65
+    }
+  ],
+  "time_basis": "ML/day",
+  "data_flags": {
+    "demand_zones[0].required_volume_ML": "Estimated. Derived from real ABS population and Melbourne Water residential-use figures (~888 ML/day, residential-only), then scaled down for toy-model tractability. See Demand_Research.md for full methodology, sources, and limitations."
+  }
+}
