@@ -1,0 +1,55 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+% Document template
+% Requires only standard packages (TeX Live base + recommended).
+% ------------------------------------------------------------------
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[square,numbers,sort]{natbib}
+\definecolor{citecol}{RGB}{0,90,160}
+\usepackage[colorlinks=true,urlcolor=blue!60!black,linkcolor=black,citecolor=citecol]{hyperref}
+
+% In-text citations rendered as bold coloured [n] (brackets included).
+\NewCommandCopy{\origcitep}{\citep}
+\NewCommandCopy{\origcitet}{\citet}
+\RenewDocumentCommand{\citep}{oom}{{\bfseries\color{citecol}%
+  \IfNoValueTF{#1}{\origcitep{#3}}{\IfNoValueTF{#2}{\origcitep[#1]{#3}}{\origcitep[#1][#2]{#3}}}}}
+\RenewDocumentCommand{\citet}{oom}{{\bfseries\color{citecol}%
+  \IfNoValueTF{#1}{\origcitet{#3}}{\IfNoValueTF{#2}{\origcitet[#1]{#3}}{\origcitet[#1][#2]{#3}}}}}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\title{\textbf{Document Title}}
+\author{Bao Minh Tran (s224236373) \\ Bridge Lead of Optimization and Analysis \& AI}
+\date{Draft v0.1 \\ \today}
+
+\begin{document}
+\maketitle
+
+% Optional preface / note to reader.
+
+\section{Executive summary}
+
+% Summary text goes here.
+
+\begin{itemize}
+    \item First item
+    \item Second item
+    \item Third item
+\end{itemize}
+
+
+\newpage
+\label{references}
+\bibliographystyle{plain}
+\bibliography{literature}
+
+\end{document}
