@@ -1,0 +1,67 @@
+% ==================================================================
+%  CLUSTERING METHOD TEMPLATE --- copy me, do not edit in place.
+%
+%    cp sections/clustering_methods/00-template.tex \
+%       sections/clustering_methods/<family>/NN-<name>.tex
+%
+%  Then: replace <NAME>, replace the label suffix `template' with the
+%  method's short name, and add one \input line for the new file under
+%  the matching family subsection in cluster_overview.tex.
+%
+%  This file is NOT included in the build.
+%
+%  Levels: a method is a \subsubsection sitting under its family
+%  subsection in cluster_overview.tex, so the parts below are
+%  \paragraph --- the article class's fourth level (there is no
+%  \subsubsubsection).  Keep their order unchanged in every copy: the
+%  comparison section (Section~\ref{sec:comparison}) relies on every
+%  method reporting the same things in the same order.
+% ==================================================================
+\subsubsection{<NAME>}
+\label{sec:tech:template}
+
+\paragraph{Overview}
+\label{sec:tech:template:overview}
+\placeholder{What the algorithm does, in one paragraph, and the family
+it belongs to (see Section~\ref{sec:background:families}).}
+
+\paragraph{Assumptions and applicability}
+\label{sec:tech:template:assumptions}
+\placeholder{What the algorithm assumes about cluster shape, density,
+scale and noise; the conditions under which it is a sensible choice
+for the data described in Section~\ref{sec:data}.}
+
+\paragraph{Formulation}
+\label{sec:tech:template:formulation}
+\placeholder{Objective function and update rule, using the symbols
+declared in the notation table. Cite the original source.}
+
+\paragraph{Hyperparameters and tuning}
+\label{sec:tech:template:hyperparameters}
+\placeholder{Each hyperparameter, the range searched, and the value
+selected --- with the reason.}
+
+\paragraph{Complexity}
+\label{sec:tech:template:complexity}
+\placeholder{Time and space complexity, and what that means at
+\projectname{} data volumes.}
+
+\paragraph{Application to \projectname{} data}
+\label{sec:tech:template:application}
+\placeholder{Implementation, any deviations from the shared
+preprocessing pipeline, and why they were necessary.}
+
+\paragraph{Results}
+\label{sec:tech:template:results}
+\placeholder{Metrics from Section~\ref{sec:methodology:metrics},
+cluster profiles, and supporting figures.}
+
+\paragraph{Limitations}
+\label{sec:tech:template:limitations}
+\placeholder{Where this method failed or would be expected to fail
+on this data.}
+
+\paragraph{Summary}
+\label{sec:tech:template:summary}
+\placeholder{Two or three sentences: the verdict on this method,
+carried into the comparison section.}
