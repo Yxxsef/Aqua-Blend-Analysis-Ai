@@ -35,9 +35,9 @@ class BaseGraphClusterer(PrecomputedMixin, BaseClusterer, ABC):
 
     Fitted attributes
     -----------------
-    affinity_matrix_ : ndarray of shape (n, n)
+    affinity_matrix_ : ndarray of shape (m, m)
         The graph actually used.
-    embedding_ : ndarray of shape (n, n_components)
+    embedding_ : ndarray of shape (m, n_components)
         Spectral embedding, where the method computes one.
     """
 

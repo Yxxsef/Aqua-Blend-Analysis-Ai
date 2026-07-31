@@ -19,11 +19,11 @@ class BaseLinearReducer(BaseDimReducer, ABC):
 
     Fitted attributes
     -----------------
-    components_ : ndarray of shape (n_components, d)
+    components_ : ndarray of shape (n_components, n)
         The learned directions, in terms of the input features. The basis
         of any interpretation of the reduced space, so it is required
         rather than optional.
-    mean_ : ndarray of shape (d,)
+    mean_ : ndarray of shape (n,)
         Centring applied before projection, needed to invert it.
     explained_variance_ratio_ : ndarray of shape (n_components,)
         Share of variance per component, where the technique defines it.

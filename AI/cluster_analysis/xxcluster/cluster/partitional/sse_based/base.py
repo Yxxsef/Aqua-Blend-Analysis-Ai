@@ -36,7 +36,7 @@ class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
 
     Fitted attributes
     -----------------
-    cluster_centers_ : ndarray of shape (|C|, d)
+    cluster_centers_ : ndarray of shape (|C|, n)
         Prototypes in the feature space, or the indices of the chosen
         observations for medoid methods.
     inertia_ : float
@@ -72,7 +72,7 @@ class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
         raise NotImplementedError
 
     def transform(self, X: MatrixLike) -> ArrayLike:
-        """Return distances to each prototype, shape (n, |C|).
+        """Return distances to each prototype, shape (m, |C|).
 
         The prototype-space representation, useful as features for a
         downstream model and for the cluster profiles of Sect. 4.4.

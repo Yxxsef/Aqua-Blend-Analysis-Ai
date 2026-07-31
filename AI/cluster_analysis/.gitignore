@@ -13,7 +13,6 @@
 *.out
 *.synctex.gz
 *.toc
-literature.bib
 
 # Python / Jupyter
 __pycache__/
@@ -21,3 +20,4 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 venv/
+build_docx.py

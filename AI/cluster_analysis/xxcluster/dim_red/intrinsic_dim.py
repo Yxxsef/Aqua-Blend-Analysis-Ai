@@ -30,7 +30,7 @@ class BaseIntrinsicDimEstimator(BaseComponent, ABC):
     -----------------
     dimension_ : float
         Global estimate, not necessarily an integer.
-    local_dimension_ : ndarray of shape (n,), optional
+    local_dimension_ : ndarray of shape (m,), optional
         Per-observation estimate, where the method produces one. Worth
         having: a dataset whose local estimates vary substantially is not
         one manifold, and a single global figure would hide that.

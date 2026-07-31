@@ -79,7 +79,7 @@ class StabilityAnalysis(BaseComponent):
         not stability.
     agreements_ : ndarray
         The pairwise agreements themselves.
-    consensus_labels_ : ndarray of shape (n,), optional
+    consensus_labels_ : ndarray of shape (m,), optional
         Partition obtained by combining the repeats, where the analysis
         produces one. Often a better final answer than any single run.
     """

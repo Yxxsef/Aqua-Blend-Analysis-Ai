@@ -88,7 +88,7 @@ class BaseComponent(BaseEstimator, ABC):
         Parameters
         ----------
         X
-            Data of shape (n, d), or an (n, n) dissimilarity matrix where
+            Data of shape (m, n), or an (m, m) dissimilarity matrix where
             the component declares `supports_precomputed`.
         y
             Ignored by unsupervised components; present so that the
@@ -157,7 +157,7 @@ class BaseDimReducer(BaseTransformer, ABC):
 
     Fitted attributes
     -----------------
-    embedding_ : ndarray of shape (n, n_components)
+    embedding_ : ndarray of shape (m, n_components)
         Representation of the training data.
     n_components_ : int
         Number of components actually retained.
@@ -195,7 +195,7 @@ class BaseClusterer(BaseComponent, ClusterMixin, ABC):
 
     Fitted attributes
     -----------------
-    labels_ : ndarray of shape (n,)
+    labels_ : ndarray of shape (m,)
         Cluster index per observation; -1 marks noise.
     n_clusters_ : int
         Number of clusters found, excluding the noise cluster. Distinct
@@ -231,7 +231,7 @@ class BaseOutlierDetector(BaseComponent, OutlierMixin, ABC):
 
     Fitted attributes
     -----------------
-    labels_ : ndarray of shape (n,)
+    labels_ : ndarray of shape (m,)
         Inlier/outlier flag per training observation.
     """
 

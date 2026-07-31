@@ -40,7 +40,7 @@ class BaseManifoldReducer(PrecomputedMixin, BaseDimReducer, ABC):
 
     Fitted attributes
     -----------------
-    embedding_ : ndarray of shape (n, n_components)
+    embedding_ : ndarray of shape (m, n_components)
         Coordinates of the fitted sample; the primary output.
     stress_ : float
         Discrepancy between input and embedding structure, under whatever

@@ -57,7 +57,7 @@ class SoftAssignmentMixin(ABC):
 
     Fitted attributes
     -----------------
-    memberships_ : ndarray of shape (n, |C|)
+    memberships_ : ndarray of shape (m, |C|)
     """
 
     memberships_: Memberships
@@ -81,9 +81,9 @@ class HierarchyMixin(ABC):
 
     Fitted attributes
     -----------------
-    linkage_ : ndarray of shape (n - 1, 4)
+    linkage_ : ndarray of shape (m - 1, 4)
         SciPy-format linkage, so existing dendrogram tooling applies.
-    children_ : ndarray of shape (n - 1, 2)
+    children_ : ndarray of shape (m - 1, 2)
         Merge (or split) tree, in scikit-learn's form.
     """
 

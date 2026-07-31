@@ -14,24 +14,27 @@ from typing import Any, Callable, Mapping, Sequence, TypeAlias, Union
 import numpy as np
 
 # --- Data -----------------------------------------------------------------
-# Anything convertible to a 2-D float array of shape (n_samples, n_features).
-# `n` and `d` follow the notation table: n observations, d features.
+# Anything convertible to a 2-D float array of shape (m, n).
+# Symbols follow the notation table: m observations, n features. Note that
+# scikit-learn calls the same axes (n_samples, n_features), so its parameter
+# and attribute names -- `n_samples`, `n_features_in_` -- keep that spelling
+# and are not renamed here.
 MatrixLike: TypeAlias = Any
 ArrayLike: TypeAlias = Any
 
-#: Square (n, n) matrix of pairwise dissimilarities, d(x_i, x_j).
+#: Square (m, m) matrix of pairwise dissimilarities, d(x_i, x_j).
 DissimilarityMatrix: TypeAlias = np.ndarray
 
-#: Crisp cluster assignment, shape (n,), dtype int. Noise is -1 by convention.
+#: Crisp cluster assignment, shape (m,), dtype int. Noise is -1 by convention.
 Labels: TypeAlias = np.ndarray
 
-#: Soft assignment, shape (n, |C|), rows summing to 1 for probabilistic models.
+#: Soft assignment, shape (m, |C|), rows summing to 1 for probabilistic models.
 Memberships: TypeAlias = np.ndarray
 
-#: Low-dimensional representation, shape (n, n_components).
+#: Low-dimensional representation, shape (m, n_components).
 Embedding: TypeAlias = np.ndarray
 
-#: SciPy-format linkage matrix, shape (n - 1, 4).
+#: SciPy-format linkage matrix, shape (m - 1, 4).
 LinkageMatrix: TypeAlias = np.ndarray
 
 # --- Parameters -----------------------------------------------------------

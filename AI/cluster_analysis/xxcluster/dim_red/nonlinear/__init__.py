@@ -5,7 +5,7 @@ Carried over from the original `nonlinear_dr.py`: implement nonlinear
 dimensionality reduction techniques, e.g. t-SNE, UMAP.
 
 These rest on the manifold hypothesis of Sect. 6.2 -- that the data lie on
-or near a low-dimensional manifold embedded in the d-dimensional feature
+or near a low-dimensional manifold embedded in the n-dimensional feature
 space -- and try to recover coordinates on it. Whether the hypothesis
 holds for this dataset is an open question of the documentation, and
 `intrinsic_dim.py` is what answers it; a manifold learner applied where it

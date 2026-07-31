@@ -4,7 +4,7 @@ Linear dimensionality reduction techniques.
 Carried over from the original `linear_dr.py`: implement linear
 dimensionality reduction techniques, e.g. PCA, LDA.
 
-Each learns a linear map from the d input features to n_components
+Each learns a linear map from the n input features to n_components
 directions. Two properties follow and are relied on elsewhere: the map
 applies to unseen observations, so these techniques are inductive; and it
 is invertible on its image, so `inverse_transform` reconstructs an

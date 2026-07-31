@@ -54,11 +54,14 @@ class BaseDissimilarity(BaseComponent, ABC):
     def pairwise(
         self, X: MatrixLike, Y: MatrixLike | None = None
     ) -> DissimilarityMatrix:
-        """Return all pairwise dissimilarities: (n, n) for X, else (n, m).
+        """Return all pairwise dissimilarities.
+
+        Shape (m, m) for `X` against itself, or (m, m') where `Y` is given
+        and has m' rows.
 
         Separate from `__call__` because the matrix is what methods
         actually consume, and computing it in one vectorised pass rather
-        than n^2 scalar calls is the difference between usable and not.
+        than m^2 scalar calls is the difference between usable and not.
         """
         ...
 

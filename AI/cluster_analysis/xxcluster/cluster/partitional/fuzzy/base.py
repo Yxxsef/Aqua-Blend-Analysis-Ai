@@ -28,15 +28,21 @@ class BaseFuzzyClusterer(
     Parameters
     ----------
     fuzzifier
-        The exponent m controlling how soft the partition is. m -> 1
-        recovers crisp assignment; large m drives all memberships towards
-        uniform. Data-dependent and subjective, one of the hyperparameters
-        Sect. 2.1 flags as such, so its selection must be reported.
+        The exponent controlling how soft the partition is. Approaching 1
+        recovers crisp assignment; a large value drives all memberships
+        towards uniform. Data-dependent and subjective, one of the
+        hyperparameters Sect. 2.1 flags as such, so its selection must be
+        reported.
+
+        The literature writes this exponent as m, which now collides with
+        the notation table's m for the number of observations. It is
+        referred to by name here; a write-up needing a symbol for it must
+        declare a non-colliding one in `sections/notation.tex`.
 
     Fitted attributes
     -----------------
-    memberships_ : ndarray of shape (n, |C|)
-    cluster_centers_ : ndarray of shape (|C|, d)
+    memberships_ : ndarray of shape (m, |C|)
+    cluster_centers_ : ndarray of shape (|C|, n)
         Prototypes, each a weighted combination of every observation.
     fuzzy_partition_coefficient_ : float
         Summary of partition crispness, used for model selection within

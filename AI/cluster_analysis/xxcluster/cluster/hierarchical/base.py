@@ -42,7 +42,7 @@ class BaseHierarchicalClusterer(HierarchyMixin, PrecomputedMixin, BaseClusterer,
     -----------------
     linkage_, children_
         The hierarchy; see `HierarchyMixin`.
-    distances_ : ndarray of shape (n - 1,)
+    distances_ : ndarray of shape (m - 1,)
         Merge or split height at each step, for the dendrogram.
     """
 

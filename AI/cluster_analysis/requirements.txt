@@ -1,0 +1,38 @@
+# Dependencies for cluster_analysis/ --- the xxcluster package and the
+# notebooks that exercise it.
+#
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Lower bounds, not pins. This file states what the code needs to run; the
+# exact versions a result was produced under are captured at run time by
+# xxcluster.evaluation.protocol.Environment.capture() and stored with the
+# artefact, which is what App. A of the document requires. Do not maintain
+# a second version list by hand.
+
+# --- Core: required to import xxcluster -----------------------------------
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.2.2      # 1.6+ also gives check_estimator(expected_failed_checks=...)
+pandas>=2.1
+
+# --- Figures --------------------------------------------------------------
+matplotlib>=3.8
+
+# --- Notebooks ------------------------------------------------------------
+notebook>=7.0
+ipykernel>=6.28
+nbformat>=5.9
+
+# --- Tests ----------------------------------------------------------------
+pytest>=7.4
+
+# --- Optional backends ----------------------------------------------------
+# Uncomment only what a method you are adding actually adapts. These are
+# imported at fit time, not at import time, so a missing one raises
+# BackendUnavailableError from that method alone and leaves the rest of the
+# package usable -- see xxcluster/core/adapters.py.
+#
+# hdbscan>=0.8          # density-based: HDBSCAN
+# umap-learn>=0.5       # nonlinear dimensionality reduction: UMAP
+# minisom>=2.3          # model-based: Self-Organising Map

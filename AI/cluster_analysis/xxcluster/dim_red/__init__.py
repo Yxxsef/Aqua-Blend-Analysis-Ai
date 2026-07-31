@@ -7,7 +7,7 @@ Mirrors Sect. 6 of the documentation:
     nonlinear/      manifold learning: t-SNE, UMAP, and others
     intrinsic_dim.py    how many dimensions the data actually occupies
 
-The motivation is the curse of dimensionality: as d grows, pairwise
+The motivation is the curse of dimensionality: as n grows, pairwise
 distances concentrate, and a clustering method that reads the data only
 through d(., .) degrades accordingly. Reduction is therefore not a
 convenience step but part of the method's applicability.

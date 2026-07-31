@@ -45,7 +45,7 @@ class BaseSelector(BaseComponent, ABC):
         Every candidate and every score, not only the winner. The input to
         the selection figures, and the record that makes a selection
         auditable.
-    labels_ : ndarray of shape (n,)
+    labels_ : ndarray of shape (m,)
         Partition of the winning configuration, so a fitted selector can
         stand in for a clusterer.
     """

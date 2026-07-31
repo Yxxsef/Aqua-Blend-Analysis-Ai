@@ -25,7 +25,7 @@ def check_matrix(
     min_samples: int = 1,
     dtype: Any = "numeric",
 ) -> Any:
-    """Validate and convert a feature matrix of shape (n, d).
+    """Validate and convert a feature matrix of shape (m, n).
 
     `allow_missing` is opened only by methods declaring `handles_missing`;
     everything else must fail loudly rather than propagate NaN into a
@@ -35,7 +35,7 @@ def check_matrix(
 
 
 def check_dissimilarity_matrix(D: MatrixLike, *, symmetric: bool = True) -> DissimilarityMatrix:
-    """Validate a precomputed (n, n) dissimilarity matrix.
+    """Validate a precomputed (m, m) dissimilarity matrix.
 
     Checks squareness, a zero diagonal and non-negativity. Symmetry is
     checked by default but can be relaxed: Def. 2 permits a dissimilarity
@@ -55,7 +55,7 @@ def check_labels(labels: Any, *, n_samples: int | None = None, allow_noise: bool
 
 
 def check_n_clusters(n_clusters: Any, *, n_samples: int | None = None) -> int:
-    """Validate a requested number of clusters, 2 <= |C| <= n."""
+    """Validate a requested number of clusters, 2 <= |C| <= m."""
     raise NotImplementedError
 
 
