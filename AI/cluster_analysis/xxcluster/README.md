@@ -4,7 +4,7 @@ Cluster analysis for the AquaBlend dataset — the codebase behind `documentatio
 
 The document and the package share one structure: a method's write-up and its implementation sit at matching addresses in the two trees, and docstrings cite the document by section number.
 
-**Status: scaffolding complete, no method implemented.** Everything that does not depend on a clustering algorithm is written and tested — 238 tests, `python -m pytest` from `cluster_analysis/`. No clustering method or dimensionality reduction technique exists yet; their `_fit` bodies are the work of the sprints ahead.
+**Status: scaffolding complete, no method implemented.** No clustering method or dimensionality reduction technique exists yet; their `_fit` bodies are the work of the sprints ahead.
 
 | Area | What works |
 |---|---|

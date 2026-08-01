@@ -1,12 +1,8 @@
 """
-Agglomerative Hierarchical Clustering (AHC).
+Base class for Agglomerative Hierarchical Clustering (AHC).
 
-Bottom-up construction: begin with n singletons and repeatedly merge the
+Bottom-up construction: begin with m singletons and repeatedly merge the
 closest pair under the linkage criterion until one cluster remains.
-
-Concrete methods go here, one class each -- the variants differ only in
-their linkage criterion, so most of them are a base class plus a
-declaration.
 """
 
 from __future__ import annotations
@@ -14,8 +10,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 
-from ...core.types import MatrixLike
-from .base import BaseHierarchicalClusterer
+from ....core.types import MatrixLike
+from ..base import BaseHierarchicalClusterer
 
 
 class BaseAgglomerative(BaseHierarchicalClusterer, ABC):

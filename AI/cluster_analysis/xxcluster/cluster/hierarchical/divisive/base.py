@@ -1,15 +1,12 @@
 """
-Divisive Hierarchical Clustering (DHC).
+Base class for Divisive Hierarchical Clustering (DHC).
 
 Top-down construction: begin with one cluster containing every
 observation and repeatedly split the cluster selected by the splitting
 rule.
 
 Two choices distinguish these methods, and both are exposed here: which
-cluster to split next, and how to split it. The splitting step is often a
-partitional method applied to a subset, which makes DHC the natural home
-for the bisecting variants; a method whose splitting step is doing most of
-the work may belong in `hybrid` instead.
+cluster to split next, and how to split it.
 """
 
 from __future__ import annotations
@@ -17,8 +14,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ...core.types import MatrixLike
-from .base import BaseHierarchicalClusterer
+from ....core.types import MatrixLike
+from ..base import BaseHierarchicalClusterer
 
 
 class BaseDivisive(BaseHierarchicalClusterer, ABC):

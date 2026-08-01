@@ -53,8 +53,7 @@ Four rules:
 ### 3.2 The fit lifecycle
 
 `BaseComponent.fit` is a template method running a fixed sequence. **It is
-implemented** ([`core/base.py`](core/base.py), covered by
-`tests/test_base.py`):
+implemented** ([`core/base.py`](core/base.py)):
 
 ```
 fit(X, y)
@@ -184,8 +183,8 @@ Mirrors the document's taxonomy one directory per subsection.
 | Path | Base class | Distinguishing contract |
 |---|---|---|
 | `hierarchical/base.py` | `BaseHierarchicalClusterer` | Fit builds the tree; `n_clusters` is a *cut*, not a fitting parameter |
-| `hierarchical/agglomerative.py` | `BaseAgglomerative` | Bottom-up merge loop; a method here is a linkage plus a declaration |
-| `hierarchical/divisive.py` | `BaseDivisive` | Top-down; two choices — which cluster to split, and how |
+| `hierarchical/agglomerative/` | `BaseAgglomerative` | Bottom-up merge loop; a method here is a linkage plus a declaration |
+| `hierarchical/divisive/` | `BaseDivisive` | Top-down; two choices — which cluster to split, and how |
 | `hierarchical/linkage.py` | `BaseLinkage` | Lifts `d(·,·)` on points to `d(·,·)` on clusters; shared by both directions |
 | `partitional/base.py` | `BasePartitionalClusterer` | Iterative, converges locally, depends on initialisation — hence `n_init`, `tol`, `n_iter_`, `converged_` |
 | `partitional/sse_based/` | `BasePrototypeClusterer` | `cluster_centers_`; inductive; subclasses differ only in `_update_centers` |
