@@ -9,7 +9,7 @@ from typing import Any
 
 from ....core.base import BaseClusterer
 from ....core.mixins import PrecomputedMixin
-from ....core.types import ArrayLike, Embedding, MatrixLike, MetricLike
+from ....core.types import ArrayLike, Embedding, MatrixLike, MetricLike, PrecomputedKind
 
 
 class BaseGraphClusterer(PrecomputedMixin, BaseClusterer, ABC):
@@ -40,6 +40,12 @@ class BaseGraphClusterer(PrecomputedMixin, BaseClusterer, ABC):
     embedding_ : ndarray of shape (m, n_components)
         Spectral embedding, where the method computes one.
     """
+
+    #: "precomputed" here means an affinity matrix, not a dissimilarity: the
+    #: diagonal is unconstrained and the weights must be non-negative for the
+    #: Laplacian to mean anything.
+    _precomputed_kind = PrecomputedKind.AFFINITY
+    _precomputed_param = "affinity"
 
     affinity_matrix_: ArrayLike
     embedding_: Embedding

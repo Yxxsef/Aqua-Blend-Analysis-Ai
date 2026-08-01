@@ -2,13 +2,10 @@
 Internal validity indices.
 
 Score a partition using the data and the labels alone, with no reference
-labelling -- the only group available for this project, since the
-operational data carries no ground-truth regime labels. Silhouette,
-Calinski-Harabasz and Davies-Bouldin are the ones the literature of
-Sect. 2.3 uses for comparable work.
+labelling, e.g. Silhouette, Calinski-Harabasz and Davies-Bouldin.
 
-Every index in this group formalises the same intuition as Def. 2 --
-compact clusters, well separated -- so a caveat applies to all of them and
+Every index in this group formalises the same intuition as Def. 2, i.e.
+compact clusters, well separated, so a caveat applies to all of them and
 belongs in the class docstring of each: they encode a notion of cluster
 shape. An index built on distances to a centroid rewards the compact,
 isotropic clusters the SSE family produces and penalises the elongated or
@@ -39,4 +36,4 @@ class BaseInternalIndex(BaseValidityIndex, ABC):
     requires_labels_true = False
     requires_X = True
 
-    assumes_shape: str | None = None
+    assumes_shape: str | None = None    # for sake of clarity about the index

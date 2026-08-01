@@ -46,8 +46,14 @@ from .types import (
     Backend,
     ComponentKind,
     Family,
+    PrecomputedKind,
     Scaling,
     SubFamily,
+)
+from .validation import (
+    check_affinity_matrix,
+    check_dissimilarity_matrix,
+    check_kernel_matrix,
 )
 
 __all__ = [
@@ -81,8 +87,13 @@ __all__ = [
     "Backend",
     "ComponentKind",
     "Family",
+    "PrecomputedKind",
     "Scaling",
     "SubFamily",
+    # Validation
+    "check_dissimilarity_matrix",
+    "check_affinity_matrix",
+    "check_kernel_matrix",
     # Errors
     "XXClusterError",
     "ContractViolationError",

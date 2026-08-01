@@ -1,10 +1,6 @@
 # Contributing to `cluster_analysis/`
 
-A contribution here is **three things that land together**: a section in the
-document, the code it describes, and the notebook that evidences it. One
-without the others is incomplete — a section with no code cannot be
-reproduced, code with no section cannot be reviewed, and neither can be
-believed without the run that produced the numbers.
+A contribution here is **three things that land together**: a section in the document, the code it describes, and the notebook that evidences it. One without the others is incomplete, i.e. a section with no code cannot be reproduced, code with no section cannot be reviewed, and neither can be believed without the run that produced the numbers.
 
 ```
 cluster_analysis/
@@ -21,8 +17,7 @@ cluster_analysis/
 | [Part 2](#part-2--the-code) | Adding to `xxcluster/`, tied to the section it documents |
 | [Part 3](#part-3--the-notebooks) | Testing what you built and evidencing the benchmark |
 
-Branch naming, commits and pull requests follow [`AI/README.md`](../README.md):
-one branch per task, `task-<number>-<short-description>`.
+Branch naming, commits and pull requests follow [`AI/README.md`](../README.md): one branch per task, `task-<number>-<short-description>`.
 
 ---
 
@@ -30,8 +25,7 @@ one branch per task, `task-<number>-<short-description>`.
 
 ## 1.1 The templates
 
-`template/` holds one template per **kind** of section. Different kinds report
-different things, so they are not interchangeable.
+`template/` holds one template per **kind** of section. Different kinds report different things, so they are not interchangeable.
 
 | Template | For | Document section | Code counterpart |
 |---|---|---|---|
@@ -39,23 +33,19 @@ different things, so they are not interchangeable.
 | `dimreduction_template` | A dimensionality reduction technique | Sect. 6.3–6.4 | `xxcluster/dim_red/…` |
 | `measure_template` | A dissimilarity measure or validity index | Sect. 7.1 | `xxcluster/measures/…` |
 
-Each exists as `.tex` and `.docx`. Write in whichever you prefer; both feed
-`documentation/main.pdf`.
+Each exists as `.tex` and `.docx`. Write in whichever you prefer; both feed `documentation/main.pdf`.
 
 Why the templates differ, concretely: a clustering method reports
-hyperparameters and a partition; a reduction technique instead has to answer
-whether its mapping extends to unseen points and whether it can be inverted,
-and must show its effect on the clustering that follows it; a measure has to
-declare its metric properties, or its range and direction. Forcing all three
-into one shape would lose exactly the parts that matter.
+hyperparameters and a partition; a reduction technique instead has to answer whether its mapping extends to unseen points and whether it can be inverted, and must show its effect on the clustering that follows it; a measure has to declare its metric properties, or its range and direction. Forcing all three into one shape would lose exactly the parts that matter.
 
-**The parts within a template are ordered and fixed.** The comparison section
-(Sect. 8) aggregates across contributions part by part. A merged, renamed or
-reordered part cannot be compared with the others.
+**The parts within a template are ordered and fixed.** The comparison section (Sect. 8) aggregates across contributions part by part. A merged, renamed or reordered part cannot be compared with the others.
 
 ## 1.2 Two formats, one source of truth
 
-**The `.tex` file is authoritative.** The `.docx` is generated from it:
+**The `.tex` file is authoritative and `.docx` is generated from it.** As mentioned earlier, choose to work on what you find most simple, should strictly follow the section declared in the templat and the content required, for any extension or removal, ask the author of this file, i.e. Bao Minh Tran (s224236373@deakin.edu.au).
+
+The content below is for the documentation and code lead owner.
+The `.docx` is generated from it:
 
 ```bash
 cd template
@@ -63,20 +53,15 @@ python build_docx.py              # rebuild all generated templates
 python build_docx.py measure      # rebuild one
 ```
 
-`build_docx.py` copies the styling from `method_template.docx` — which is
-hand-made and never overwritten — and replaces only the body, so every
-template looks identical in Word.
+`build_docx.py` copies the styling from `method_template.docx`, which is hand-made and never overwritten, and replaces only the body, so every template looks identical in Word.
 
-If you change a `.tex` template, change the matching spec in `build_docx.py`
-and commit both files. Keeping the two in step by hand does not survive a
-sprint.
+If you change a `.tex` template, change the matching spec in `build_docx.py` and commit both files. Keeping the two in step by hand does not survive a sprint.
 
-Word contributors: **leave the heading levels alone.** The name is Heading 3
-and the parts are Heading 4; that is how the file assembles into the document
-at the right depth.
+Word contributors: **leave the heading levels alone.** The name is Heading 3 and the parts are Heading 4; that is how the file assembles into the document at the right depth.
 
 ## 1.3 Using a template
 
+Step 1 to 3 are for those using `.tex`.
 1. Copy it — never edit in place.
    ```bash
    cp template/dimreduction_template.tex \
@@ -86,49 +71,40 @@ at the right depth.
    name throughout (`sec:dr:template:overview` → `sec:dr:umap:overview`).
 3. Fill every `\placeholder{}` and delete it. A placeholder left in a draft
    renders as guidance text in the PDF.
+
+For those using `.docx`, simply write the content and put the file in the appropriate folder in `documentation/sections/...` (must be completed in a separate branch, do not directly edit the master|main branch)
+
+Step 4 and 5 are for the code and document lead owner.
+
 4. Add one `\input` line under the matching subsection in the section's main
    file — `cluster_main.tex`, `dim_main.tex`.
-5. Build and check it: `latexmk -pdf main.tex`.
+5. Build and check: `latexmk -pdf main.tex`.
 
-Do not restate shared material. The dataset (Sect. 3), the preprocessing
-pipeline (Sect. 3.3) and the evaluation protocol (Sect. 4) are defined once;
-refer to them. Use the symbols in the notation table and introduce no private
-notation.
+**Important notes**: Do not restate shared material and strictly follow the conventions. The dataset (Sect. 3), the preprocessing pipeline (Sect. 3.3) and the evaluation protocol (Sect. 4) are defined once; refer to them. Use the symbols in the notation table and introduce no private notation.
+
+If any notations or conventions are not found in the main document, please notify Bao Minh Tran (s224236373@deakin.edu.au) to extend or explain use of notations.
 
 ## 1.4 Adding a new kind of template
 
-When a new *kind* of section appears — a task write-up, an EDA finding — add a
-template rather than bending an existing one:
+When a new *kind* of section appears, e.g. a task write-up, an EDA finding, then add a completely new template rather than bending an existing one (you could copy any existing templates into a different place, edit, and pushed to the `template/` later):
 
-1. Write `template/<kind>_template.tex`, following the header-comment
-   convention of the existing ones: what it is for, where a copy goes, which
-   parts are fixed, and which code file must agree with it.
-2. Add a `spec_<kind>()` function and a `SPECS` entry in `build_docx.py`, then
-   run it. The block helpers (`h4`, `prompt`, `table`, `checklist`) already
-   exist; a spec is a list of parts.
-3. Add a row to the table in [1.1](#11-the-templates) and to the mapping table
-   in [2.2](#22-where-your-contribution-goes).
+**Important note**: new template must be created using `.tex`, if anyone comes up with a `.docx` template, please notify Bao Minh Tran (s224236373@deakin.edu.au) to convert it to a valid `.tex` for consistency.
+
+1. Write `template/<kind>_template.tex`, following the header-comment convention of the existing ones: what it is for, where a copy goes, which parts are fixed, and which code file must agree with it.
+2. Add a `spec_<kind>()` function and a `SPECS` entry in `build_docx.py`, then run it. The block helpers (`h4`, `prompt`, `table`, `checklist`) already exist; a spec is a list of parts.
+3. Add a row to the table in [1.1](#11-the-templates) and to the mapping table in [2.2](#22-where-your-contribution-goes).
 4. Create the target directory under `documentation/sections/`.
 
 ## 1.5 Changing or removing a template
+The content below is for the documentation and code lead owner.
 
-Labels are referenced from elsewhere in the document, so before deleting or
-renaming anything:
+Labels are referenced from elsewhere in the document, so before deleting or renaming anything:
 
 ```bash
 grep -rn "sec:dr:umap" documentation/     # find every reference first
 ```
 
-Removing a template means deleting both files, its `SPECS` entry, and its rows
-in the tables above. Removing a *section* means also deleting its `\input`
-line — and leaving the section in place if its results are still cited
-elsewhere.
-
-> **Note.** `template/method_template.tex` and
-> `documentation/sections/clustering_methods/00-template.tex` are currently
-> identical copies. Two copies of one template drift. Treat `template/` as
-> canonical; the duplicate under `sections/` should be removed once the team
-> agrees.
+Removing a template means deleting both files, its `SPECS` entry, and its rows in the tables above. Removing a *section* means also deleting its `\input` line and leaving the section in place if its results are still cited elsewhere.
 
 ---
 
@@ -145,15 +121,14 @@ false row in the document.
 So the order of work is: read the template for your kind, write the code with
 that template's parts in view, and fill both together.
 
-Read [`xxcluster/ARCHITECTURE.md`](xxcluster/ARCHITECTURE.md) first — it
-explains the contract you are implementing.
+Read [`xxcluster/ARCHITECTURE.md`](xxcluster/ARCHITECTURE.md) first, as it explains the contract you are implementing.
 
 ## 2.2 Where your contribution goes
 
 | You are adding | Code goes in | Subclass | Document section | Template | Notebook |
 |---|---|---|---|---|---|
 | A clustering method | `xxcluster/cluster/<family>/<subfamily>/<name>.py` | that subfamily's base | Sect. 7.2–7.4 | `method_template` | required |
-| A dim. reduction technique | `xxcluster/dim_red/<linear\|nonlinear>/<name>.py` | `BaseLinearReducer` / `BaseManifoldReducer` | Sect. 6.3–6.4 | `dimreduction_template` | required |
+| A dim. reduction technique | `xxcluster/dim_red/<linear\|nonlinear>/<name>.py` | `BaseLinearReducer`, or `BaseManifoldReducer` / `BaseKernelReducer` — see [2.4](#24-adding-a-dimensionality-reduction-technique) | Sect. 6.2–6.4 | `dimreduction_template` | required |
 | A dissimilarity measure | `xxcluster/measures/dissimilarity/<name>.py` | `BaseDissimilarity` | Sect. 7.1 | `measure_template` | required |
 | A validity index | `xxcluster/measures/validation/{internal,external,relative}.py` | the matching base | Sect. 7.1 | `measure_template` | required |
 | A preprocessing step | `xxcluster/pipeline/preprocess.py` | `BasePreprocessor` | Sect. 3.3 | — (add to that section) | recommended |
@@ -202,13 +177,35 @@ that produced it.
 
 ## 2.4 Adding a dimensionality reduction technique
 
-Same shape as 2.3, with one part carrying most of the weight.
+Same shape as 2.3, with two things to get right first.
 
-**Declare `is_inductive` honestly, and make the write-up say the same thing.**
-A linear projection applies to unseen points; most manifold learners embed only
-the sample they were fitted on. A transductive technique declared inductive
-will silently corrupt any pipeline that later calls `predict` — and the
-*Out-of-sample and inverse mapping* paragraph is where a reviewer checks it.
+### Pick the base class by what the technique *assumes*, not by whether it curves
+
+"Nonlinear" is not one family. Choose by the assumption:
+
+| Base class | Assumes | Examples | Inductive? | Reports |
+|---|---|---|---|---|
+| `BaseLinearReducer` | A linear map suffices | PCA, LDA | yes, exactly | `explained_variance_ratio_` |
+| `BaseKernelReducer` | A feature map induced by a kernel | Kernel PCA | yes, exactly | `explained_variance_ratio_` |
+| `BaseManifoldReducer` | The data lie on a low-dimensional manifold | t-SNE, UMAP, Isomap, LLE | mostly no | `stress_`, `trustworthiness()` |
+
+Kernel PCA is the case that catches people: it is nonlinear, but it is
+inductive, deterministic, spectral, and takes a kernel matrix rather than a
+neighbourhood graph — so it is *not* manifold learning, has no `n_neighbors`,
+and needs no check against the manifold hypothesis. Putting it under
+`BaseManifoldReducer` would attach five false claims to it at once.
+
+If the technique fits none of the three — a parametric autoencoder, which is
+inductive and has a true decoder — subclass `BaseNonlinearReducer` directly and
+say why in the module docstring.
+
+### Declare `is_inductive` honestly, and make the write-up say the same thing
+
+A linear or kernel map applies to unseen points; most manifold learners embed
+only the sample they were fitted on. A transductive technique declared
+inductive will silently corrupt any pipeline that later calls `predict` — and
+the *Out-of-sample and inverse mapping* paragraph is where a reviewer checks
+it.
 
 | Document paragraph | Code |
 |---|---|

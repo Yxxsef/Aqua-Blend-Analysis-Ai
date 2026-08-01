@@ -63,8 +63,9 @@ class BaseValidityIndex(ABC):
         arguments it declares and ignores the rest.
 
         `metric` accepts a precomputed dissimilarity matrix as well as a
-        name. It should be the same measure the method was fitted with,
-        otherwise the index scores a geometry the method never saw.
+        name. It should be the same measure the method was fitted with, e.g.
+        K-Means determines clusters using Euclidean distance,
+        so validity must be a Eulidean distance.
         """
         ...
 

@@ -1,8 +1,7 @@
 """
 Dissimilarity and similarity measures.
 
-Carried over from the original `dissimilarity.py`: implement the
-dissimilarity and similarity measures used in the different clustering
+Implement the dissimilarity and similarity measures used in the different clustering
 methods.
 
 Def. 1 and Def. 2 of the documentation draw the distinction this

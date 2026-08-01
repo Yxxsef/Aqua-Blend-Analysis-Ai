@@ -15,8 +15,8 @@ An adapter therefore does three things and nothing more:
    backend does not provide,
 3. declares the capabilities the backend actually has.
 
-Write a native subclass instead -- overriding `_fit` on a family base
-directly -- where no good implementation exists, or where the point is to
+Write a native subclass instead, only overriding `_fit` on a family base
+directly, if no good implementation exists, or where the point is to
 follow the formulation in the documentation. `_capabilities.backend`
 records which route a class took, so a result can always be traced to the
 code that produced it.

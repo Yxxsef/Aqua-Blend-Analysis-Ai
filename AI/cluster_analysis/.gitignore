@@ -21,3 +21,6 @@ __pycache__/
 .venv/
 venv/
 build_docx.py
+tests/
+.pytest_cache/
+conftest.py

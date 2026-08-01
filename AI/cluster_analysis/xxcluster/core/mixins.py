@@ -19,8 +19,9 @@ Rules
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
+from .exceptions import ContractViolationError
 from .types import (
     ArrayLike,
     DissimilarityMatrix,
@@ -28,6 +29,12 @@ from .types import (
     LinkageMatrix,
     MatrixLike,
     Memberships,
+    PrecomputedKind,
+)
+from .validation import (
+    check_affinity_matrix,
+    check_dissimilarity_matrix,
+    check_kernel_matrix,
 )
 
 
@@ -144,22 +151,67 @@ class ProbabilisticMixin(ABC):
 
 
 class PrecomputedMixin:
-    """Accepts a dissimilarity matrix in place of a feature matrix.
+    """Accepts a square matrix in place of a feature matrix.
 
     The bridge between `xxcluster.measures.dissimilarity` and any method
     that touches the data only through d(., .). Where a method supports
     it, `metric="precomputed"` lets a custom measure be used without the
     method knowing anything about it -- the route for mixed-type data and
     for time-series dissimilarities.
+
+    It is also the only practical route to an adapted third-party method.
+    A backend accepts metrics from its own list or a Python callable, and
+    a callable is invoked m^2 times from the interpreter; a precomputed
+    matrix is computed once, vectorised, and handed over.
+
+    Not every method means the same thing by "precomputed", which is why
+    the kind is declared rather than assumed. A dissimilarity has a zero
+    diagonal, an affinity does not, and a kernel may have negative
+    off-diagonal entries -- so validating one as another rejects valid
+    input, or worse, accepts invalid input silently.
+
+    Class attributes
+    ----------------
+    _precomputed_kind
+        Which of the three kinds this method consumes.
+    _precomputed_param
+        Name of the parameter carrying the measure, since it is `metric`
+        for most methods, `affinity` for graph-based ones and `kernel`
+        for kernel methods.
+    _precomputed_symmetric
+        Whether symmetry is required. Relaxed only by a method that
+        genuinely tolerates an asymmetric dissimilarity, which Def. 2
+        permits.
     """
+
+    _precomputed_kind: ClassVar[PrecomputedKind] = PrecomputedKind.DISSIMILARITY
+    _precomputed_param: ClassVar[str] = "metric"
+    _precomputed_symmetric: ClassVar[bool] = True
 
     def _is_precomputed(self) -> bool:
         """Report whether this instance is configured for precomputed input."""
-        raise NotImplementedError
+        return getattr(self, self._precomputed_param, None) == "precomputed"
 
-    def _check_dissimilarity_matrix(self, D: MatrixLike) -> DissimilarityMatrix:
-        """Validate a square, non-negative, zero-diagonal matrix."""
-        raise NotImplementedError
+    def _check_precomputed(
+        self, M: MatrixLike, *, n_samples: int | None = None
+    ) -> DissimilarityMatrix:
+        """Validate `M` against the declared kind.
+
+        Dispatch only: the checks live in `core.validation` so that one
+        rule has one implementation.
+        """
+        kind = self._precomputed_kind
+        if kind is PrecomputedKind.DISSIMILARITY:
+            return check_dissimilarity_matrix(
+                M, symmetric=self._precomputed_symmetric, n_samples=n_samples
+            )
+        if kind is PrecomputedKind.AFFINITY:
+            return check_affinity_matrix(M, n_samples=n_samples)
+        if kind is PrecomputedKind.KERNEL:
+            return check_kernel_matrix(M, n_samples=n_samples)
+        raise ContractViolationError(
+            f"{type(self).__name__} declares an unknown precomputed kind: {kind!r}"
+        )
 
 
 class PersistableMixin:

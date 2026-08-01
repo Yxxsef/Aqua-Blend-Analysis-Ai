@@ -1,8 +1,7 @@
 """
 Linear dimensionality reduction techniques.
 
-Carried over from the original `linear_dr.py`: implement linear
-dimensionality reduction techniques, e.g. PCA, LDA.
+Implement linear dimensionality reduction techniques, e.g. PCA, LDA.
 
 Each learns a linear map from the n input features to n_components
 directions. Two properties follow and are relied on elsewhere: the map

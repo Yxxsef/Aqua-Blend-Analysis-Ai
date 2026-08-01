@@ -1,9 +1,8 @@
 """
 Abstract base classes: the universal contract.
 
-Carried over from the original `base_class.py`: this module implements the
-abstract classes and interfaces, and outlines the naming conventions and
-coding rules every component follows.
+This module implements the abstract classes and interfaces,
+and outlines the naming conventions and coding rules every component follows.
 
 Every component in this package is a scikit-learn estimator. Inheriting
 `sklearn.base.BaseEstimator` is deliberate: it buys `get_params`/
@@ -30,7 +29,8 @@ Capabilities
     declaration contradicts its interface is a `ContractViolationError`.
 Skeleton
     An `@abstractmethod` body is `...`; an unwritten concrete method
-    raises `NotImplementedError`. Nothing here is implemented yet.
+    raises `NotImplementedError`. `BaseComponent.fit` and the steps it
+    runs are implemented and tested; no concrete method is.
 """
 
 from __future__ import annotations
@@ -40,14 +40,17 @@ from typing import Any, ClassVar, Self
 
 from sklearn.base import BaseEstimator, ClusterMixin, OutlierMixin, TransformerMixin
 
+from .exceptions import ContractViolationError
 from .tags import Capabilities
 from .types import (
     ArrayLike,
+    Assignment,
     Embedding,
     Labels,
     MatrixLike,
     Seed,
 )
+from .validation import finite_policy
 
 
 class BaseComponent(BaseEstimator, ABC):
@@ -75,26 +78,37 @@ class BaseComponent(BaseEstimator, ABC):
     _kind: ClassVar[Any]
     _capabilities: ClassVar[Capabilities] = Capabilities()
 
+    #: Attributes `_fit` must set, declared per class. Collected across the
+    #: MRO, so a subclass lists only what it adds to its parent's.
+    _required_fitted: ClassVar[tuple[str, ...]] = ()
+
     n_features_in_: int
     feature_names_in_: ArrayLike
 
     def fit(self, X: MatrixLike, y: Any = None, **fit_params: Any) -> Self:
         """Fit the component and return `self`.
 
-        Template method; override `_fit` instead. The sequence is:
-        validate parameters, validate and record the input, delegate to
-        `_fit`, then verify the subclass set everything it declared.
+        Template method; override `_fit` instead. The sequence is fixed so
+        that every component in the package is validated identically --
+        which is what makes the comparison of Sect. 8 a comparison rather
+        than a collection of differently-guarded runs.
 
         Parameters
         ----------
         X
-            Data of shape (m, n), or an (m, m) dissimilarity matrix where
-            the component declares `supports_precomputed`.
+            Data of shape (m, n), or an (m, m) matrix where the component
+            declares `supports_precomputed`; see `mixins.PrecomputedMixin`
+            for which kind of matrix that means.
         y
             Ignored by unsupervised components; present so that the
             signature matches scikit-learn's `Pipeline`.
         """
-        raise NotImplementedError
+        self._validate_params()
+        self._check_capabilities()
+        X = self._validate_input(X, reset=True)
+        self._fit(X, y, **fit_params)
+        self._check_fitted()
+        return self
 
     @abstractmethod
     def _fit(self, X: MatrixLike, y: Any = None, **fit_params: Any) -> None:
@@ -104,24 +118,124 @@ class BaseComponent(BaseEstimator, ABC):
     @classmethod
     def capabilities(cls) -> Capabilities:
         """Return the capabilities declared by this class."""
-        raise NotImplementedError
+        return cls._capabilities
 
     @property
     def is_fitted(self) -> bool:
         """Report whether `fit` has completed successfully."""
-        raise NotImplementedError
+        required = self._required_fitted_attributes() or ("n_features_in_",)
+        return all(hasattr(self, name) for name in required)
+
+    # --- Steps of the template method -------------------------------------
 
     def _validate_params(self) -> None:
         """Check constructor parameters; called at the start of `fit`.
 
-        Kept out of `__init__` so that parameters round-trip through
-        `get_params`/`set_params` unchanged.
+        Deferred from `__init__` so that parameters round-trip through
+        `get_params`/`set_params` unchanged, which `clone` and
+        `check_estimator` both depend on.
+
+        Delegates to scikit-learn's constraint machinery where the class
+        declares `_parameter_constraints`, so a range or a type is stated
+        once as data rather than as code. The guard is needed because
+        `BaseEstimator._validate_params` assumes that attribute exists.
+        Subclasses adding checks should override this and call `super()`.
         """
-        raise NotImplementedError
+        if hasattr(self, "_parameter_constraints"):
+            super()._validate_params()
 
     def _check_capabilities(self) -> None:
-        """Verify the declared capabilities match the actual interface."""
-        raise NotImplementedError
+        """Verify the declared capabilities match the actual interface.
+
+        One direction only: a declaration must be backed by the interface
+        it promises. The converse -- an interface present but undeclared --
+        is not an error, since a class may expose more than it advertises,
+        and flagging it would fire on every class that has not yet filled
+        in its declaration.
+
+        The checks are duck-typed rather than `isinstance` against the
+        mixins: a class that implements `predict` directly is as inductive
+        as one that inherits `InductiveMixin`.
+        """
+        caps = self._capabilities
+        promised: list[tuple[bool, str, str]] = [
+            (caps.is_inductive, "predict", "is_inductive"),
+            (caps.produces_hierarchy, "cut", "produces_hierarchy"),
+            (caps.handles_noise, "noise_mask", "handles_noise"),
+            (caps.supports_precomputed, "_check_precomputed", "supports_precomputed"),
+            (
+                caps.assignment is not Assignment.CRISP,
+                "predict_proba",
+                f"assignment={caps.assignment.value}",
+            ),
+        ]
+        for declared, attribute, label in promised:
+            if declared and not hasattr(self, attribute):
+                raise ContractViolationError(
+                    f"{type(self).__name__} declares {label} but has no "
+                    f"`{attribute}`. Either mix in the capability or correct "
+                    f"the declaration -- the comparison table of Sect. 8.2 is "
+                    f"generated from it."
+                )
+
+    def _validate_input(self, X: MatrixLike, *, reset: bool = True) -> Any:
+        """Validate `X` and record what the contract requires from it.
+
+        Two routes, because a precomputed matrix is not a feature matrix
+        and validating one as the other either rejects valid input or
+        accepts invalid input silently.
+        """
+        if self._is_precomputed_input():
+            expected = None if reset else getattr(self, "n_features_in_", None)
+            M = self._check_precomputed(X, n_samples=expected)
+            if reset:
+                # sklearn's convention for precomputed input: the "features"
+                # of an (m, m) matrix are the m reference observations.
+                self.n_features_in_ = M.shape[1]
+            return M
+
+        return self._validate_data(
+            X,
+            reset=reset,
+            dtype="numeric",
+            **finite_policy(self._capabilities.handles_missing),
+        )
+
+    def _check_fitted(self) -> None:
+        """Verify `_fit` set everything this class declared.
+
+        Runs after every fit. A method that sets `labels_` but forgets
+        `n_clusters_` fails here, naming the omission, rather than several
+        layers away in a report with a missing column.
+        """
+        missing = [
+            name for name in self._required_fitted_attributes() if not hasattr(self, name)
+        ]
+        if missing:
+            raise ContractViolationError(
+                f"{type(self).__name__}._fit did not set: {', '.join(missing)}. "
+                f"Every attribute a class declares in `_required_fitted` must "
+                f"exist once fitting succeeds."
+            )
+
+    def _is_precomputed_input(self) -> bool:
+        """Report whether this instance expects a precomputed matrix."""
+        checker = getattr(self, "_is_precomputed", None)
+        return bool(checker()) if callable(checker) else False
+
+    @classmethod
+    def _required_fitted_attributes(cls) -> tuple[str, ...]:
+        """Collect `_required_fitted` across the MRO, base first.
+
+        Reading own declarations only, so a subfamily declares what it adds
+        and inherits the rest -- a density-based method need not restate
+        `labels_` to also require `n_noise_`.
+        """
+        collected: dict[str, None] = {}
+        for klass in reversed(cls.__mro__):
+            for name in klass.__dict__.get("_required_fitted", ()):
+                collected[name] = None
+        return tuple(collected)
 
 
 class BaseTransformer(BaseComponent, TransformerMixin, ABC):
@@ -163,6 +277,8 @@ class BaseDimReducer(BaseTransformer, ABC):
         Number of components actually retained.
     """
 
+    _required_fitted = ("embedding_", "n_components_")
+
     embedding_: Embedding
     n_components_: int
 
@@ -202,6 +318,8 @@ class BaseClusterer(BaseComponent, ClusterMixin, ABC):
         from any `n_clusters` parameter, which is a request, not a result.
     """
 
+    _required_fitted = ("labels_", "n_clusters_")
+
     labels_: Labels
     n_clusters_: int
 
@@ -234,6 +352,8 @@ class BaseOutlierDetector(BaseComponent, OutlierMixin, ABC):
     labels_ : ndarray of shape (m,)
         Inlier/outlier flag per training observation.
     """
+
+    _required_fitted = ("labels_",)
 
     labels_: Labels
 

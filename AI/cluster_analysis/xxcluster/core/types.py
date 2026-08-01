@@ -119,6 +119,31 @@ class Backend(str, Enum):
     THIRD_PARTY = "third_party"
 
 
+class PrecomputedKind(str, Enum):
+    """What kind of square matrix a component accepts as precomputed input.
+
+    Three kinds, because they obey different rules and confusing them
+    produces a wrong result rather than an error. A method declares one;
+    `PrecomputedMixin` validates against it.
+
+    DISSIMILARITY
+        d(x, y). Zero diagonal, non-negative. Symmetry optional --
+        Def. 2 permits a measure that is not a metric.
+    AFFINITY
+        Edge weights of a similarity graph. Non-negative and symmetric;
+        the diagonal is unconstrained. Negative weights would make the
+        graph Laplacian meaningless.
+    KERNEL
+        k(x, y) = <phi(x), phi(y)>. Symmetric with a non-negative
+        diagonal, but off-diagonal entries may be negative -- a linear
+        kernel on centred data routinely is.
+    """
+
+    DISSIMILARITY = "dissimilarity"
+    AFFINITY = "affinity"
+    KERNEL = "kernel"
+
+
 class Scaling(str, Enum):
     """Order-of-magnitude guide to the data size a method tolerates.
 

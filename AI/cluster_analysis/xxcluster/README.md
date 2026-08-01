@@ -1,15 +1,25 @@
 # xxcluster
 
-Cluster analysis for the AquaBlend dataset — the codebase behind
-`documentation/main.pdf`, *On the Search for Cluster Analysis*.
+Cluster analysis for the AquaBlend dataset — the codebase behind `documentation/main.pdf`, *On the Search for Cluster Analysis*.
 
-The document and the package share one structure: a method's write-up and its
-implementation sit at matching addresses in the two trees, and docstrings cite
-the document by section number.
+The document and the package share one structure: a method's write-up and its implementation sit at matching addresses in the two trees, and docstrings cite the document by section number.
 
 **Status: skeleton.** Structure, contracts and conventions are settled. No
 method is implemented yet — abstract methods have empty bodies, and concrete
 methods not yet written raise `NotImplementedError`.
+
+Two exceptions, both in `core/` and both tested (`python -m pytest` from
+`cluster_analysis/`):
+
+- **`BaseComponent.fit`** and the steps it runs — the template method every
+  component inherits. A subclass now only overrides `_fit`.
+- **The precomputed-matrix checks** in `core/validation.py`. They came first
+  because the failures they catch — a similarity matrix passed as a
+  dissimilarity, a squared distance, a non-zero diagonal — produce a
+  plausible-looking partition rather than an error.
+
+A component whose only content is a `_fit` override already passes
+scikit-learn's `check_estimator`.
 
 ## Layout
 
@@ -26,15 +36,11 @@ methods not yet written raise `NotImplementedError`.
 | `viz/` | Figures | — |
 | `tasks/` | End-to-end analyses; the horizontal extension point | — |
 
-`core/` depends on nothing else in the package; everything else depends on
-`core/`.
+`core/` depends on nothing else in the package; everything else depends on `core/`.
 
 ## The contract
 
-Every component is a scikit-learn estimator, inheriting `BaseEstimator`
-through `core.base.BaseComponent`. That is what buys `Pipeline`, the
-`*SearchCV` classes, `clone`, `check_estimator`, and interchangeability with
-third-party estimators.
+Every component is a scikit-learn estimator, inheriting `BaseEstimator` through `core.base.BaseComponent`.
 
 1. **Parameters** go in `__init__` only, stored unmodified, never validated there.
 2. **Fitted state** is set by `fit` and named with a trailing underscore.

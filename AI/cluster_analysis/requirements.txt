@@ -13,7 +13,7 @@
 # --- Core: required to import xxcluster -----------------------------------
 numpy>=1.26
 scipy>=1.11
-scikit-learn>=1.2.2      # 1.6+ also gives check_estimator(expected_failed_checks=...)
+scikit-learn>=1.2.2
 pandas>=2.1
 
 # --- Figures --------------------------------------------------------------

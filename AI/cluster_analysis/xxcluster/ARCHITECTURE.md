@@ -1,31 +1,23 @@
 # xxcluster — structure and design
 
-What each folder holds, what each file is for, and how they work as one thing.
-For a summary see [README.md](README.md); for how to add to it see
-[../CONTRIBUTING.md](../CONTRIBUTING.md).
+What each folder holds, what each file is for, and how they work as one thing. For a summary see [README.md](README.md); for how to contribute to it see [../CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
 ## 1. The idea in one paragraph
 
-A clustering study is a comparison, and a comparison is only valid if every
-method is treated identically. So the package is built around a single
-contract: every method, measure, reducer and step is a scikit-learn estimator
-with the same interface, declaring what it assumes and what it supports. Once
-that holds, the surrounding machinery — preprocessing, choosing \|C\|,
-stability, scoring, plotting, reporting — can be written once and applied to
-everything, and adding a method means writing the method and nothing else.
+A clustering study is a comparison, and a comparison is only valid if every method is treated identically. So the package is built around a single contract: every method, measure, reducer and step is a scikit-learn estimator with the same interface, declaring what it assumes and what it supports. Once that holds, the surrounding machinery, i.e. preprocessing, choosing \|C\|, stability, scoring, plotting, reporting, can be written once and applied to everything, and adding a method means writing the method and nothing else.
 
 ## 2. Layering
 
 ```
-                 tasks/          end-to-end analyses
+                 tasks/                         end-to-end analyses
                     |
-   +--------+-------+-------+--------+
-   |        |               |        |
+   +-----------+----+-------+--------+
+   |           |            |        |
  pipeline/  selection/  evaluation/  viz/        machinery
-   |        |               |        |
-   +--------+-------+-------+--------+
+   |           |            |        |
+   +-----------+----+-------+--------+
                     |
       cluster/   dim_red/   measures/            components
                     |
@@ -34,13 +26,10 @@ everything, and adding a method means writing the method and nothing else.
                    io/                           data in, artefacts out
 ```
 
-One rule: **`core/` imports nothing else from the package.** Everything else
-imports `core/`. An import from `core/` into a sibling is a design error — it
-would make the contract depend on an implementation of it.
+One rule: **`core/` imports nothing else from the package.** Everything else imports `core/`. An import from `core/` into a sibling is a design error as it would make the contract depend on an implementation of it.
 
 Machinery layers depend on components only through `core/`'s base classes and
-protocols, never on a concrete method. That is what lets `evaluation/` score a
-method written next year.
+protocols, never on a concrete method.
 
 ## 3. The contract
 
@@ -52,7 +41,7 @@ est.fit(X)                                       # does the work
 est.labels_                                      # fitted state
 ```
 
-Four rules, all mechanically checkable:
+Four rules:
 
 | Rule | Why |
 |---|---|
@@ -63,19 +52,37 @@ Four rules, all mechanically checkable:
 
 ### 3.2 The fit lifecycle
 
-`BaseComponent.fit` is a template method running a fixed sequence:
+`BaseComponent.fit` is a template method running a fixed sequence. **It is
+implemented** ([`core/base.py`](core/base.py), covered by
+`tests/test_base.py`):
 
 ```
 fit(X, y)
-  ├─ _validate_params()      constructor params, deferred from __init__
+  ├─ _validate_params()      sklearn's constraints where declared
   ├─ _check_capabilities()   declaration must match the interface
-  ├─ check_matrix(X)         validate input; record n_features_in_
+  ├─ _validate_input(X)      feature matrix or precomputed; records n_features_in_
   ├─ _fit(X, y)              << the subclass writes only this >>
-  └─ verify declared fitted attributes were set
+  └─ _check_fitted()         declared attributes must now exist
+  return self
 ```
 
-A subclass that sets `labels_` but not `n_clusters_` fails at the last step
-rather than three layers downstream.
+Each step earns its place by catching something that is otherwise silent:
+
+| Step | Catches |
+|---|---|
+| `_validate_params` | An out-of-range parameter, via `_parameter_constraints` if the class declares one. Deferred from `__init__` so `clone` still works |
+| `_check_capabilities` | A class declaring `is_inductive` with no `predict` — which would put a false row in Sect. 8.2's table |
+| `_validate_input` | A similarity matrix passed where a dissimilarity is expected; NaN in a method that never declared `handles_missing` |
+| `_check_fitted` | `_fit` setting `labels_` but forgetting `n_clusters_` — caught here, naming the omission, not three layers downstream in a report with a missing column |
+
+`_required_fitted` is collected across the MRO, so a subfamily declares only
+what it adds: `BaseClusterer` requires `labels_` and `n_clusters_`, and a
+density-based subclass adding `_required_fitted = ("n_noise_",)` inherits both.
+
+The payoff is asserted directly:
+`check_estimator(Dummy())` passes for a component whose only content is a
+`_fit` override, so `Pipeline`, `clone` and the `*SearchCV` classes work on
+anything built this way.
 
 ### 3.3 Component kinds
 
@@ -106,11 +113,25 @@ something its subclasses cannot do.
 | `HierarchyMixin` | `linkage_`, `children_`, `cut` | Build a cuttable hierarchy |
 | `NoiseAwareMixin` | `n_noise_`, label `-1` | May decline to assign an observation |
 | `ProbabilisticMixin` | `score_samples`, `bic`, `aic` | Fit a likelihood |
-| `PrecomputedMixin` | Accepts a dissimilarity matrix as `X` | Touch data only through `d(·,·)` |
+| `PrecomputedMixin` | Accepts a square matrix as `X`, validated against a declared `PrecomputedKind` | Touch data only through `d(·,·)` or a similarity |
 | `PersistableMixin` | `save`, `load` | — (opt-in) |
 
 The mixin and the `_capabilities` declaration must agree; `_check_capabilities`
 enforces the pair.
+
+`PrecomputedMixin` carries one further declaration, because "precomputed" does
+not mean one thing. A method states which `PrecomputedKind` it consumes and
+which parameter carries it, and the mixin dispatches to the matching check:
+
+| Kind | Parameter | Rules | Used by |
+|---|---|---|---|
+| `DISSIMILARITY` | `metric` | zero diagonal, non-negative, symmetry optional (Def. 2) | hierarchical, density-based, manifold |
+| `AFFINITY` | `affinity` | non-negative, symmetric, diagonal free | graph-theoretic |
+| `KERNEL` | `kernel` | symmetric, non-negative diagonal, off-diagonal may be negative | kernel reducers |
+
+Validating one as another is not a type error — it rejects valid input, or
+accepts invalid input and returns a wrong partition. The checks live in
+`core/validation.py` and nowhere else.
 
 ### 3.5 Native or adapted
 
@@ -145,7 +166,7 @@ which route was taken, so any result traces to the code that produced it.
 | `types.py` | Type aliases; `Family`, `SubFamily`, `Backend`, `Assignment`, `ComponentKind`, `Scaling` |
 | `registry.py` | `ComponentRegistry`, the global `REGISTRY`, the `@register` decorator |
 | `adapters.py` | `BackendAdapter`, `AdaptedClusterer`, `AdaptedDimReducer` |
-| `validation.py` | Input checks sklearn does not provide (dissimilarity matrices, label vectors) |
+| `validation.py` | Input checks sklearn does not provide. `check_dissimilarity_matrix` / `check_affinity_matrix` / `check_kernel_matrix` are **implemented**; the rest declared |
 | `exceptions.py` | `XXClusterError` and its subclasses |
 
 Base classes are how you *build* a component; protocols are how the machinery
@@ -182,13 +203,22 @@ already in `SubFamily`; create the package when the first such method arrives.
 | Path | Holds |
 |---|---|
 | `linear/base.py` | `BaseLinearReducer`: `components_`, `explained_variance_ratio_`, invertible, inductive |
-| `nonlinear/base.py` | `BaseManifoldReducer`: `embedding_`, `stress_`, `trustworthiness`; transductive by default |
+| `nonlinear/base.py` | `BaseNonlinearReducer`: `embedding_`, `trustworthiness` — assumes only that the map is not a projection |
+| ↳ | `BaseManifoldReducer`: neighbourhood-based, `stress_`, mostly transductive — the manifold hypothesis lives *here* |
+| ↳ | `BaseKernelReducer`: kernel PCA and relatives — inductive, deterministic, spectral, no manifold assumed |
 | `intrinsic_dim.py` | `BaseIntrinsicDimEstimator`, `manifold_hypothesis_report` |
 
-The axis that matters is **inductive vs transductive**. A linear map applies to
-new points; most manifold learners embed only what they were fitted on. Only
-the former can precede a clustering step in a pipeline that will later see new
-data, so declaring it is not optional.
+**Nonlinear is not the same as manifold learning**, and the split above is the
+consequence. Kernel PCA is nonlinear yet inductive, deterministic, spectral,
+and takes a kernel matrix rather than a neighbourhood graph — a base class
+asserting the manifold hypothesis would be wrong about it on every count. The
+document keeps the same distinction: Sect. 6.2 treats the manifold hypothesis
+as its own topic, Sect. 6.4 is the broader family.
+
+The axis that matters most is **inductive vs transductive**. A linear map and a
+kernel map both apply to new points; most manifold learners embed only what
+they were fitted on. Only the former can precede a clustering step in a
+pipeline that will later see new data, so declaring it is not optional.
 
 `intrinsic_dim.py` answers Objective 4 of the introduction — is the manifold
 hypothesis supported? — and gives a principled `n_components` instead of "2,
@@ -374,5 +404,7 @@ every clustering method unchanged.
 - Docstrings cite the document by section and literature by `literature.bib`
   key.
 - `from __future__ import annotations` at the top of every module.
+- The precomputed-matrix checks in `core/validation.py` are implemented and
+  covered by `tests/test_validation.py`. Everything else is still declared.
 - In the skeleton: `@abstractmethod` bodies are `...`; unwritten concrete
   methods raise `NotImplementedError`.
