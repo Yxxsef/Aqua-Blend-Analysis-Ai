@@ -1,25 +1,33 @@
 # xxcluster
 
-Cluster analysis for the AquaBlend dataset — the codebase behind `documentation/main.pdf`, *On the Search for Cluster Analysis*.
+Cluster analysis for the AquaBlend dataset — the codebase behind `documentation/main.pdf`, *In Search of Cluster Analysis*.
 
 The document and the package share one structure: a method's write-up and its implementation sit at matching addresses in the two trees, and docstrings cite the document by section number.
 
-**Status: skeleton.** Structure, contracts and conventions are settled. No
-method is implemented yet — abstract methods have empty bodies, and concrete
-methods not yet written raise `NotImplementedError`.
+**Status: scaffolding complete, no method implemented.** Everything that does not depend on a clustering algorithm is written and tested — 238 tests, `python -m pytest` from `cluster_analysis/`. No clustering method or dimensionality reduction technique exists yet; their `_fit` bodies are the work of the sprints ahead.
 
-Two exceptions, both in `core/` and both tested (`python -m pytest` from
-`cluster_analysis/`):
+| Area | What works |
+|---|---|
+| `core/base.py` | `fit` and the steps it runs — subclasses override only `_fit` |
+| `core/validation.py` | precomputed-matrix, label, parameter and seed checks |
+| `core/registry.py` | name → class, taxonomy filters, capability shortlisting |
+| `core/adapters.py` | adapting a third-party estimator to the contract |
+| `core/tags.py` | `Capabilities.describe()`, which feeds the Sect. 8.2 table |
+| `io/` | in-memory, CSV, Parquet and benchmark loading |
+| `evaluation/protocol.py` | `Environment`, `Protocol`, `RunResult` |
+| `evaluation/report.py` | both comparison tables, CSV and LaTeX export, cluster profiles |
+| `pipeline/compose.py` | `ClusterPipeline` — a composition that *is* a clusterer |
+| `viz/` | dendrograms, embeddings, selection curves, silhouettes, profiles |
 
-- **`BaseComponent.fit`** and the steps it runs — the template method every
-  component inherits. A subclass now only overrides `_fit`.
-- **The precomputed-matrix checks** in `core/validation.py`. They came first
-  because the failures they catch — a similarity matrix passed as a
-  dissimilarity, a squared distance, a non-zero diagonal — produce a
-  plausible-looking partition rather than an error.
+The precomputed-matrix checks came first because the failures they catch — a similarity matrix passed as a dissimilarity, a squared distance, a non-zero diagonal — produce a plausible-looking partition rather than an error.
 
-A component whose only content is a `_fit` override already passes
-scikit-learn's `check_estimator`.
+A component whose only content is a `_fit` override already passes scikit-learn's `check_estimator`. An adapted method needs only `_backend_import`, a parameter map and a capability declaration.
+
+Still blocked, and on what:
+
+- **`measures/validation/`** — the indices themselves. `ComparisonRun.run` and `best`, `selection/n_clusters.py` and `selection/stability.py` all wait on these.
+- **`io/artifacts.py`** and `PersistableMixin` — a storage format decision.
+- **`io/loaders/supabase.py`** — the Data Engineering team publishing its view.
 
 ## Layout
 

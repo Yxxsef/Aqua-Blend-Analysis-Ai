@@ -156,24 +156,32 @@ class BaseComponent(BaseEstimator, ABC):
         The checks are duck-typed rather than `isinstance` against the
         mixins: a class that implements `predict` directly is as inductive
         as one that inherits `InductiveMixin`.
+
+        Where a capability has more than one legitimate spelling, any one
+        satisfies it. `is_inductive` is the case that matters: it promises
+        the fitted model applies to observations unseen at fit time, which
+        a clusterer offers through `predict` and a reducer through
+        `transform`. Requiring `predict` of both would fail every inductive
+        dimensionality reduction technique.
         """
         caps = self._capabilities
-        promised: list[tuple[bool, str, str]] = [
-            (caps.is_inductive, "predict", "is_inductive"),
-            (caps.produces_hierarchy, "cut", "produces_hierarchy"),
-            (caps.handles_noise, "noise_mask", "handles_noise"),
-            (caps.supports_precomputed, "_check_precomputed", "supports_precomputed"),
+        promised: list[tuple[bool, tuple[str, ...], str]] = [
+            (caps.is_inductive, ("predict", "transform"), "is_inductive"),
+            (caps.produces_hierarchy, ("cut",), "produces_hierarchy"),
+            (caps.handles_noise, ("noise_mask",), "handles_noise"),
+            (caps.supports_precomputed, ("_check_precomputed",), "supports_precomputed"),
             (
                 caps.assignment is not Assignment.CRISP,
-                "predict_proba",
+                ("predict_proba",),
                 f"assignment={caps.assignment.value}",
             ),
         ]
-        for declared, attribute, label in promised:
-            if declared and not hasattr(self, attribute):
+        for declared, attributes, label in promised:
+            if declared and not any(hasattr(self, name) for name in attributes):
+                expected = " or ".join(f"`{name}`" for name in attributes)
                 raise ContractViolationError(
                     f"{type(self).__name__} declares {label} but has no "
-                    f"`{attribute}`. Either mix in the capability or correct "
+                    f"{expected}. Either mix in the capability or correct "
                     f"the declaration -- the comparison table of Sect. 8.2 is "
                     f"generated from it."
                 )

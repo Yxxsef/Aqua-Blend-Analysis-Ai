@@ -388,17 +388,13 @@ Sect. 4.5. **They are part of the result, not an embarrassment to omit.**
 
 # Before opening a pull request
 
-- [ ] Section written from the right template, all parts present and in order,
-      every `\placeholder{}` filled and deleted.
-- [ ] `.docx` regenerated if a `.tex` template changed.
-- [ ] `documentation/main.pdf` builds, and the new `\input` line is in place.
-- [ ] Code subclasses the right base, mixes in only the capabilities it has,
-      and is registered under a permanent name.
-- [ ] `_capabilities` agrees with the write-up, field by field
-      ([2.3.1](#231-what-must-agree)).
-- [ ] `doc_label` and `references` set.
+- [ ] Section written from the right template, all parts present and in order, every `\placeholder{}` filled and deleted.
+<!-- - [ ] `.docx` regenerated if a `.tex` template changed.
+- [ ] `documentation/main.pdf` builds, and the new `\input` line is in place. -->
+- [ ] Code subclasses the right base, mixes in only the capabilities it has, and is registered under a permanent name.
+- [ ] `_capabilities` agrees with the write-up, field by field ([2.3.1](#231-what-must-agree)).
+<!-- - [ ] `doc_label` and `references` set. -->
 - [ ] Notebook runs top to bottom on a restarted kernel.
 - [ ] Tables and figures exported, not retyped.
 - [ ] Caveats reported, including unfavourable results.
-- [ ] Branch named `task-<number>-<short-description>`; changes confined to
-      `AI/` ([`AI/README.md`](../README.md)).
+- [ ] Branch named `task-<number>-<short-description>`; changes confined to `AI/` ([`AI/README.md`](../README.md)).

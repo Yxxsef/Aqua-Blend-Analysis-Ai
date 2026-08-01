@@ -12,11 +12,28 @@ addresses two of the weaknesses named in Sect. 2.1 directly: local optima,
 where the same data and different seeds give different partitions, and
 subjective hyperparameters, where a result that only holds at one setting
 is not a robust one. A high internal index with low stability means the
-method found a partition it can score well, not one the data supports.
+method found a partition it can score well, not one the data supports. In other words,
+this choice of method is inappropriate.
 
 Stability is also a selection criterion in its own right -- preferring the
 |C| whose partition is most reproducible -- so it composes with
 `n_clusters.py` rather than duplicating it.
+
+The general procedure is:
+    1. Cluster the original dataset.
+    2. Create a **slightly** modified dataset by:
+            bootstrap sampling,
+            subsampling,
+            adding small amounts of noise,
+            leaving out some observations.
+    3. Cluster the modified dataset.
+    4. Compare the new clustering to the original.
+    5. Repeat many times.
+
+> If the clusterings remain similar across repetitions,
+> the clustering method is considered stable and appropriate.
+> Note: the dataset should be slightly modified,
+        otherwise it becomes an different dataset, and has no practical meaning.
 """
 
 from __future__ import annotations
@@ -73,9 +90,9 @@ class StabilityAnalysis(BaseComponent):
     Fitted attributes
     -----------------
     stability_ : float
-        Mean agreement across pairs of repeats.
+        Mean (Average) agreement across pairs of repeats.
     stability_std_ : float
-        Spread, reported with the mean; a high mean with a high spread is
+        Spread, reported with the mean; even a high mean but with a high spread is
         not stability.
     agreements_ : ndarray
         The pairwise agreements themselves.

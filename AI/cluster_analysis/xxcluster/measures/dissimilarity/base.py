@@ -75,5 +75,12 @@ class BaseDissimilarity(BaseComponent, ABC):
         raise NotImplementedError
 
     def _fit(self, X: MatrixLike, y: Any = None, **fit_params: Any) -> None:
-        """Estimate whatever the measure needs from the data, if anything."""
-        raise NotImplementedError
+        """Estimate whatever the measure needs from the data, if anything.
+
+        A no-op by default, so that a measure with no learned quantity --
+        which is most of them -- inherits a working `fit` that records the
+        input dimensions and nothing else. Override only where there is
+        something to estimate: a covariance for Mahalanobis, per-feature
+        ranges for a scaled measure. Doing that estimation here rather
+        than in the caller is what keeps it inside the resampling loop.
+        """

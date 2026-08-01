@@ -21,8 +21,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
+import numpy as np
+
 from .exceptions import ContractViolationError
 from .types import (
+    NOISE_LABEL,
     ArrayLike,
     DissimilarityMatrix,
     Labels,
@@ -35,6 +38,8 @@ from .validation import (
     check_affinity_matrix,
     check_dissimilarity_matrix,
     check_kernel_matrix,
+    check_labels,
+    ensure_fitted,
 )
 
 
@@ -75,8 +80,27 @@ class SoftAssignmentMixin(ABC):
         ...
 
     def defuzzify(self, memberships: Memberships | None = None) -> Labels:
-        """Reduce memberships to a crisp partition, by default by argmax."""
-        raise NotImplementedError
+        """Reduce memberships to a crisp partition, by default by argmax.
+
+        Defaults to the fitted `memberships_` when none is given, so a
+        fitted method can restate its own partition.
+
+        Discarding the degrees is a loss, and where it matters the caller
+        should read `memberships_` instead: an observation split 0.51/0.49
+        and one at 1.00/0.00 become the same label here, and only the first
+        is a boundary case worth reporting under Sect. 4.4.
+        """
+        if memberships is None:
+            ensure_fitted(self, "memberships_")
+            memberships = self.memberships_
+
+        memberships = np.asarray(memberships)
+        if memberships.ndim != 2:
+            raise ValueError(
+                f"memberships must be an (m, |C|) matrix; got shape "
+                f"{memberships.shape}."
+            )
+        return np.argmax(memberships, axis=1).astype(int)
 
 
 class HierarchyMixin(ABC):
@@ -118,14 +142,24 @@ class NoiseAwareMixin:
     n_noise_ : int
     """
 
-    #: Label reserved for unassigned observations.
-    NOISE_LABEL: int = -1
+    #: Label reserved for unassigned observations; one definition, in
+    #: `core.types`, shared with the validation helpers.
+    NOISE_LABEL: int = NOISE_LABEL
 
     n_noise_: int
 
     def noise_mask(self, labels: Labels | None = None) -> ArrayLike:
-        """Return a boolean mask selecting the noise observations."""
-        raise NotImplementedError
+        """Return a boolean mask selecting the noise observations.
+
+        Defaults to the fitted `labels_`. The mask rather than the indices,
+        because every downstream use is a selection -- excluding noise from
+        an index that does not handle it, or colouring it distinctly in a
+        figure.
+        """
+        if labels is None:
+            ensure_fitted(self, "labels_")
+            labels = self.labels_
+        return check_labels(labels) == self.NOISE_LABEL
 
 
 class ProbabilisticMixin(ABC):
@@ -134,20 +168,46 @@ class ProbabilisticMixin(ABC):
     Adds the model selection quantities that only a likelihood-based
     method can report, which give an alternative to the internal indices
     of Sect. 4.2 for choosing the number of clusters.
+
+    Both criteria are implemented here rather than per method: the
+    formulae are the same for every likelihood-based model, and only the
+    two quantities they read are method-specific. Lower is better for
+    both, matching scikit-learn.
+
+    Fitted attributes
+    -----------------
+    n_parameters_ : int
+        Free parameters of the fitted model. The subclass computes it --
+        for a Gaussian mixture it depends on the covariance structure --
+        and it is required, because a criterion that penalises complexity
+        cannot default the complexity.
     """
+
+    n_parameters_: int
 
     @abstractmethod
     def score_samples(self, X: MatrixLike) -> ArrayLike:
         """Return the log-likelihood of each observation."""
         ...
 
+    def _log_likelihood(self, X: MatrixLike) -> float:
+        ensure_fitted(self, "n_parameters_")
+        return float(np.sum(self.score_samples(X)))
+
     def bic(self, X: MatrixLike) -> float:
-        """Bayesian information criterion of the fitted model."""
-        raise NotImplementedError
+        """Bayesian information criterion of the fitted model.
+
+        The stricter of the two: its penalty grows with the sample size,
+        so it prefers fewer clusters than AIC on the same data. Reporting
+        both and noting where they disagree is more honest than picking
+        one silently.
+        """
+        n_samples = np.asarray(X).shape[0]
+        return -2.0 * self._log_likelihood(X) + self.n_parameters_ * np.log(n_samples)
 
     def aic(self, X: MatrixLike) -> float:
         """Akaike information criterion of the fitted model."""
-        raise NotImplementedError
+        return -2.0 * self._log_likelihood(X) + 2.0 * self.n_parameters_
 
 
 class PrecomputedMixin:

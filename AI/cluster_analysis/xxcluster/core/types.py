@@ -28,6 +28,11 @@ DissimilarityMatrix: TypeAlias = np.ndarray
 #: Crisp cluster assignment, shape (m,), dtype int. Noise is -1 by convention.
 Labels: TypeAlias = np.ndarray
 
+#: The label reserved for an observation no method assigned. Defined here so
+#: the validation helpers and `mixins.NoiseAwareMixin` share one constant --
+#: two spellings of this convention is how a noise point becomes cluster 0.
+NOISE_LABEL: int = -1
+
 #: Soft assignment, shape (m, |C|), rows summing to 1 for probabilistic models.
 Memberships: TypeAlias = np.ndarray
 

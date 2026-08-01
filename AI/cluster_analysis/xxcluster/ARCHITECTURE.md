@@ -300,8 +300,9 @@ regime (Sect. 4.4), so a scaled or reduced representation would be useless.
 
 | File | Holds |
 |---|---|
-| `datasets.py` | `FeatureSpec`, `Dataset`, `BaseDatasetLoader` |
-| `artifacts.py` | `ArtifactMeta`, `BaseArtifactStore` |
+| `datasets.py` | `FeatureSpec`, `Dataset`, `BaseDatasetLoader` — **implemented** |
+| `loaders/` | One loader per source: `FrameLoader`, `CsvLoader`, `ParquetLoader`, `BenchmarkLoader` — **implemented**; `supabase.py` awaits the published view |
+| `artifacts.py` | `ArtifactMeta`, `BaseArtifactStore` — declared |
 
 Nothing else in the package reads a file or knows a path. A method receives an
 array — hence testable on synthetic data; a loader knows the AquaBlend schema —
@@ -309,7 +310,23 @@ and is the only thing that does.
 
 `FeatureSpec.role` separates columns clustered *on* from columns held back to
 *interpret with*. Clustering on a column and then explaining the clusters by it
-is circular, and the role field is what prevents it.
+is circular, and the role field is what prevents it. Roles are **declared, never
+inferred** — a loader without a schema is refused, because no source can tell
+you which of its columns is a modelling input.
+
+`BaseDatasetLoader.load` is a template method like `BaseComponent.fit`:
+subclasses implement `_read`, and inherit schema validation that no loader can
+skip. A missing column and an undeclared extra column are both errors — the
+first breaks the analysis, the second means the source changed and nobody
+recorded it.
+
+The upstream store is live, so a result records the **window** its data covers
+rather than a copy of the rows: `provenance["data_cutoff"]`, rendered by
+`Dataset.provenance_statement()` into Sect. 3.1. Results are comparable within
+one cutoff; a later cutoff is a new dataset, and a difference in the numbers is
+then attributable. `check_ranges()` makes `valid_range` enforceable — values
+outside it are data faults to raise with the owning team, not outliers to
+cluster.
 
 `ArtifactMeta` is a required argument to `save`, not an optional one: metadata
 written at the same moment as the result is provenance; written afterwards from
@@ -404,7 +421,11 @@ every clustering method unchanged.
 - Docstrings cite the document by section and literature by `literature.bib`
   key.
 - `from __future__ import annotations` at the top of every module.
-- The precomputed-matrix checks in `core/validation.py` are implemented and
-  covered by `tests/test_validation.py`. Everything else is still declared.
-- In the skeleton: `@abstractmethod` bodies are `...`; unwritten concrete
-  methods raise `NotImplementedError`.
+- `@abstractmethod` bodies are `...`; a concrete method not yet written raises
+  `NotImplementedError`. Note that a `NotImplementedError` is not always a gap:
+  it is also how a component refuses something it genuinely cannot do — a
+  transductive technique asked to map unseen data, a nonlinear embedding asked
+  for feature loadings. The docstring says which.
+- Everything that does not depend on a clustering algorithm is implemented and
+  tested; see the table in `README.md` for what that covers and what is still
+  blocked.

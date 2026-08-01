@@ -16,7 +16,8 @@ and Complexity paragraphs of the method's documentation section.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from enum import Enum
 
 from .types import Assignment, Backend, Family, Scaling, SubFamily
 
@@ -64,13 +65,45 @@ class Capabilities:
     doc_label: str | None = None
 
     def describe(self) -> dict[str, object]:
-        """Return the tags as a flat row for the comparison table."""
-        raise NotImplementedError
+        """Return the tags as a flat row for the comparison table.
+
+        Enums render as their values and the reference tuple as a
+        comma-separated string, so the row is directly writable to CSV or
+        LaTeX without a second pass of type handling in the reporting
+        layer. `references` and `doc_label` are dropped: they are
+        provenance for the prose, not columns of Table 8.2.
+        """
+        row: dict[str, object] = {}
+        for field_ in fields(self):
+            if field_.name in ("references", "doc_label"):
+                continue
+            value = getattr(self, field_.name)
+            row[field_.name] = value.value if isinstance(value, Enum) else value
+        return row
 
     def is_applicable(self, **data_properties: bool) -> bool:
         """Report whether these capabilities cover the given data properties.
 
         Used to shortlist methods for a dataset (missing values, mixed
         types, expected noise) before any fitting is attempted.
+
+        Each keyword names a property the data has; a method qualifies only
+        if it declares the matching capability. Properties are passed as
+        the `handles_*` name they are checked against, e.g.
+        `is_applicable(handles_missing=True)`.
+
+        A property the capabilities do not define is a caller's error, not
+        a silent false. Misspelling one would otherwise shortlist every
+        method rather than none, which is the failure that would go
+        unnoticed.
         """
-        raise NotImplementedError
+        known = {field_.name for field_ in fields(self)}
+        for name, required in data_properties.items():
+            if name not in known:
+                raise ValueError(
+                    f"unknown capability {name!r}; expected one of "
+                    f"{', '.join(sorted(known))}."
+                )
+            if required and not getattr(self, name):
+                return False
+        return True

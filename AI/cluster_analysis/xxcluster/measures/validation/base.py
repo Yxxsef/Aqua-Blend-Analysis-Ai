@@ -70,13 +70,26 @@ class BaseValidityIndex(ABC):
         ...
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
-        """Alias for `score`, so an index is usable as a plain callable."""
-        raise NotImplementedError
+        """Alias for `score`, so an index is usable as a plain callable.
+
+        What lets an index stand in wherever scikit-learn expects a
+        scoring function, and lets a caller pass either an index or a bare
+        function without the receiving code knowing which it got.
+        """
+        return self.score(*args, **kwargs)
 
     def is_better(self, a: float, b: float) -> bool:
         """Report whether score `a` is better than `b` under this index.
 
         The single place the direction is applied. Callers compare through
         this rather than with a bare inequality.
+
+        A NaN never wins, which is what makes it safe to fold a failed run
+        into a comparison: it is reported in the table and loses the
+        selection, rather than either propagating or being dropped.
         """
-        raise NotImplementedError
+        if a != a:
+            return False
+        if b != b:
+            return True
+        return a > b if self.higher_is_better else a < b

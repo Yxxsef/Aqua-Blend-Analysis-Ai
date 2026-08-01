@@ -13,12 +13,11 @@ of the ecosystem.
 
 The precomputed-matrix checks are implemented here and nowhere else.
 `PrecomputedMixin` dispatches to them; no component should repeat the
-logic, because two implementations of one rule diverge. They are the only
-functions in this module that are written rather than declared: the
-failures they catch -- a similarity matrix passed as a dissimilarity, a
-squared distance, a non-zero diagonal -- do not raise on their own. They
-produce a plausible-looking partition that is wrong, which is the kind of
-error Sect. 4.5 exists to prevent.
+logic, because two implementations of one rule diverge. They came first
+because the failures they catch -- a similarity matrix passed as a
+dissimilarity, a squared distance, a non-zero diagonal -- do not raise on
+their own. They produce a plausible-looking partition that is wrong,
+which is the kind of error Sect. 4.5 exists to prevent.
 """
 
 from __future__ import annotations
@@ -29,9 +28,11 @@ import inspect
 
 import numpy as np
 from scipy.spatial.distance import squareform
-from sklearn.utils.validation import check_array
+from sklearn.utils import check_random_state as sk_check_random_state
+from sklearn.utils.validation import check_array, check_is_fitted
 
-from .types import DissimilarityMatrix, Labels, MatrixLike, Seed
+from .exceptions import NotFittedError
+from .types import NOISE_LABEL, DissimilarityMatrix, Labels, MatrixLike, Seed
 
 #: scikit-learn renamed `force_all_finite` to `ensure_all_finite` in 1.6.
 #: Resolved once here so callers pass one name across the supported range.
@@ -254,20 +255,132 @@ def check_labels(labels: Any, *, n_samples: int | None = None, allow_noise: bool
 
     Verifies length and integer dtype, and that -1 appears only where
     noise is permitted.
+
+    Integral floats are accepted and converted, because a label vector that
+    has been through a DataFrame column or a `np.zeros` initialisation
+    arrives as float without meaning anything different. Non-integral
+    values are refused: they are memberships, not a partition, and
+    truncating them would silently defuzzify.
+
+    `allow_noise=False` is passed by a consumer that cannot interpret an
+    unassigned observation -- most validity indices, per
+    `BaseValidityIndex.handles_noise`. Refusing here forces the caller to
+    decide what happens to the noise points, rather than having them
+    scored as though they were a cluster of their own.
     """
-    raise NotImplementedError
+    labels = np.asarray(labels)
+
+    if labels.ndim != 1:
+        raise ValueError(
+            f"labels must be a one-dimensional vector of cluster indices; got "
+            f"shape {labels.shape}. An (m, |C|) array is a membership matrix "
+            f"-- defuzzify it first."
+        )
+
+    if not np.issubdtype(labels.dtype, np.integer):
+        try:
+            as_float = np.asarray(labels, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"labels must be integer cluster indices; got dtype "
+                f"{labels.dtype}. Encode names to indices before scoring."
+            ) from exc
+        if not np.isfinite(as_float).all() or not np.array_equal(
+            as_float, np.floor(as_float)
+        ):
+            raise ValueError(
+                "labels contains non-integral values, so it is a membership "
+                "vector rather than a partition."
+            )
+        labels = as_float.astype(int)
+
+    if n_samples is not None and labels.shape[0] != n_samples:
+        raise ValueError(
+            f"labels has length {labels.shape[0]}, but {n_samples} observations "
+            f"were expected."
+        )
+
+    if labels.size and labels.min() < NOISE_LABEL:
+        raise ValueError(
+            f"labels contains {int(labels.min())}; {NOISE_LABEL} is the only "
+            f"negative label, and it means noise."
+        )
+
+    if not allow_noise and labels.size and (labels == NOISE_LABEL).any():
+        n_noise = int((labels == NOISE_LABEL).sum())
+        raise ValueError(
+            f"labels marks {n_noise} observation(s) as noise, which this "
+            f"consumer is not defined on. Exclude them explicitly, or use one "
+            f"that declares handles_noise."
+        )
+
+    return labels
 
 
 def check_n_clusters(n_clusters: Any, *, n_samples: int | None = None) -> int:
-    """Validate a requested number of clusters, 2 <= |C| <= m."""
-    raise NotImplementedError
+    """Validate a requested number of clusters, 2 <= |C| <= m.
+
+    The lower bound is 2 by Def. 2: one cluster is not a partition of the
+    data into groups, and every validity index of Sect. 4.2 is undefined
+    there since none has a between-cluster term to compute.
+    """
+    if isinstance(n_clusters, bool) or not isinstance(n_clusters, (int, np.integer)):
+        raise ValueError(
+            f"n_clusters must be an integer; got {n_clusters!r}. A method that "
+            f"determines |C| itself should leave it unset rather than pass None."
+        )
+
+    n_clusters = int(n_clusters)
+    if n_clusters < 2:
+        raise ValueError(
+            f"n_clusters must be at least 2; got {n_clusters}. A single cluster "
+            f"is not a partition, and every validity index is undefined on it."
+        )
+
+    if n_samples is not None and n_clusters > n_samples:
+        raise ValueError(
+            f"n_clusters={n_clusters} exceeds the {n_samples} observations "
+            f"available."
+        )
+
+    return n_clusters
 
 
 def check_random_state(seed: Seed) -> Any:
-    """Normalise a seed to a random state, so runs are reproducible."""
-    raise NotImplementedError
+    """Normalise a seed to a random state, so runs are reproducible.
+
+    Not a bare re-export of scikit-learn's function of the same name: that
+    one rejects a `numpy.random.Generator`, which is the modern interface
+    and which `core.types.Seed` admits. A Generator is passed through
+    unchanged; everything else goes to scikit-learn so that a legacy
+    `RandomState` still behaves exactly as a backend expects.
+    """
+    if isinstance(seed, np.random.Generator):
+        return seed
+    return sk_check_random_state(seed)
 
 
 def ensure_fitted(component: Any, *attributes: str) -> None:
-    """Raise `NotFittedError` unless every named attribute is present."""
-    raise NotImplementedError
+    """Raise `NotFittedError` unless every named attribute is present.
+
+    With no attributes named, falls back to the component's own
+    `_required_fitted` declaration -- so a caller writes `ensure_fitted(m)`
+    and the check stays correct as the class's declaration grows. Where
+    there is no declaration either, scikit-learn's convention applies: any
+    attribute ending in an underscore counts as evidence of fitting.
+    """
+    names = tuple(attributes)
+    if not names:
+        declared = getattr(component, "_required_fitted_attributes", None)
+        names = tuple(declared()) if callable(declared) else ()
+
+    if not names:
+        check_is_fitted(component)
+        return
+
+    missing = [name for name in names if not hasattr(component, name)]
+    if missing:
+        raise NotFittedError(
+            f"{type(component).__name__} is not fitted: {', '.join(missing)} "
+            f"missing. Call fit before using this component."
+        )
