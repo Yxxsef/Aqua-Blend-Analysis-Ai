@@ -54,12 +54,16 @@ class BaseDivisive(BaseHierarchicalClusterer, ABC):
         """Run the recursive split and record the resulting tree."""
         raise NotImplementedError
 
-    @abstractmethod
     def _select_cluster(self, X: MatrixLike, labels: Any) -> int:
-        """Choose the next cluster to split; the first of the two choices."""
-        ...
+        """Choose the next cluster to split; the first of the two choices.
 
-    @abstractmethod
+        Required of a native method; an adapted one never reaches it.
+        """
+        raise NotImplementedError
+
     def _split(self, X: MatrixLike) -> Any:
-        """Split one cluster in two; the second of the two choices."""
-        ...
+        """Split one cluster in two; the second of the two choices.
+
+        Required of a native method; an adapted one never reaches it.
+        """
+        raise NotImplementedError

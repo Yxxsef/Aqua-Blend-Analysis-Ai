@@ -141,6 +141,23 @@ class HDBSCAN(AdaptedClusterer, BaseDensityClusterer):
     _capabilities = Capabilities(backend=Backend.SKLEARN, handles_noise=True, ...)
 ```
 
+The adapter must come **first** in the bases, so the MRO reaches
+`AdaptedClusterer._fit` before the family base's, which raises for a native
+method.
+
+This is why **a hook that only a native fitting loop calls — `_fit_once`,
+`_update_centers`, `_build_hierarchy`, `_partition_graph` — is a concrete
+method raising `NotImplementedError`, never an `@abstractmethod`.** An adapted
+method never reaches one, so an abstract hook would make its whole subfamily
+impossible to adapt: `ABCMeta` refuses to instantiate the class. Only `_fit`
+stays abstract, and the adapters supply it. A hook every subclass must answer
+whichever route it took — `BaseHybridClusterer._check_steps` — does stay
+abstract.
+
+Where a backend does not expose an attribute the contract declares, derive it
+in `_derive_missing`: `n_clusters_` and `n_noise_` are derived there already,
+and, say, a `converged_` flag that scikit-learn signals only by stopping early.
+
 Write `_fit` natively where no good implementation exists, or where following
 the formulation in the document is the point. `_capabilities.backend` records
 which route was taken, so any result traces to the code that produced it.

@@ -20,6 +20,18 @@ directly, if no good implementation exists, or where the point is to
 follow the formulation in the documentation. `_capabilities.backend`
 records which route a class took, so a result can always be traced to the
 code that produced it.
+
+One rule this puts on the family bases: **a hook that exists only to be
+called by a native fitting loop -- `_fit_once`, `_update_centers`,
+`_build_hierarchy`, `_partition_graph` -- is a concrete method raising
+`NotImplementedError`, never an `@abstractmethod`.** An adapted method
+never reaches such a hook, because its backend runs its own iteration, so
+an abstract one makes the whole subfamily impossible to adapt: `ABCMeta`
+refuses to instantiate the class. Only `_fit` stays abstract, and the
+adapters below supply it.
+
+The exception is a hook that every subclass must answer regardless of
+route, such as `BaseHybridClusterer._check_steps` -- those stay abstract.
 """
 
 from __future__ import annotations

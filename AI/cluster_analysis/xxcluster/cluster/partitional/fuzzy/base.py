@@ -85,12 +85,16 @@ class BaseFuzzyClusterer(
         """Alternate the membership and prototype steps until convergence."""
         raise NotImplementedError
 
-    @abstractmethod
     def _update_memberships(self, X: MatrixLike, centers: ArrayLike) -> Memberships:
-        """Membership step, given the current prototypes."""
-        ...
+        """Membership step, given the current prototypes.
 
-    @abstractmethod
+        Required of a native method; an adapted one never reaches it.
+        """
+        raise NotImplementedError
+
     def _update_centers(self, X: MatrixLike, memberships: Memberships) -> ArrayLike:
-        """Prototype step, given the current memberships."""
-        ...
+        """Prototype step, given the current memberships.
+
+        Required of a native method; an adapted one never reaches it.
+        """
+        raise NotImplementedError

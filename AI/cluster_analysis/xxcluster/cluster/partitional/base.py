@@ -4,7 +4,7 @@ Base class shared by partitional methods.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any
 
 from ...core.base import BaseClusterer
@@ -48,6 +48,16 @@ class BasePartitionalClusterer(BaseClusterer, ABC):
     converged_ : bool
     """
 
+    #: Declared, not merely documented: `_check_fitted` verifies these after
+    #: every fit, and `BackendAdapter._collect_fitted` copies exactly this set
+    #: from a backend. An attribute named only in the docstring above is
+    #: neither checked nor copied.
+    #:
+    #: Safe for the whole family because the subfamilies that do not iterate
+    #: -- density-based and graph-theoretic -- derive from `BaseClusterer`
+    #: directly and never inherit this.
+    _required_fitted = ("n_iter_", "converged_", "criterion_")
+
     n_iter_: int
     criterion_: float
     converged_: bool
@@ -71,15 +81,19 @@ class BasePartitionalClusterer(BaseClusterer, ABC):
         """Run `n_init` restarts and retain the best by criterion value."""
         raise NotImplementedError
 
-    @abstractmethod
     def _fit_once(self, X: MatrixLike, random_state: Any) -> Any:
         """Run a single restart to convergence and return its result.
 
         The iteration itself, which is what a subfamily defines: alternate
         assignment and update, run EM, adapt a lattice. Restarts,
         comparison and selection are handled by `_fit` above.
+
+        Required of a native method. Not abstract, because an adapted method
+        never reaches it -- its backend runs its own iteration -- and making
+        it abstract would leave no way to adapt a method of this family at
+        all. See the note on native hooks in `core/adapters.py`.
         """
-        ...
+        raise NotImplementedError
 
     def _initialise(self, X: MatrixLike, random_state: Any) -> Any:
         """Produce the starting state for one restart."""

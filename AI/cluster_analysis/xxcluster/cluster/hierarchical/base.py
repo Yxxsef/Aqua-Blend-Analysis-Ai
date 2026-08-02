@@ -75,11 +75,12 @@ class BaseHierarchicalClusterer(HierarchyMixin, PrecomputedMixin, BaseClusterer,
         """Build the hierarchy, then apply the requested cut, if any."""
         raise NotImplementedError
 
-    @abstractmethod
     def _build_hierarchy(self, X: MatrixLike) -> None:
         """Construct the tree and set `linkage_`, `children_`, `distances_`.
 
         The one step that differs between agglomerative and divisive
-        construction, and the only one a concrete method must write.
+        construction, and the only one a native method must write. Not
+        abstract: an adapted method never reaches it, because its backend
+        builds the tree.
         """
-        ...
+        raise NotImplementedError

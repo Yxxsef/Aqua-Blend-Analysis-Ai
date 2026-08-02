@@ -60,17 +60,17 @@ class BaseDensityClusterer(NoiseAwareMixin, PrecomputedMixin, BaseClusterer, ABC
         """Estimate density, extract clusters, and mark the remainder noise."""
         raise NotImplementedError
 
-    @abstractmethod
     def _density_estimate(self, X: MatrixLike) -> ArrayLike:
         """Return the per-observation density quantity the method uses.
 
         A neighbour count within a radius, a core distance, or a mutual
         reachability -- whichever the method defines. Exposed separately
         because it is worth plotting when diagnosing a poor result.
-        """
-        ...
 
-    @abstractmethod
+        Required of a native method; an adapted one never reaches it.
+        """
+        raise NotImplementedError
+
     def _extract_clusters(self, X: MatrixLike, density: ArrayLike) -> None:
         """Form clusters from the density estimate and label the remainder.
 
@@ -78,5 +78,7 @@ class BaseDensityClusterer(NoiseAwareMixin, PrecomputedMixin, BaseClusterer, ABC
         `core_sample_indices_`. The step where the family's variants
         differ -- a fixed radius, a hierarchy of densities, a stability
         criterion over that hierarchy.
+
+        Required of a native method; an adapted one never reaches it.
         """
-        ...
+        raise NotImplementedError

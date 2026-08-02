@@ -4,15 +4,19 @@ Base class for prototype-based (SSE) methods.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any
+
+from sklearn.base import TransformerMixin
 
 from ....core.mixins import InductiveMixin
 from ....core.types import ArrayLike, Labels, MatrixLike, MetricLike, Seed
 from ..base import BasePartitionalClusterer
 
 
-class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
+class BasePrototypeClusterer(
+    InductiveMixin, TransformerMixin, BasePartitionalClusterer, ABC
+):
     """A method representing each cluster by a single prototype.
 
     Fitting alternates assignment and prototype update until the criterion
@@ -20,7 +24,11 @@ class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
     recomputed -- a mean, a medoid, a median -- and inherit the loop.
 
     Inductive by construction: `predict` assigns to the nearest prototype
-    under the same measure used at fit time.
+    under the same measure used at fit time. `TransformerMixin` is mixed in
+    because `transform` below maps into prototype space, and scikit-learn
+    requires the matching `fit_transform` of anything exposing `transform` --
+    without it `check_estimator` fails, which every contributor is told to
+    run.
 
     Parameters
     ----------
@@ -42,6 +50,11 @@ class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
     inertia_ : float
         Final SSE; the criterion value, exposed under scikit-learn's name.
     """
+
+    #: Added to the family's declaration; see `BasePartitionalClusterer`.
+    #: `inertia_` is scikit-learn's name for the same quantity the family
+    #: calls `criterion_`, and an adapted method maps both onto its backend.
+    _required_fitted = ("cluster_centers_", "inertia_")
 
     cluster_centers_: ArrayLike
     inertia_: float
@@ -91,11 +104,11 @@ class BasePrototypeClusterer(InductiveMixin, BasePartitionalClusterer, ABC):
         """Assignment step: nearest prototype for every observation."""
         raise NotImplementedError
 
-    @abstractmethod
     def _update_centers(self, X: MatrixLike, labels: Labels) -> ArrayLike:
         """Update step: recompute each prototype from its members.
 
         The one method that distinguishes k-means from k-medoids and
-        k-medians.
+        k-medians. Required of a native method, which inherits the loop in
+        `_fit_once`; an adapted method never reaches it.
         """
-        ...
+        raise NotImplementedError

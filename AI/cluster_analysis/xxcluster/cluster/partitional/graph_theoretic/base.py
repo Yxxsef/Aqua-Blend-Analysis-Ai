@@ -74,12 +74,13 @@ class BaseGraphClusterer(PrecomputedMixin, BaseClusterer, ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def _partition_graph(self, affinity: ArrayLike) -> Any:
         """Partition the graph and set the fitted attributes.
 
         The step that distinguishes the methods, once the graph is fixed:
         an eigendecomposition of the Laplacian, a modularity optimisation,
         a learned assignment.
+
+        Required of a native method; an adapted one never reaches it.
         """
-        ...
+        raise NotImplementedError
