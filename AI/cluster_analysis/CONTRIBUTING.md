@@ -53,7 +53,7 @@ python build_docx.py              # rebuild all generated templates
 python build_docx.py measure      # rebuild one
 ```
 
-`build_docx.py` copies the styling from `method_template.docx`, which is hand-made and never overwritten, and replaces only the body, so every template looks identical in Word.
+`build_docx.py` copies the styling from `style_donor.docx` and replaces only the body, so every template looks identical in Word. `style_donor.docx` is the hand-made original the styles came from; it is never overwritten and is not a template anyone writes in. All three `.docx` templates, method included, are generated.
 
 If you change a `.tex` template, change the matching spec in `build_docx.py` and commit both files. Keeping the two in step by hand does not survive a sprint.
 
@@ -105,6 +105,31 @@ grep -rn "sec:dr:umap" documentation/     # find every reference first
 ```
 
 Removing a template means deleting both files, its `SPECS` entry, and its rows in the tables above. Removing a *section* means also deleting its `\input` line and leaving the section in place if its results are still cited elsewhere.
+
+## 1.6 References and academic integrity
+
+**Every source is declared once, in the shared citation key mapping sheet, and nowhere else.** Everyone's references go in the same sheet:
+
+<https://deakin365-my.sharepoint.com/:x:/g/personal/s224236373_deakin_edu_au/IQDSW3PBbHhZSq6vzGGQqi3WAbgJ1id1-t02k5B6fduX5Ys?e=nShY5e>
+
+Each entry there is given a key of the form `ref_<n>`, and that key is what you use:
+
+- **Writing in LaTeX** — cite it in the text as `\cite{ref_12}`, and list every source in the `REFERENCES USED` block at the end of your section file.
+- **Writing in Word** — refer to it by key in the text and fill in the References table, which is the last part of the template.
+
+Do not invent your own key, and do not edit `documentation/literature.bib` yourself — the document lead applies the mapping there. A citation whose key is not in the sheet cannot be resolved: it prints as `[?]` and the source is silently missing from the bibliography.
+
+The same keys go in the `references` field when the matching component is registered in `xxcluster` ([2.3.1](#231-what-must-agree)). The two lists must agree.
+
+**Cite where the claim is made**, not in a lump at the end. Every formulation, every published result and every parameter value taken from the literature carries its own reference. List what you read and did not cite as well — a reviewer needs to see what the write-up rests on, not only what it quotes.
+
+**Plagiarism.** An uncited claim, figure, equation, table or code fragment is plagiarism, whether it came from a paper, a library's documentation, a teammate, or a generative AI tool. Quote and cite it, or write it yourself, and declare AI assistance as Deakin policy requires. This is a matter of academic misconduct, not of house style, and it is the contributor's responsibility rather than the reviewer's.
+
+**Before opening a pull request, run your section through Turnitin.** It is available to Deakin students; the policy and the procedure are here:
+
+<https://d2l.deakin.edu.au/d2l/le/content/93067/viewContent/5882569/View>
+
+**Do not commit the report.** The repository is not where it belongs. Paste the similarity summary into the pull request as an image, or send it to the document lead privately — and the lead may run the check later in any case.
 
 ---
 
@@ -397,4 +422,6 @@ Sect. 4.5. **They are part of the result, not an embarrassment to omit.**
 - [ ] Notebook runs top to bottom on a restarted kernel.
 - [ ] Tables and figures exported, not retyped.
 - [ ] Caveats reported, including unfavourable results.
+- [ ] Every source declared in the citation key mapping sheet and cited by its `ref_<n>` key; the References block or table filled in, including sources read but not cited ([1.6](#16-references-and-academic-integrity)).
+- [ ] Turnitin run; the summary shared as an image in this PR or sent to the document lead — **not committed**.
 - [ ] Branch named `task-<number>-<short-description>`; changes confined to `AI/` ([`AI/README.md`](../README.md)).

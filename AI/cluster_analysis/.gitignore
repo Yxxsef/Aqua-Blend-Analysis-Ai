@@ -25,3 +25,6 @@ build_docx.py
 tests/
 .pytest_cache/
 conftest.py
+
+# Others
+style_donor.docx

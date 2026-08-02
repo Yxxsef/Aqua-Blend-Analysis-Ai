@@ -78,11 +78,6 @@ Each step earns its place by catching something that is otherwise silent:
 what it adds: `BaseClusterer` requires `labels_` and `n_clusters_`, and a
 density-based subclass adding `_required_fitted = ("n_noise_",)` inherits both.
 
-The payoff is asserted directly:
-`check_estimator(Dummy())` passes for a component whose only content is a
-`_fit` override, so `Pipeline`, `clone` and the `*SearchCV` classes work on
-anything built this way.
-
 ### 3.3 Component kinds
 
 `core/base.py` defines one base class per kind of thing that can be fitted.
@@ -368,42 +363,56 @@ partition is part of the output, not something filtered out of it.
 
 ---
 
-## 5. How a run flows
+## 5. How a comparison flows
+
+**This is not what a notebook does.** A notebook evidences *one*
+implementation against its own write-up — see [CONTRIBUTING Part 3](../CONTRIBUTING.md#part-3--the-notebooks) for that procedure. What follows is the cross-notebook run that produces Sect. 8, and it happens **once, after those sections and notebooks are final**.
+
+The unit of comparison is a **configuration**, not a method. Sect. 8 sets `KMeans` beside `PCA → KMeans` and `UMAP → HDBSCAN`, so every entry is a `ClusterPipeline` and a bare method is simply the one-step case.
 
 ```
-io.datasets.Dataset          load; features carry roles and units
+io.datasets.Dataset          load once; every configuration sees the same data
         │
-pipeline.ClusterPipeline     preprocess → method, as one component
+evaluation.Protocol          indices, restarts, seeds, shared preprocessing --
+        │                    fixed here, never supplied per method
+        │
+pipeline.ClusterPipeline     one per configuration: [reduction →] method, as a
+        │                    single component, so preprocessing stays inside
+        │                    the resampling loop below
         │
 selection.BaseSelector       sweep |C| or density params → best_params_, curve_
 selection.StabilityAnalysis  refit under perturbation → stability_
+        │                    both per configuration -- a reduction changes them
         │
-evaluation.ComparisonRun     every method, one Protocol → list[RunResult]
+evaluation.ComparisonRun     every configuration, one Protocol → list[RunResult]
+        │                    a failure is recorded, never dropped
         │
-        ├── measures.validation      indices applied identically
+        ├── measures.validation           indices applied identically
         ├── evaluation.profile_clusters   clusters in original units
+        ├── viz.*                       → figures, with provenance
         │
 evaluation.ComparisonTable   → Sect. 8.1 (scores) and 8.2 (capabilities)
-viz.*                        → figures, with provenance
 io.artifacts                 → stored with Protocol + Environment
 ```
 
 Each stage consumes the contract and none of them knows which method it holds.
 
+**The two tables aggregate at different granularity, and Sect. 8 must say
+which it is showing.** `quantitative()` is per configuration — `PCA → KMeans`
+scoring differently from `KMeans` is the finding, and the reduction has to be
+visible in the row. `qualitative()` is per *method*: capabilities are declared
+by a class, and a pipeline has none of its own, so a configuration's row there
+is its final method's row. Naming a configuration `kmeans` when a reduction
+preceded it puts a false row in both.
+
 ## 6. Where to extend
 
-**Vertically — a new method.** One module under the matching subfamily,
-subclassing that subfamily's base, plus a `@register` line. Selection,
-evaluation and reporting find it through the registry; nothing else changes.
+**Vertically — a new method.** One module under the matching subfamily, subclassing that subfamily's base, plus a `@register` line. Selection, evaluation and reporting find it through the registry; nothing else changes.
 
 **Horizontally — a new task.** Time-series clustering, anomaly detection,
-scenario generation, demand forecasting. A subpackage under `tasks/`, plus
-whatever components it needs *in their own subpackages*: a series
-dissimilarity in `measures/dissimilarity/`, a detector on
-`BaseOutlierDetector`, a generator on `BaseGenerator`.
+scenario generation, demand forecasting. A subpackage under `tasks/`, plus whatever components it needs *in their own subpackages*: a series dissimilarity in `measures/dissimilarity/`, a detector on `BaseOutlierDetector`, a generator on `BaseGenerator`.
 
-Time-series clustering illustrates the payoff of routing everything through
-`d(·,·)`: it needs a new dissimilarity and a representation step, and reuses
+Time-series clustering illustrates the payoff of routing everything through `d(·,·)`: it needs a new dissimilarity and a representation step, and reuses
 every clustering method unchanged.
 
 ## 7. Conventions
@@ -420,11 +429,5 @@ every clustering method unchanged.
 - Docstrings cite the document by section and literature by `literature.bib`
   key.
 - `from __future__ import annotations` at the top of every module.
-- `@abstractmethod` bodies are `...`; a concrete method not yet written raises
-  `NotImplementedError`. Note that a `NotImplementedError` is not always a gap:
-  it is also how a component refuses something it genuinely cannot do — a
-  transductive technique asked to map unseen data, a nonlinear embedding asked
-  for feature loadings. The docstring says which.
-- Everything that does not depend on a clustering algorithm is implemented and
-  tested; see the table in `README.md` for what that covers and what is still
-  blocked.
+- `@abstractmethod` bodies are `...`; a concrete method not yet written raises `NotImplementedError`. Note that a `NotImplementedError` is not always a gap: it is also how a component refuses something it genuinely cannot do — a transductive technique asked to map unseen data, a nonlinear embedding asked for feature loadings. The docstring says which.
+- Everything that does not depend on a clustering algorithm is implemented and tested; see the table in `README.md` for what that covers and what is still blocked.
