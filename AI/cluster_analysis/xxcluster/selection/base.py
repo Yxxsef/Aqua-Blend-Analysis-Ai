@@ -5,10 +5,10 @@ Base class for selectors.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
 from ..core.base import BaseComponent
-from ..core.types import Labels, MatrixLike, ParamGrid
+from ..core.types import ComponentKind, Labels, MatrixLike, ParamGrid
 
 
 class BaseSelector(BaseComponent, ABC):
@@ -49,6 +49,8 @@ class BaseSelector(BaseComponent, ABC):
         Partition of the winning configuration, so a fitted selector can
         stand in for a clusterer.
     """
+
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.SELECTOR
 
     best_params_: dict[str, Any]
     best_estimator_: Any

@@ -31,6 +31,13 @@ Skeleton
     An `@abstractmethod` body is `...`; an unwritten concrete method
     raises `NotImplementedError`. `BaseComponent.fit` and the steps it
     runs are implemented and tested; no concrete method is.
+Mixin order
+    scikit-learn's own mixins go to the **left** of `BaseComponent`, so
+    they sit left of `BaseEstimator` in the MRO. scikit-learn 1.8 checks
+    this (`check_mixin_order`) and fails `check_estimator` otherwise; the
+    general rule is that a more specialised mixin precedes a more general
+    base. Our capability mixins from `core.mixins` go left of the family
+    base for the same reason.
 """
 
 from __future__ import annotations
@@ -45,12 +52,13 @@ from .tags import Capabilities
 from .types import (
     ArrayLike,
     Assignment,
+    ComponentKind,
     Embedding,
     Labels,
     MatrixLike,
     Seed,
 )
-from .validation import finite_policy
+from .validation import finite_policy, validate_data
 
 
 class BaseComponent(BaseEstimator, ABC):
@@ -75,7 +83,12 @@ class BaseComponent(BaseEstimator, ABC):
         Set from the input; both required by scikit-learn convention.
     """
 
-    _kind: ClassVar[Any]
+    #: Set once per kind-specific base below, never on a concrete class, so
+    #: `@register("kmeans")` needs no `kind=` argument and cannot disagree
+    #: with the base the class chose. `None` here rather than unset: a new
+    #: base that forgets to declare one registers unpartitioned, which
+    #: `tests/test_registry.py` catches.
+    _kind: ClassVar[ComponentKind | None] = None
     _capabilities: ClassVar[Capabilities] = Capabilities()
 
     #: Attributes `_fit` must set, declared per class. Collected across the
@@ -202,7 +215,8 @@ class BaseComponent(BaseEstimator, ABC):
                 self.n_features_in_ = M.shape[1]
             return M
 
-        return self._validate_data(
+        return validate_data(
+            self,
             X,
             reset=reset,
             dtype="numeric",
@@ -246,12 +260,14 @@ class BaseComponent(BaseEstimator, ABC):
         return tuple(collected)
 
 
-class BaseTransformer(BaseComponent, TransformerMixin, ABC):
+class BaseTransformer(TransformerMixin, BaseComponent, ABC):
     """Maps data into another representation.
 
     `TransformerMixin` supplies `fit_transform`; subclasses provide
     `transform`.
     """
+
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.TRANSFORMER
 
     @abstractmethod
     def transform(self, X: MatrixLike) -> Any:
@@ -285,6 +301,7 @@ class BaseDimReducer(BaseTransformer, ABC):
         Number of components actually retained.
     """
 
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.DIM_REDUCER
     _required_fitted = ("embedding_", "n_components_")
 
     embedding_: Embedding
@@ -305,7 +322,7 @@ class BaseDimReducer(BaseTransformer, ABC):
         ...
 
 
-class BaseClusterer(BaseComponent, ClusterMixin, ABC):
+class BaseClusterer(ClusterMixin, BaseComponent, ABC):
     """Clustering method; the map phi_d of Def. 2.
 
     Implements a partition: every observation receives exactly one label,
@@ -326,6 +343,7 @@ class BaseClusterer(BaseComponent, ClusterMixin, ABC):
         from any `n_clusters` parameter, which is a request, not a result.
     """
 
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.CLUSTERER
     _required_fitted = ("labels_", "n_clusters_")
 
     labels_: Labels
@@ -347,7 +365,7 @@ class BaseClusterer(BaseComponent, ClusterMixin, ABC):
         raise NotImplementedError
 
 
-class BaseOutlierDetector(BaseComponent, OutlierMixin, ABC):
+class BaseOutlierDetector(OutlierMixin, BaseComponent, ABC):
     """Anomaly and novelty detection.
 
     Present so the package extends horizontally without reworking the
@@ -361,6 +379,7 @@ class BaseOutlierDetector(BaseComponent, OutlierMixin, ABC):
         Inlier/outlier flag per training observation.
     """
 
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.OUTLIER_DETECTOR
     _required_fitted = ("labels_",)
 
     labels_: Labels
@@ -380,6 +399,8 @@ class BaseGenerator(BaseComponent, ABC):
     the optimisation model.
     """
 
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.GENERATOR
+
     @abstractmethod
     def sample(self, n_samples: int = 1, *, random_state: Seed = None) -> ArrayLike:
         """Draw `n_samples` synthetic observations from the fitted model."""
@@ -398,6 +419,8 @@ class BasePredictor(BaseComponent, ABC):
     the unsupervised components. Mix in scikit-learn's `ClassifierMixin`
     or `RegressorMixin` for the matching `score` method.
     """
+
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.PREDICTOR
 
     @abstractmethod
     def predict(self, X: MatrixLike) -> ArrayLike:

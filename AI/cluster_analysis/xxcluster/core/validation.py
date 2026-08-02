@@ -7,6 +7,10 @@ supplied as precomputed input, a label vector using the noise convention,
 a request for a number of clusters. Call these from `fit`, never from
 `__init__`.
 
+`validate_data` is re-exported unchanged, so a component reaches every
+input check through this one module rather than importing some from here
+and some from scikit-learn.
+
 Wrapping rather than reimplementing keeps the error messages and the
 `n_features_in_`/`feature_names_in_` bookkeeping consistent with the rest
 of the ecosystem.
@@ -24,23 +28,26 @@ from __future__ import annotations
 
 from typing import Any
 
-import inspect
-
 import numpy as np
 from scipy.spatial.distance import squareform
 from sklearn.utils import check_random_state as sk_check_random_state
-from sklearn.utils.validation import check_array, check_is_fitted
+from sklearn.utils.validation import check_array, check_is_fitted, validate_data
 
 from .exceptions import NotFittedError
 from .types import NOISE_LABEL, DissimilarityMatrix, Labels, MatrixLike, Seed
 
-#: scikit-learn renamed `force_all_finite` to `ensure_all_finite` in 1.6.
-#: Resolved once here so callers pass one name across the supported range.
-FINITE_KWARG = (
-    "ensure_all_finite"
-    if "ensure_all_finite" in inspect.signature(check_array).parameters
-    else "force_all_finite"
-)
+__all__ = [
+    "validate_data",
+    "finite_policy",
+    "check_matrix",
+    "check_dissimilarity_matrix",
+    "check_affinity_matrix",
+    "check_kernel_matrix",
+    "check_labels",
+    "check_n_clusters",
+    "check_random_state",
+    "ensure_fitted",
+]
 
 
 def finite_policy(allow_missing: bool) -> dict[str, Any]:
@@ -48,8 +55,12 @@ def finite_policy(allow_missing: bool) -> dict[str, Any]:
 
     `allow-nan` rather than `False`: a method declaring `handles_missing`
     tolerates missing values, not infinities.
+
+    The keyword is `ensure_all_finite`, which is scikit-learn's name from
+    1.6 onwards; the earlier `force_all_finite` was removed in 1.8, and
+    `requirements.txt` floors above the rename so no branch is needed.
     """
-    return {FINITE_KWARG: "allow-nan" if allow_missing else True}
+    return {"ensure_all_finite": "allow-nan" if allow_missing else True}
 
 #: Absolute tolerance for the diagonal and symmetry checks. Loose enough to
 #: accept a matrix that has been through a float32 round trip.

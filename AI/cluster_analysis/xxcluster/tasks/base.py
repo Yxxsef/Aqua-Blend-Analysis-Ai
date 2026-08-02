@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, ClassVar, Mapping, Sequence
 
+from ..core.types import ComponentKind
 from ..evaluation.protocol import Protocol, RunResult
 from ..io.datasets import Dataset
 
@@ -50,6 +51,8 @@ class BaseTask(ABC):
         The shared setup, so that two tasks over the same data are
         comparable.
     """
+
+    _kind: ClassVar[ComponentKind] = ComponentKind.TASK
 
     name: str
 

@@ -180,8 +180,36 @@ class Protocol:
     environment: Environment | None = None
 
     def __post_init__(self) -> None:
+        self._reject_placeholders()
         if self.environment is None:
             object.__setattr__(self, "environment", Environment.capture())
+
+    def _reject_placeholders(self) -> None:
+        """Refuse a protocol still carrying the notebook template's `...`.
+
+        an unfilled placeholder is `Ellipsis` rather than a
+        missing value. Caught here, at the cell that declares the protocol,
+        rather than several cells later inside `ComparisonRun.run` -- where
+        it surfaces as `Cannot clone object 'Ellipsis'`, which names
+        neither the field nor the notebook cell that has to change.
+        """
+        unfilled = [
+            name
+            for name, value in (
+                ("indices", self.indices),
+                ("preprocessing", self.preprocessing),
+                ("n_clusters_candidates", self.n_clusters_candidates),
+            )
+            if value is Ellipsis
+            or (isinstance(value, (list, tuple)) and any(v is Ellipsis for v in value))
+        ]
+        if unfilled:
+            raise ValueError(
+                f"{', '.join(unfilled)} still holds the notebook template's "
+                f"`...`. Each is a choice the experimental setup of Sect. 4.1 "
+                f"has to state; fill it in, or pass None for no shared "
+                f"preprocessing and () for no candidates."
+            )
 
     def seed_for(self, key: str) -> int:
         """Derive a reproducible per-run seed from the root seed.

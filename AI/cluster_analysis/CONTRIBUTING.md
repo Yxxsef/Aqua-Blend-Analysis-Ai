@@ -8,6 +8,7 @@ cluster_analysis/
 ├── template/        section templates, .tex and .docx         → Part 1
 ├── xxcluster/       the package                               → Part 2
 ├── notebooks/       test bed and evidence                     → Part 3
+├── GUIDELINES/      step-by-step procedures, one per kind
 └── requirements.txt
 ```
 
@@ -16,6 +17,14 @@ cluster_analysis/
 | [Part 1](#part-1--the-document) | Writing a section, and the templates that shape it |
 | [Part 2](#part-2--the-code) | Adding to `xxcluster/`, tied to the section it documents |
 | [Part 3](#part-3--the-notebooks) | Testing what you built and evidencing the benchmark |
+
+**This file is the rule; [`GUIDELINES/`](GUIDELINES/) is the procedure.** Here
+you will find where your contribution goes, what must agree with the write-up,
+and what the pull request must contain. For the step-by-step build — which base
+class, which declarations, a skeleton and a command that proves it works — open
+[`GUIDELINES/README.md`](GUIDELINES/README.md) and pick the guide for your
+kind. Where the two disagree, this file wins and the guide is wrong; say so in
+the pull request.
 
 Branch naming, commits and pull requests follow [`AI/README.md`](../README.md): one branch per task, `task-<number>-<short-description>`.
 
@@ -148,17 +157,22 @@ that template's parts in view, and fill both together.
 
 Read [`xxcluster/ARCHITECTURE.md`](xxcluster/ARCHITECTURE.md) first, as it explains the contract you are implementing.
 
+Then [`GUIDELINES/00-the-contract.md`](GUIDELINES/00-the-contract.md), which is
+the same contract as a procedure: the six rules you will meet as error
+messages, with the messages quoted.
+
 ## 2.2 Where your contribution goes
 
-| You are adding | Code goes in | Subclass | Document section | Template | Notebook |
-|---|---|---|---|---|---|
-| A clustering method | `xxcluster/cluster/<family>/<subfamily>/<name>.py` | that subfamily's base | Sect. 7.2–7.4 | `method_template` | required |
-| A dim. reduction technique | `xxcluster/dim_red/<linear\|nonlinear>/<name>.py` | `BaseLinearReducer`, or `BaseManifoldReducer` / `BaseKernelReducer` — see [2.4](#24-adding-a-dimensionality-reduction-technique) | Sect. 6.2–6.4 | `dimreduction_template` | required |
-| A dissimilarity measure | `xxcluster/measures/dissimilarity/<name>.py` | `BaseDissimilarity` | Sect. 7.1 | `measure_template` | required |
-| A validity index | `xxcluster/measures/validation/{internal,external,relative}.py` | the matching base | Sect. 7.1 | `measure_template` | required |
-| A preprocessing step | `xxcluster/pipeline/preprocess.py` | `BasePreprocessor` | Sect. 3.3 | — (add to that section) | recommended |
-| A figure type | `xxcluster/viz/<module>.py` | — (plain function) | — | — | recommended |
-| A whole task | `xxcluster/tasks/<task>/` | `BaseTask` | new section | new kind, see [1.4](#14-adding-a-new-kind-of-template) | required |
+| You are adding | Code goes in | Subclass | Document section | Template | Notebook | Guide |
+|---|---|---|---|---|---|---|
+| A clustering method | `xxcluster/cluster/<family>/<subfamily>/<name>.py` | that subfamily's base | Sect. 7.2–7.4 | `method_template` | required | [clustering-method](GUIDELINES/clustering-method.md) |
+| A dim. reduction technique | `xxcluster/dim_red/<linear\|nonlinear>/<name>.py` | `BaseLinearReducer`, or `BaseManifoldReducer` / `BaseKernelReducer` — see [2.4](#24-adding-a-dimensionality-reduction-technique) | Sect. 6.2–6.4 | `dimreduction_template` | required | [dim-reduction](GUIDELINES/dim-reduction.md) |
+| A dissimilarity measure | `xxcluster/measures/dissimilarity/<name>.py` | `BaseDissimilarity` | Sect. 7.1 | `measure_template` | required | [dissimilarity-measure](GUIDELINES/dissimilarity-measure.md) |
+| A validity index | `xxcluster/measures/validation/{internal,external,relative}.py` | the matching base | Sect. 7.1 | `measure_template` | required | [internal](GUIDELINES/validity-index-internal.md) / [external](GUIDELINES/validity-index-external.md) / [relative](GUIDELINES/validity-index-relative.md) |
+| A preprocessing step | `xxcluster/pipeline/preprocess.py` | `BasePreprocessor` | Sect. 3.3 | — (add to that section) | recommended | [preprocessing-step](GUIDELINES/preprocessing-step.md) |
+| A selector or perturbation | `xxcluster/selection/` | `BaseSelector`, `BasePerturbation` | Sect. 4.3 | — | recommended | [selector](GUIDELINES/selection-selector.md) / [perturbation](GUIDELINES/selection-perturbation.md) |
+| A figure type | `xxcluster/viz/<module>.py` | — (plain function) | — | — | recommended | [visualisation](GUIDELINES/visualisation.md) |
+| A whole task | `xxcluster/tasks/<task>/` | `BaseTask` | new section | new kind, see [1.4](#14-adding-a-new-kind-of-template) | required | [task](GUIDELINES/task.md) |
 
 ## 2.3 Adding a clustering method
 
@@ -178,6 +192,9 @@ Read [`xxcluster/ARCHITECTURE.md`](xxcluster/ARCHITECTURE.md) first, as it expla
    appear in stored artefacts and in the document's tables.
 7. **Write the section** from `method_template`, and the notebook from
    `notebooks/00-template.ipynb`.
+
+Step by step, with skeletons and verification commands:
+[`GUIDELINES/clustering-method.md`](GUIDELINES/clustering-method.md).
 
 Nothing outside your module changes. Selection, evaluation and reporting find
 the method through the registry.
@@ -202,7 +219,8 @@ that produced it.
 
 ## 2.4 Adding a dimensionality reduction technique
 
-Same shape as 2.3, with two things to get right first.
+Same shape as 2.3, with two things to get right first. Procedure:
+[`GUIDELINES/dim-reduction.md`](GUIDELINES/dim-reduction.md).
 
 ### Pick the base class by what the technique *assumes*, not by whether it curves
 
@@ -241,6 +259,11 @@ it.
 
 ## 2.5 Adding a measure
 
+Procedures: [dissimilarity](GUIDELINES/dissimilarity-measure.md),
+[internal index](GUIDELINES/validity-index-internal.md),
+[external index](GUIDELINES/validity-index-external.md),
+[relative criterion](GUIDELINES/validity-index-relative.md).
+
 **A dissimilarity** (`BaseDissimilarity`) — the *Properties* paragraph and the
 class attributes are the same statement:
 
@@ -268,6 +291,8 @@ An index whose direction is assumed is one that will eventually be compared the
 wrong way round — which inverts a conclusion rather than breaking a test.
 
 ## 2.6 Adding a task (extending sideways)
+
+Procedure: [`GUIDELINES/task.md`](GUIDELINES/task.md).
 
 Time-series clustering, anomaly detection, scenario generation, demand
 forecasting: a subpackage under `xxcluster/tasks/`, subclassing `BaseTask`.
@@ -353,6 +378,9 @@ Do not accumulate several methods in one notebook: the reviewer reads one
 notebook against one write-up.
 
 ## 3.3 The structure
+
+Procedure, including the path and protocol fixes a personal folder needs:
+[`GUIDELINES/notebook.md`](GUIDELINES/notebook.md).
 
 The template's sections mirror the write-up's parts, in the same order, so the
 two can be read side by side:

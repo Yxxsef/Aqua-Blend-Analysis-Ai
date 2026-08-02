@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from abc import ABC
 
+from ...core.registry import register
+from ...core.validation import check_labels
 from .base import BaseValidityIndex
 
 
@@ -37,3 +39,21 @@ class BaseInternalIndex(BaseValidityIndex, ABC):
     requires_X = True
 
     assumes_shape: str | None = None    # for sake of clarity about the index
+
+
+
+@register("silhouette")
+class Silhouette(BaseInternalIndex):
+    """
+        Writing something here
+    """
+    name = "silhouette"
+    higher_is_better = True
+    range_ = (-1.0, 1.0)
+    handles_noise = False
+    assumes_shape = "compact, isotropic"
+
+    def score(self, X = None, labels = None, *, labels_true = None, metric = "euclidean", **kwargs):
+        from sklearn.metrics import silhouette_score
+        labels = check_labels(labels, allow_noise = self.handles_noise)
+        return silhouette_score(X, labels, metric = metric)

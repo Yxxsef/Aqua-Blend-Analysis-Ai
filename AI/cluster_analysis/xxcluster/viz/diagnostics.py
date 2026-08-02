@@ -58,9 +58,9 @@ def plot_selection_curve(
                 f"selected={selected!r} is not among the swept candidates "
                 f"{candidates}."
             )
-        ax.axvline(selected, color="0.4", linestyle="--", linewidth=1)
+        ax.axvline(selected, color="red", linestyle="--", linewidth=1)
         ax.plot([selected], [curve[selected]], marker="o", markersize=11,
-                markerfacecolor="none", color="0.2")
+                markerfacecolor="none", color="red")
 
     ax.set_xlabel("candidate")
     ax.set_ylabel("index")

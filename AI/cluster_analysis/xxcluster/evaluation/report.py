@@ -19,17 +19,20 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 
 from ..core.exceptions import RegistryError
 from ..core.registry import REGISTRY
 from ..core.tags import Capabilities
-from ..core.types import MatrixLike
+from ..core.types import NOISE_LABEL, ComponentKind, MatrixLike
 from ..core.validation import check_labels
-from .protocol import Protocol, RunResult
+from ..measures.validation.base import BaseValidityIndex
+from .protocol import Protocol, RunResult, _describe_component
 
 
 class ComparisonRun:
@@ -61,12 +64,158 @@ class ComparisonRun:
         A method that fails is recorded with its error and does not stop
         the run: a comparison missing its hardest case silently is worse
         than one that reports the failure.
+
+        The protocol's preprocessing is fitted once and shared, so every
+        method sees the same matrix; the indices score that same matrix,
+        since it is what the method was given. An index that cannot be
+        computed for a result -- an external one with no `y`, or one that
+        does not handle noise applied to a partition containing it --
+        scores NaN rather than failing the run, which is how it reaches
+        the table as a visible gap.
         """
-        raise NotImplementedError
+        protocol = self.protocol or Protocol()
+        indices = [_resolve_index(name) for name in protocol.indices]
+
+        data = X
+        if protocol.preprocessing is not None:
+            data = clone(protocol.preprocessing).fit_transform(X, y)
+
+        self.results_ = [
+            self._run_one(entry, data, y, indices, protocol)
+            for entry in (self.methods or ())
+        ]
+        return self.results_
+
+    def _run_one(
+        self,
+        entry: Any,
+        X: MatrixLike,
+        y: Any,
+        indices: Sequence[BaseValidityIndex],
+        protocol: Protocol,
+    ) -> RunResult:
+        name = _name_of(entry)
+        try:
+            method = REGISTRY.create(entry) if isinstance(entry, str) else clone(entry)
+            _configure(method, name, protocol)
+
+            start = perf_counter()
+            method.fit(X, y)
+            fit_seconds = perf_counter() - start
+
+            labels = check_labels(method.labels_)
+        except Exception as exc:  # noqa: BLE001 -- recorded, per the docstring
+            return RunResult(method=name, error=f"{type(exc).__name__}: {exc}")
+
+        # Reported only where the method declares it can leave an
+        # observation unassigned, so that a comparison of methods that
+        # cannot produces no column at all rather than a column of zeros.
+        capabilities = getattr(type(method), "_capabilities", None)
+        n_noise = (
+            int(np.count_nonzero(labels == NOISE_LABEL))
+            if getattr(capabilities, "handles_noise", False)
+            else None
+        )
+
+        return RunResult(
+            method=name,
+            params=_describe_component(method)["params"],
+            scores={
+                index.name: _score(index, X, labels, y=y) for index in indices
+            },
+            n_clusters_found=getattr(method, "n_clusters_", None),
+            n_noise=n_noise,
+            fit_seconds=fit_seconds,
+        )
 
     def best(self, index: str) -> RunResult:
-        """Return the best result under one index, using its direction."""
-        raise NotImplementedError
+        """Return the best result under one index, using its direction.
+
+        Compared through `BaseValidityIndex.is_better` rather than a bare
+        inequality, since half the indices are minimised. A run that
+        scored NaN -- failed, or not scorable on this index -- loses
+        rather than winning or propagating.
+        """
+        results = list(getattr(self, "results_", None) or ())
+        if not results:
+            raise ValueError("no results to choose from; call run() first.")
+
+        scorer = _resolve_index(index)
+        best = results[0]
+        for result in results[1:]:
+            if scorer.is_better(
+                result.scores.get(scorer.name, math.nan),
+                best.scores.get(scorer.name, math.nan),
+            ):
+                best = result
+
+        if math.isnan(best.scores.get(scorer.name, math.nan)):
+            raise ValueError(
+                f"no run produced a finite {scorer.name!r} score, so there is "
+                f"no best one. Check the `error` column of quantitative()."
+            )
+        return best
+
+
+def _resolve_index(spec: Any) -> BaseValidityIndex:
+    """Resolve an index given as a registered name, a class, or an instance."""
+    if isinstance(spec, str):
+        spec = REGISTRY.get(spec, kind=ComponentKind.VALIDITY_INDEX)
+    return spec() if isinstance(spec, type) else spec
+
+
+def _name_of(entry: Any) -> str:
+    """The registered name of a component, or its class name if unregistered.
+
+    The name is what identifies a row in Sect. 8.1, so it comes from the
+    registry wherever possible: two runs of the same method must land in
+    the same row whether the notebook passed the name or the object.
+    """
+    if isinstance(entry, str):
+        return entry
+    for name, cls in REGISTRY:
+        if cls is type(entry):
+            return name
+    return type(entry).__name__
+
+
+def _configure(method: Any, name: str, protocol: Protocol) -> None:
+    """Apply the protocol's seeding and restarts to one method.
+
+    Only where the method exposes the parameter: a deterministic method
+    has no `random_state` and a non-iterative one no `n_init`, and the
+    protocol is not entitled to invent either. `n_init` is the family-wide
+    name for restarts, declared on `BasePartitionalClusterer`.
+
+    Nested parameters are included, so the steps of a `ClusterPipeline` --
+    the unit Sect. 8 actually compares -- are seeded too, each from its own
+    key so that two stochastic steps do not share a seed.
+    """
+    updates = {}
+    for param in method.get_params(deep=True):
+        if param == "random_state" or param.endswith("__random_state"):
+            updates[param] = protocol.seed_for(f"{name}:{param}")
+        elif param == "n_init" or param.endswith("__n_init"):
+            updates[param] = protocol.n_restarts
+    if updates:
+        method.set_params(**updates)
+
+
+def _score(index: BaseValidityIndex, X: MatrixLike, labels: Any, *, y: Any) -> float:
+    """Score one result on one index, returning NaN where it does not apply.
+
+    NaN rather than an exception because the alternative is dropping the
+    whole run over one inapplicable index -- which would lose a density
+    method's every other score because Silhouette declines to read its
+    noise. `_format_cell` renders it as the document's dash, and
+    `is_better` makes it lose a selection.
+    """
+    if index.requires_labels_true and y is None:
+        return math.nan
+    try:
+        return float(index.score(X, labels, labels_true=y))
+    except (ValueError, TypeError, NotImplementedError):
+        return math.nan
 
 
 class ComparisonTable:

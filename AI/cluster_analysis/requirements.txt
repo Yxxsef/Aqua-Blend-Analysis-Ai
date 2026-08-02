@@ -9,11 +9,20 @@
 # xxcluster.evaluation.protocol.Environment.capture() and stored with the
 # artefact, which is what App. A of the document requires. Do not maintain
 # a second version list by hand.
+#
+# Verified green (243 tests, no deprecation or future warnings) against the
+# latest stable stack: numpy 2.4.6, scipy 1.17.1, scikit-learn 1.9.0,
+# pandas 3.0.5, matplotlib 3.11.1, pyarrow 25.0.0.
 
 # --- Core: required to import xxcluster -----------------------------------
 numpy>=1.26
 scipy>=1.11
-scikit-learn>=1.2.2
+# 1.6 is a hard floor, not a preference. It moved `_validate_data` off
+# BaseEstimator to the `validate_data` function and renamed
+# `force_all_finite` to `ensure_all_finite`; `BaseComponent.fit` uses both
+# new APIs directly. On 1.5 or earlier every component fails at fit time --
+# not at import, so an install check would not catch it.
+scikit-learn>=1.6
 pandas>=2.1
 
 # --- Figures --------------------------------------------------------------

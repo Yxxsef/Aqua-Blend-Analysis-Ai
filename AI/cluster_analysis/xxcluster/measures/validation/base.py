@@ -5,9 +5,15 @@ Base class shared by validity indices.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
-from ...core.types import DissimilarityMatrix, Labels, MatrixLike, MetricLike
+from ...core.types import (
+    ComponentKind,
+    DissimilarityMatrix,
+    Labels,
+    MatrixLike,
+    MetricLike,
+)
 
 
 class BaseValidityIndex(ABC):
@@ -38,6 +44,10 @@ class BaseValidityIndex(ABC):
         false, the caller must decide explicitly what to do with them, and
         `score` refuses rather than dropping them silently.
     """
+
+    #: Registry partition. Declared here even though this is not a
+    #: `BaseComponent`, so `@register("silhouette")` needs no `kind=`.
+    _kind: ClassVar[ComponentKind] = ComponentKind.VALIDITY_INDEX
 
     name: str
     higher_is_better: bool

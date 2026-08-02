@@ -32,12 +32,39 @@ and `xxcluster/README.md` for how to add to it.
 
 Status
 ------
-Skeleton. The structure, contracts and conventions are settled; no method
-is implemented yet. Abstract methods have empty bodies, and concrete
-methods that are not yet written raise `NotImplementedError`.
+Everything that does not depend on a clustering algorithm is implemented
+and tested; no clustering method or reduction technique is yet. Abstract
+methods have empty bodies, and a concrete method not yet written raises
+`NotImplementedError` -- as does one refusing something it genuinely
+cannot do. See `xxcluster/README.md`.
+
+Requires scikit-learn >= 1.6; see `requirements.txt`.
 """
 
 from __future__ import annotations
+
+#: Floor from `requirements.txt`. Checked here because the APIs the contract
+#: depends on -- `validate_data`, `ensure_all_finite` -- were introduced in
+#: 1.6, and importing against an older release otherwise fails with a bare
+#: `ImportError` naming a symbol that means nothing to the reader.
+_MIN_SKLEARN = (1, 6)
+
+def _check_sklearn() -> None:
+    import sklearn
+
+    installed = tuple(int(part) for part in sklearn.__version__.split(".")[:2])
+    if installed < _MIN_SKLEARN:
+        raise ImportError(
+            f"xxcluster needs scikit-learn >= "
+            f"{'.'.join(map(str, _MIN_SKLEARN))}, but {sklearn.__version__} is "
+            f"installed. 1.6 moved `_validate_data` off BaseEstimator and "
+            f"renamed `force_all_finite`, both of which the component contract "
+            f"uses. Upgrade with `pip install -r requirements.txt`."
+        )
+
+
+_check_sklearn()
+del _check_sklearn
 
 from .core import (
     REGISTRY,

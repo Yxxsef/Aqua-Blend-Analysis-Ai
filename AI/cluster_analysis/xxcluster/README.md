@@ -15,7 +15,7 @@ The document and the package share one structure: a method's write-up and its im
 | `core/tags.py` | `Capabilities.describe()`, which feeds the Sect. 8.2 table |
 | `io/` | in-memory, CSV, Parquet and benchmark loading |
 | `evaluation/protocol.py` | `Environment`, `Protocol`, `RunResult` |
-| `evaluation/report.py` | both comparison tables, CSV and LaTeX export, cluster profiles |
+| `evaluation/report.py` | `ComparisonRun`, both comparison tables, CSV and LaTeX export, cluster profiles |
 | `pipeline/compose.py` | `ClusterPipeline` — a composition that *is* a clusterer |
 | `viz/` | dendrograms, embeddings, selection curves, silhouettes, profiles |
 
@@ -25,7 +25,7 @@ A component whose only content is a `_fit` override already passes scikit-learn'
 
 Still blocked, and on what:
 
-- **`measures/validation/`** — the indices themselves. `ComparisonRun.run` and `best`, `selection/n_clusters.py` and `selection/stability.py` all wait on these.
+- **`measures/validation/`** — the indices themselves. `selection/n_clusters.py` and `selection/stability.py` wait on these.
 - **`io/artifacts.py`** and `PersistableMixin` — a storage format decision.
 - **`io/loaders/supabase.py`** — the Data Engineering team publishing its view.
 

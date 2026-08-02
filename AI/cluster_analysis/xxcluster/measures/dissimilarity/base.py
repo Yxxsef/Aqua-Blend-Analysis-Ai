@@ -5,10 +5,10 @@ Base class for dissimilarity measures.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
 from ...core.base import BaseComponent
-from ...core.types import ArrayLike, DissimilarityMatrix, MatrixLike
+from ...core.types import ArrayLike, ComponentKind, DissimilarityMatrix, MatrixLike
 
 
 class BaseDissimilarity(BaseComponent, ABC):
@@ -38,6 +38,8 @@ class BaseDissimilarity(BaseComponent, ABC):
         Range of the measure, where it has one; needed to combine measures
         across feature blocks on a common scale.
     """
+
+    _kind: ClassVar[ComponentKind | None] = ComponentKind.DISSIMILARITY
 
     is_metric: bool = False
     is_symmetric: bool = True
