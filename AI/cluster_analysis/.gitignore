@@ -21,10 +21,6 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 venv/
-build_docx.py
 tests/
 .pytest_cache/
 conftest.py
-
-# Others
-style_donor.docx
