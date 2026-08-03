@@ -7,10 +7,13 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 
+import numpy as np
 from sklearn.base import TransformerMixin
+from sklearn.metrics import pairwise_distances
 
 from ....core.mixins import InductiveMixin
 from ....core.types import ArrayLike, Labels, MatrixLike, MetricLike, Seed
+from ....core.validation import ensure_fitted
 from ..base import BasePartitionalClusterer
 
 
@@ -81,16 +84,74 @@ class BasePrototypeClusterer(
         self.metric = metric
 
     def predict(self, X: MatrixLike) -> Labels:
-        """Assign each observation to the nearest fitted prototype."""
-        raise NotImplementedError
+        """Assign each observation to the nearest fitted prototype.
+
+        Concrete for the whole family: once the prototypes exist, the
+        assignment is the same geometry whatever recomputed them. Reads the
+        distances from `transform` rather than recomputing them, so the two
+        cannot disagree.
+        """
+        return np.argmin(self.transform(X), axis=1).astype(int)
 
     def transform(self, X: MatrixLike) -> ArrayLike:
         """Return distances to each prototype, shape (m, |C|).
 
         The prototype-space representation, useful as features for a
         downstream model and for the cluster profiles of Sect. 4.4.
+
+        Validated with `reset=False`, so the feature count is checked
+        against the fit rather than overwritten -- an X of the wrong width
+        is refused here instead of producing distances to prototypes it does
+        not correspond to.
         """
-        raise NotImplementedError
+        ensure_fitted(self, "cluster_centers_")
+        X = self._validate_input(X, reset=False)
+        return pairwise_distances(X, self._prototypes(), metric=self._check_metric())
+
+    def _check_metric(self) -> MetricLike:
+        """Return the measure to assign under, refusing what it cannot do.
+
+        This family has no `PrecomputedMixin`: a prototype is a point in the
+        feature space, and a precomputed matrix covers only the observations
+        it was built from, so there is no row for a prototype and no way to
+        assign unseen data. Refused by name rather than ignored, because
+        silently falling back to Euclidean would report a partition under a
+        measure that never ran.
+        """
+        if self.metric == "precomputed":
+            raise NotImplementedError(
+                f"{type(self).__name__} cannot assign under "
+                f"metric='precomputed': a prototype is a point in the feature "
+                f"space and a precomputed matrix has no row for it. Use a "
+                f"medoid method, whose prototypes are observations, or pass a "
+                f"callable measure."
+            )
+        return self.metric
+
+    def _prototypes(self) -> ArrayLike:
+        """Return `cluster_centers_` as an (|C|, n) array of coordinates."""
+        centers = np.asarray(self.cluster_centers_)
+        if centers.ndim != 2:
+            raise ValueError(
+                f"{type(self).__name__}.cluster_centers_ has shape "
+                f"{centers.shape}; an (|C|, n) array of coordinates is "
+                f"required. A medoid method records the chosen rows in a "
+                f"separate `medoid_indices_` and still exposes their "
+                f"coordinates here."
+            )
+        return centers
+
+    def _derive_fitted(self) -> None:
+        """Also mirror `criterion_` into `inertia_`.
+
+        They are the same quantity under two names -- the family's and
+        scikit-learn's -- so a native method reports it once from
+        `_fit_once` and both attributes follow.
+        """
+        super()._derive_fitted()
+        criterion = getattr(self, "criterion_", None)
+        if criterion is not None:
+            self.inertia_ = float(criterion)
 
     def _fit_once(self, X: MatrixLike, random_state: Any) -> Any:
         """Alternate assignment and update until the criterion converges.

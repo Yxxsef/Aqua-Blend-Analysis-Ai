@@ -142,8 +142,10 @@ class HDBSCAN(AdaptedClusterer, BaseDensityClusterer):
 ```
 
 The adapter must come **first** in the bases, so the MRO reaches
-`AdaptedClusterer._fit` before the family base's, which raises for a native
-method.
+`AdaptedClusterer._fit` before the family base's. A family `_fit` is the
+native path — the partitional one runs the restart loop around `_fit_once`,
+the hierarchical one builds the tree and cuts it — and an adapted method
+implements none of those hooks, because its backend does the whole fit.
 
 This is why **a hook that only a native fitting loop calls — `_fit_once`,
 `_update_centers`, `_build_hierarchy`, `_partition_graph` — is a concrete

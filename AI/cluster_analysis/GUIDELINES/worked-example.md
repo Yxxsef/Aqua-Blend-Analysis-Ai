@@ -129,7 +129,10 @@ class KMeans(AdaptedClusterer, BasePrototypeClusterer):
 ### Why each line is there
 
 **`AdaptedClusterer` first.** The MRO must reach `AdaptedClusterer._fit` before
-`BasePartitionalClusterer._fit`, which raises `NotImplementedError`:
+`BasePartitionalClusterer._fit`. The family base's `_fit` is the native restart
+loop: it calls `_fit_once`, which an adapted method does not implement. Order
+the bases the other way and K-Means fits by running our loop around a hook that
+raises, instead of by handing the whole fit to the backend:
 
 ```
 KMeans -> AdaptedClusterer -> BackendAdapter -> BasePrototypeClusterer

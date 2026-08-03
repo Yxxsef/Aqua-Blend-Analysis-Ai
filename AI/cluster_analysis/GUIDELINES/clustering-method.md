@@ -20,18 +20,30 @@ like. Your choice fixes what you must implement and what you inherit.
 
 | Base | Import from | Subfamily | You must set | Native hook |
 |---|---|---|---|---|
-| `BasePrototypeClusterer` | `cluster.partitional.sse_based.base` | `SSE_BASED` | `cluster_centers_`, `inertia_` | `_update_centers` |
+| `BasePrototypeClusterer` | `cluster.partitional.sse_based.base` | `SSE_BASED` | `cluster_centers_` | `_update_centers` |
 | `BaseDensityClusterer` | `cluster.partitional.density_based.base` | `DENSITY_BASED` | (family's) | `_density_estimate`, `_extract_clusters` |
-| `BaseModelBasedClusterer` / `BaseMixtureClusterer` | `cluster.partitional.model_based.base` | `MODEL_BASED` | model params | `_fit_once` |
+| `BaseModelBasedClusterer` / `BaseMixtureClusterer` | `cluster.partitional.model_based.base` | `MODEL_BASED` | `model_` (or `backend_`) | `_fit_once` |
 | `BaseFuzzyClusterer` | `cluster.partitional.fuzzy.base` | `FUZZY` | `memberships_` | `_update_memberships`, `_update_centers` |
 | `BaseGraphClusterer` | `cluster.partitional.graph_theoretic.base` | `GRAPH_THEORETIC` | (family's) | `_partition_graph` |
-| `BaseAgglomerative` | `cluster.hierarchical.agglomerative.base` | `AGGLOMERATIVE` | `linkage_`, `children_` | `_build_hierarchy` |
-| `BaseDivisive` | `cluster.hierarchical.divisive.base` | `DIVISIVE` | `linkage_`, `children_` | `_select_cluster`, `_split` |
+| `BaseAgglomerative` | `cluster.hierarchical.agglomerative.base` | `AGGLOMERATIVE` | `linkage_` **or** `children_` + `distances_` | `_build_hierarchy` |
+| `BaseDivisive` | `cluster.hierarchical.divisive.base` | `DIVISIVE` | `linkage_` **or** `children_` + `distances_` | `_select_cluster`, `_split` |
 | `BaseHybridClusterer` | `cluster.hybrid.base` | — | (family's) | `_check_steps` (**abstract**) |
 
 Everything under `partitional/` except density-based and graph-theoretic also
 inherits `BasePartitionalClusterer`, which requires `n_iter_`, `converged_` and
-`criterion_`, and gives you `max_iter`, `tol`, `n_init`, `random_state`.
+`criterion_`, and gives you `max_iter`, `tol`, `n_init`, `random_state` — plus
+the restart loop itself, so you write `_fit_once` and not `_fit`.
+
+**What you no longer set by hand.** Each family base derives whatever follows
+mechanically from what you did set, so it cannot drift:
+
+| Family | You set | The base derives |
+|---|---|---|
+| partitional | `labels_`, `criterion_` | `n_clusters_` |
+| SSE-based | `criterion_` | `inertia_` |
+| density-based | `labels_` | `n_clusters_`, `n_noise_` |
+| hierarchical | either tree format | the other two of `linkage_` / `children_` / `distances_`, and `labels_` from the requested cut |
+| model-based | `model_` | `predict`, `predict_proba`, `score_samples`, `sample` |
 
 **If the subfamily package does not exist,** create it with `__init__.py` and
 `base.py` modelled on an existing one, and check the name is already in
@@ -95,25 +107,50 @@ The `ensure_fitted` guard is **not optional**. scikit-learn ≥ 1.6 checks that
 
 ### Writing it natively
 
-Subclass the family base and implement `_fit` plus the subfamily's native
-hooks. Everything the family declares in `_required_fitted` is yours to set.
+Subclass the family base and implement the subfamily's native hooks. **Do not
+write `_fit`.** `BasePartitionalClusterer._fit` is concrete: it derives one
+seed per restart from `random_state`, runs `_fit_once` for each, keeps the best
+and installs it. A second restart loop in your class is the duplication the
+family base exists to prevent — and it would run the restarts under a different
+seeding scheme, so your method's `n_init` would not mean what every other
+method's `n_init` means in Sect. 8.1.
+
+`_fit_once` returns **a mapping of fitted attribute name to value**, with the
+trailing underscores, so the loop installs the winner with `setattr` and there
+is no second vocabulary to agree on. It must contain `criterion_`; that is what
+the restarts are compared on.
 
 ```python
 @register("kmedoids")
 class KMedoids(BasePrototypeClusterer):
-    def _fit(self, X, y=None, **fit_params):
-        rng = check_random_state(self.random_state)
-        best = None
-        for _ in range(self.n_init):
-            result = self._fit_once(X, rng)
-            if best is None or result.criterion < best.criterion:
-                best = result
-        self.labels_ = best.labels
-        self.cluster_centers_ = best.centers
-        self.inertia_ = self.criterion_ = best.criterion
-        self.n_iter_, self.converged_ = best.n_iter, best.converged
-        self.n_clusters_ = self.n_clusters
+    def _fit_once(self, X, random_state):
+        centers = self._initialise(X, random_state)
+        for n_iter in range(1, self.max_iter + 1):
+            labels = self._assign(X, centers)
+            centers = self._update_centers(X, labels)
+            ...
+        return {
+            "labels_": labels,
+            "cluster_centers_": centers,
+            "criterion_": cost,
+            "n_iter_": n_iter,
+            "converged_": converged,
+        }
 ```
+
+You do not return `n_clusters_` or `inertia_`. `_derive_fitted` recomputes
+`n_clusters_` from `labels_` and mirrors `criterion_` into `inertia_`, so the
+two names for the SSE cannot drift apart. Override `_derive_fitted` (calling
+`super()` first) only if your subfamily adds another attribute that follows
+mechanically from the ones `_fit_once` sets.
+
+**Declare the direction of your criterion.** The loop minimises by default,
+which is right for an SSE. A method whose criterion improves upwards — a
+log-likelihood — sets `_criterion_higher_is_better = True` on the class, as
+`BaseModelBasedClusterer` already does for its whole family. Get this wrong and
+every fit silently returns the *worst* restart of the batch.
+
+Everything else the family declares in `_required_fitted` is yours to set.
 
 Set `backend=Backend.NATIVE` and cite the formulation you followed in the
 module docstring — a native implementation exists because following the

@@ -4,11 +4,16 @@ Cluster analysis for the AquaBlend dataset — the codebase behind `documentatio
 
 The document and the package share one structure: a method's write-up and its implementation sit at matching addresses in the two trees, and docstrings cite the document by section number.
 
-**Status: scaffolding complete, no method implemented.** No clustering method or dimensionality reduction technique exists yet; their `_fit` bodies are the work of the sprints ahead.
+**Status: the contract and the family machinery work; one method exists.** K-Means is adapted from scikit-learn and passes `check_estimator`. The `cluster/` family base classes are implemented, so a native method now writes only its subfamily's hooks. No dimensionality reduction technique, validity index or dissimilarity measure exists yet.
 
 | Area | What works |
 |---|---|
 | `core/base.py` | `fit` and the steps it runs — subclasses override only `_fit` |
+| `cluster/partitional/base.py` | the restart loop: seeds per restart, best-by-criterion, derived `n_clusters_` |
+| `cluster/partitional/sse_based/base.py` | `predict` and `transform` for any prototype method |
+| `cluster/hierarchical/base.py` | `cut` by level or height, and `_fit`; `linkage_` / `children_` / `distances_` reconciled |
+| `cluster/partitional/density_based/base.py` | estimate → extract → recount, with the `-1` convention enforced |
+| `cluster/partitional/model_based/base.py` | `predict`, `predict_proba`, `score_samples`, `sample` |
 | `core/validation.py` | precomputed-matrix, label, parameter and seed checks |
 | `core/registry.py` | name → class, taxonomy filters, capability shortlisting |
 | `core/adapters.py` | adapting a third-party estimator to the contract |
@@ -25,9 +30,14 @@ A component whose only content is a `_fit` override already passes scikit-learn'
 
 Still blocked, and on what:
 
-- **`measures/validation/`** — the indices themselves. `selection/n_clusters.py` and `selection/stability.py` wait on these.
+- **`measures/`** — the indices and the dissimilarities themselves. `selection/n_clusters.py` and `selection/stability.py` wait on these, and `metric=` cannot dispatch to a named measure until one is registered.
+- **`cluster/hierarchical/linkage.py`** — no criterion is implemented, so `linkage="ward"` resolves to nothing. The hierarchical family cannot produce a method until it is.
+- **`dim_red/`** — `BaseLinearReducer.transform` / `inverse_transform` still raise, so Sect. 6 has nothing behind it.
+- **`cluster/hybrid/`, `partitional/fuzzy/`, `partitional/graph_theoretic/`** — deliberately out of scope for the current block; their bases are untouched.
 - **`io/artifacts.py`** and `PersistableMixin` — a storage format decision.
 - **`io/loaders/supabase.py`** — the Data Engineering team publishing its view.
+
+Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. That is the first task on the current list.
 
 ## Layout
 
