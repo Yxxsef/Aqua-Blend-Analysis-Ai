@@ -179,7 +179,7 @@ which route was taken, so any result traces to the code that produced it.
 | `types.py` | Type aliases; `Family`, `SubFamily`, `Backend`, `Assignment`, `ComponentKind`, `Scaling` |
 | `registry.py` | `ComponentRegistry`, the global `REGISTRY`, the `@register` decorator |
 | `adapters.py` | `BackendAdapter`, `AdaptedClusterer`, `AdaptedDimReducer` |
-| `validation.py` | Input checks sklearn does not provide. `check_dissimilarity_matrix` / `check_affinity_matrix` / `check_kernel_matrix` are **implemented**; the rest declared |
+| `validation.py` | Input checks sklearn does not provide: the three precomputed-matrix kinds, labels, `n_clusters`, seeds, fitted state |
 | `exceptions.py` | `XXClusterError` and its subclasses |
 
 Base classes are how you *build* a component; protocols are how the machinery
@@ -449,4 +449,5 @@ every clustering method unchanged.
   key.
 - `from __future__ import annotations` at the top of every module.
 - `@abstractmethod` bodies are `...`; a concrete method not yet written raises `NotImplementedError`. Note that a `NotImplementedError` is not always a gap: it is also how a component refuses something it genuinely cannot do — a transductive technique asked to map unseen data, a nonlinear embedding asked for feature loadings. The docstring says which.
-- Everything that does not depend on a clustering algorithm is implemented and tested; see the table in `README.md` for what that covers and what is still blocked.
+
+What is implemented and what is still blocked is in [README.md](README.md); it changes, and one list is easier to keep true than two.

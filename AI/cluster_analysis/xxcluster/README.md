@@ -24,8 +24,6 @@ The document and the package share one structure: a method's write-up and its im
 | `pipeline/compose.py` | `ClusterPipeline` — a composition that *is* a clusterer |
 | `viz/` | dendrograms, embeddings, selection curves, silhouettes, profiles |
 
-The precomputed-matrix checks came first because the failures they catch — a similarity matrix passed as a dissimilarity, a squared distance, a non-zero diagonal — produce a plausible-looking partition rather than an error.
-
 A component whose only content is a `_fit` override already passes scikit-learn's `check_estimator`. An adapted method needs only `_backend_import`, a parameter map and a capability declaration.
 
 Still blocked, and on what:
@@ -58,13 +56,7 @@ Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. Th
 
 ## The contract
 
-Every component is a scikit-learn estimator, inheriting `BaseEstimator` through `core.base.BaseComponent`.
-
-1. **Parameters** go in `__init__` only, stored unmodified, never validated there.
-2. **Fitted state** is set by `fit` and named with a trailing underscore.
-3. **`fit` is a template method** — override the private `_fit`.
-4. **Capabilities are declared** as `_capabilities`, and are read by the
-   registry and by the comparison table of Sect. 8.2.
+Every component is a scikit-learn estimator, inheriting `BaseEstimator` through `core.base.BaseComponent`. Four rules — parameters, fitted state, the template method, and the capability declaration — with what each one buys: [ARCHITECTURE §3.1](ARCHITECTURE.md#31-the-estimator-interface).
 
 ## Install
 

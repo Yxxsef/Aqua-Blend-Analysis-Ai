@@ -1,11 +1,11 @@
 """
 xxcluster -- cluster analysis for the AquaBlend dataset.
 
-The codebase accompanying `documentation/main.pdf`, *On the Search for
-Cluster Analysis*. The document's structure and this package's structure
-are the same structure: a method's write-up and its implementation sit at
-matching addresses in the two trees, and the section numbers referenced in
-docstrings here are that document's.
+The codebase accompanying `documentation/main.pdf`, *In Search of Cluster
+Analysis*. The document's structure and this package's structure are the
+same structure: a method's write-up and its implementation sit at matching
+addresses in the two trees, and the section numbers in docstrings here are
+that document's.
 
 Layout
 ------
@@ -32,11 +32,10 @@ and `xxcluster/README.md` for how to add to it.
 
 Status
 ------
-Everything that does not depend on a clustering algorithm is implemented
-and tested; no clustering method or reduction technique is yet. Abstract
-methods have empty bodies, and a concrete method not yet written raises
-`NotImplementedError` -- as does one refusing something it genuinely
-cannot do. See `xxcluster/README.md`.
+Abstract methods have empty bodies, and a concrete method not yet written
+raises `NotImplementedError` -- as does one refusing something it
+genuinely cannot do. What is implemented and what is still blocked is in
+`xxcluster/README.md`.
 
 Requires scikit-learn >= 1.6; see `requirements.txt`.
 """

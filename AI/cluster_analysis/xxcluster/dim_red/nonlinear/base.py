@@ -14,11 +14,9 @@ family, so the classes here are split the same way:
     └── BaseKernelReducer    kernel methods; assume a feature map induced
                              by a kernel, and no manifold at all
 
-Kernel PCA is why the distinction is load-bearing rather than pedantic. It
-is nonlinear, but it is inductive, deterministic, has an eigenvalue
-spectrum rather than a stress, takes a kernel matrix rather than a
-neighbourhood graph, and has no `n_neighbors`. A manifold base class
-declaring the opposite of each of those would be wrong about every one.
+Kernel PCA is why the split is load-bearing rather than pedantic: a
+manifold base class would be wrong about it on every count, as
+`BaseKernelReducer` below sets out.
 
 A technique that is neither -- a parametric autoencoder, say, which is
 inductive and has a true decoder rather than a pre-image approximation --

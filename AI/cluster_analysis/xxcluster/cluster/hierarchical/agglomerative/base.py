@@ -1,8 +1,5 @@
 """
 Base class for Agglomerative Hierarchical Clustering (AHC).
-
-Bottom-up construction: begin with m singletons and repeatedly merge the
-closest pair under the linkage criterion until one cluster remains.
 """
 
 from __future__ import annotations

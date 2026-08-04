@@ -29,8 +29,8 @@ Capabilities
     declaration contradicts its interface is a `ContractViolationError`.
 Skeleton
     An `@abstractmethod` body is `...`; an unwritten concrete method
-    raises `NotImplementedError`. `BaseComponent.fit` and the steps it
-    runs are implemented and tested; no concrete method is.
+    raises `NotImplementedError` -- as does one refusing something it
+    genuinely cannot do, so the docstring says which it is.
 Mixin order
     scikit-learn's own mixins go to the **left** of `BaseComponent`, so
     they sit left of `BaseEstimator` in the MRO. scikit-learn 1.8 checks

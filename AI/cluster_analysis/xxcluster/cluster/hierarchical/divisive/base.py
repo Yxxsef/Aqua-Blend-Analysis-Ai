@@ -1,10 +1,6 @@
 """
 Base class for Divisive Hierarchical Clustering (DHC).
 
-Top-down construction: begin with one cluster containing every
-observation and repeatedly split the cluster selected by the splitting
-rule.
-
 Two choices distinguish these methods, and both are exposed here: which
 cluster to split next, and how to split it.
 """
