@@ -21,11 +21,9 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 venv/
-tests/
+# tests/
 .pytest_cache/
-conftest.py
+# conftest.py
 
-# Local task-list tooling. Generates the Word task list from tasks.py; the
-# document is distributed to the team outside git, and python-docx is a
-# personal dependency rather than a package one.
+# Local task-list tooling.
 .tasks/

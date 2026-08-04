@@ -138,7 +138,7 @@ The same keys go in the `references` field when the matching component is regist
 
 <https://d2l.deakin.edu.au/d2l/le/content/93067/viewContent/5882569/View>
 
-**Do not commit the report.** The repository is not where it belongs. Paste the similarity summary into the pull request as an image, or send it to the document lead privately — and the lead may run the check later in any case.
+**Do not commit the Turnitin similarity report.** The repository is not where it belongs. Paste the similarity summary into the pull request as an image, or send it to the document lead privately — and the lead may run the check later in any case.
 
 ---
 
