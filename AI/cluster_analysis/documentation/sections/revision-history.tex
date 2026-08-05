@@ -1,0 +1,24 @@
+% ------------------------------------------------------------------
+%  Revision history.  Add one row per released version, newest last,
+%  and update \docversion / \docdate in main.tex to match.
+% ------------------------------------------------------------------
+\section*{Revision history}
+\addcontentsline{toc}{section}{Revision history}
+
+\begin{longtable}{@{}l l l p{7.5cm}@{}}
+  \toprule
+  \textbf{Version} & \textbf{Date} & \textbf{Author} & \textbf{Summary of changes} \\
+  \midrule
+  \endfirsthead
+  \toprule
+  \textbf{Version} & \textbf{Date} & \textbf{Author} & \textbf{Summary of changes} \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endlastfoot
+  v0.1 & \docdate & B. M. Tran & Initial document structure. \\
+  % vX.Y & DD Mon YYYY & Author & What changed and why. \\
+\end{longtable}
+% Uncaptioned longtables still step the table counter; give it back so
+% that captioned tables in the main matter are numbered from 1.
+\addtocounter{table}{-1}

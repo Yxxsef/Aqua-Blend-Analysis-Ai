@@ -1,0 +1,120 @@
+% ------------------------------------------------------------------
+%  Background and related work.
+%  Shared theory only --- anything specific to one algorithm belongs
+%  in that algorithm's file under sections/techniques/.
+% ------------------------------------------------------------------
+\section{Background}
+\label{sec:background}
+
+\subsection{Cluster analysis in brief}
+\label{sec:background:overview}
+% \placeholder{The general problem statement and the vocabulary used throughout the document.}
+
+% \begin{itemize}
+%     \item General (informal) definition
+%     \item Mathematical formulation of the problem
+%     \item Challenges
+% \end{itemize}
+
+Clustering analysis refers to the process of exploring the dataset to uncover the latent structure and underlying relationships among data points, commonly known as unsupervised machine learning (UML) in the AI community, and essentially important in data mining and knowledge discovery \cite{ref_1}.
+It comprises of all clustering methods that are capable of handling (usually) high–dimensional data and grouping them by the utilisation of several (usually) quantitative measurements metrics, see \cite{ref_6} for a brief history of development.
+In this document, we shall refer to a clustering method as \cite{ref_5}:
+\begin{itemize}
+    \item Minimising within–cluster (intra–cluster) distance/dissimilarity.
+    \item Maximising intra–cluster distance/dissimilarity.
+    \item Measurement of distance/dissimilarity must be well–defined and practically meaningful.
+\end{itemize}
+Formally, let us claim the definitions of a valid mathematical metric and a clustering method.
+
+\begin{definition}[A mathematical metric \cite{ref_8}]
+    \label{def:math_metric}
+    Given two points $\mathbf x, \mathbf y \in \mathbb R^n$, a (mathematical) metric is given by
+    $d: \mathbb R^n \times \mathbb R^n \mapsto \mathbb R$, which satisfies:
+    \begin{itemize}
+        \item Identity and Positivity: $d(\mathbf x, \mathbf y) > 0$ if $\mathbf x \neq \mathbf y$, and $d(\mathbf x, \mathbf y) = 0 \Leftrightarrow \mathbf x = \mathbf y$
+        \item Symmetry: $d(\mathbf x, \mathbf y) = d(\mathbf y, \mathbf x)$
+        \item Triangle inequality: $d(\mathbf x, \mathbf y) \le d(\mathbf x, \mathbf z) + d(\mathbf z, \mathbf y), \forall \mathbf z \in \mathbb R^n$
+    \end{itemize}
+\end{definition}
+
+\begin{definition}[Clustering method \cite{ref_1}]
+    \label{def:cluster_method}
+    Given a dataset $\mathbf X \triangleq \left\{\mathbf x_i \in \mathbb R^n\right\}_{i = 1}^m$.
+    A clustering method is defined as $\phi_d: \mathbf X \mapsto \mathcal C$, such that:
+    \begin{align}
+        \bigcap_{i = 1}^{|\mathcal C|} \mathcal C_i = \emptyset
+        \quad \text{and} \quad
+        \bigcup_{i = 1}^{|\mathcal C|} \mathcal C_i = \mathbf X
+    \end{align}
+    and $\phi_d$ is (usually) aiming to:
+    \begin{align}
+        \min ~\sum_{i = 1}^{|\mathcal C|} ~\sum_{\substack{\mathbf x_j, \mathbf x_k \in \mathcal C_i \\ \mathbf x_j \neq \mathbf x_k}} d(\mathbf x_j, \mathbf x_k)
+        \quad \text{and} \quad
+        \max ~ \min_{\substack{1 \le i < j \le |\mathcal C|}} \left\{ \min_{\substack{ \mathbf x_i \in \mathcal C_i \\ \mathbf x_j \in \mathcal C_j}} d(\mathbf x_i, \mathbf x_j) \right\}
+    \end{align}
+    where $d(\cdot, \cdot)$ is a \textit{dissimilarity measure}, need not to be a metric as in \textbf{Def. \ref{def:math_metric}}.
+\end{definition}
+
+Although different literatures proposing different claims of standard process of cluster analysis \cite{ref_6}, though sharing a lot in common, we shall adopt the process written in \cite{ref_5}.
+\begin{enumerate}
+    \item Feature extraction and selection: opt out representative features of the dataset.
+    \item Clustering algorithm design: select appropriate methods for the data characteristics and problems' constraints.
+    \item Cluster evaluation/validation: quantify the performance of clustering results by use of validity measures.
+    \item Result interpretation: explain what drives the method to identify the patterns.
+\end{enumerate}
+
+Looking from the above definition and formulation of clustering methods, several issues have been identified, which are (mostly) subject to dataset and nature of clustering methods \cite{ref_1}.
+Regarding dataset, the Curse of Dimensionality leads to indistinguishable distances between points in high–dimensional space \cite{ref_9}, which degrades the capability of dissimilarity measure used in the methods.
+Other hurdles are, including but not limited. to, size of dataset, noise/outliers, and mixed data type.
+Regarding methods, many of them requires hyperparameter tuning, which is subjective and data–dependent, also but not limited to, computation complexity, convergence speed, and local optima convergence.
+Therefore, the upcoming clustering techniques have been developed to mitigate some of issues associated with the problems at some extent.
+
+\subsection{Families of clustering techniques}
+\label{sec:background:families}
+% \placeholder{Taxonomy used to organise Sections that follow ---
+% e.g.\ partitional, hierarchical, density-based, model-based,
+% graph-based --- and where each technique surveyed sits within it.}
+
+This section serves as a brief list of methods' names, for details what each family include, refer to \textbf{Sect. \ref{sec:clustering_methods}}.
+There is no universal agreement on how clustering methods are classified, several articles, e.g. \cite{ref_4} \cite{ref_2} \cite{ref_6} and books, e.g. \cite{ref_10} and \cite{ref_11} rely on different criteria to divide these clustering methods into groups depending on strategies implemented.
+In this document, we adopt the philosophy in \cite{ref_1} to classify the methods into two major groups.
+
+\paragraph{Hierarchical clustering} Hierarchical Cluster Analysis (HCA) offers multi–level partitions of the dataset, usually represented using a dendogram, and one can select a threshold to obtain different clustering outcomes.
+It is further categorised into two groups, i.e. a top–down strategy, known as Divisive Hierarchical Clustering (DHC), and a bottom–up strategy, known as Agglomerative Hierarchical Clustering (AHC). Although differing in construction approaches, they share same components, including dissimilarity measure and linkage criterion.
+However, DHC is more favorable in practices due to its efficiency.
+
+\paragraph{Partition–based clustering} Partitional clustering or iterative relocation algorithms focus on diving the dataset into (nearly–)homogenous groups without the needs of hierarchical structure, aiming to optimise certain criteria functions, can be understood as those given in \textbf{Def. \ref{def:cluster_method}}.
+It is further categorised into two groups, i.e. hard/crisp clustering and soft/fuzzy clustering.
+In lieu of considering crisp and fuzzy clustering as two primary groups within partitional methods as in \cite{ref_1} \cite{ref_2}, we shall classify crisp clustering methods in more thorough manners and keep fuzzy clustering method as is.
+Hence, the family of partition–based methods, including but not limited to, graph–theoretic, subspace, density–based, model–based, search–based, SSE–optimised, and miscellaneous clustering methods.
+
+\paragraph{Hybrid clustering} this family of method comprises those techniques that are mixture of the other techniques, irrespective of what family they reside in.
+
+In reality, clustering can have any arbitrary shape and distribution, this fact underpins distinct classification of the clustering methods.
+In brief, there are certain types of clusters that have been extensively studied, e.g. well–separated, prototype–based, graph–based, density–based, and shared–property. For detailed visualisations of these clusters in 2D-space, see \cite{ref_10}.
+
+
+\subsection{Related work}
+\label{sec:background:priorwork}
+% \placeholder{Existing studies applying these techniques to comparable data, and what this document adds. Cite with \texttt{\textbackslash citep\{key\}}.}
+
+Cluster analysis is a fundamental phase in knowledge discovery process, and thus, can be applied to a broad range of real–world applications, e.g. bioinformatics \cite{ref_4}, health research \cite{ref_12}, and network–related problems \cite{ref_3}.
+Nonetheless, we limit ourselves to revisit recent work tackling issues and demands associated with water systems in the past few years.
+
+Two applications of clustering methods, i.e. K–Means and Gaussian mixture clustering, were leveraged by \cite{ref_13}, which assisted them to detect recurring operational states, or ``fingerprints'', using data obtained from wasterwater treatment plants based in Ontario, Canada.
+Thereafter, successfully identified the associations between these fingerprints and critical events, which allows engineers to identify early signals of critical events from operational conditions.
+A more closely related research was conducted in Finland, which attempted to model changes in water quality through different stages in a treatment process \cite{ref_14}. They first projected the features onto a lower–dimensional space by the utilisation of Self–organising Map (SOM), and subsequently applied K–Means to cluster the projected data, and successfully identified different prototypes in the data, which implies the variations of water quality through distinct phases conducted in a treatment plant.
+Indeed, the application of SOM have been widely adopted in water–related research, with two surveys devoted to it in recent years. In particular, \cite{ref_15} systematically reviewed how SOM had been applied to water quality assessment in reservoirs and lakes. 
+Meanwhile, \cite{ref_16} highlighted the improved interpretability of SOM when being merged with a clustering algorithm, as studied in \cite{ref_14}, and superiority over other relevant methods in modelling the nonlinear relationship between variables, and can be well visualised in 2D or 3D space.
+
+Aside from the scope of water quality, the majority of the literature focusing on discovery of water demands. More specifically, 
+A comparative study on daily consumption patterns evaluates $K$–means, agglomerative hierarchical and spectral clustering under the Silhouette Coefficient and the Calinski–Harabasz index \cite{ref_17}.
+Closer to density–based methods, a modified DBSCAN with automatic optimisation of the neighbourhood radius and explicit detection of noise points has been applied to segment daily consumption profiles \cite{ref_18}.
+Time–series formulations are also represented, by clustering of consumption series combined with entropy analysis \cite{ref_19} and by clustering of hydrological telemetry series \cite{ref_20}.
+More recently, a graph–based clustering method, specifically a Graph Neural Network (GNN), was proposed in \cite{ref_21}, to leverage the interdependencies between the dataset and external information unavailable to it, which is likely to govern the urban water demands.
+
+A relatively sparse research direction is the problem–driven scenario clustering. Typically, scenarios are generated by sampling from the distributions of the operational dataset, and sometimes overlook the mathematical models, as highlighted in \cite{ref_23}.
+A recent literature, see \cite{ref_22}, not only worked on this problem–driven scenario clustering method, but also emphasised the pivotal role of feature engineering to yield better clustering results. Both of them inspired a more appropriate scenario generation approaches to comply with the real–world cases while considering the mathematical model used.
+This is essentially important, as the mathematical model will soon be developed to become a stochastic programming model, and in reality, the parameters given to the model are not fixed.
+
+Up to our knowledge, no recent work connects regimes discovered in an operational water–quality feature space to source–blending or source–selection decisions, and we suppose this is a potential and abundant area to discover and study.
