@@ -30,15 +30,15 @@ The review checks:
 | 2 | Cheapest-first baseline | [PR #20](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/20) | Approved |
 | 3 | Fixed-priority baseline | [PR #17](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/17) | Approved |
 | 4 | Toy-model demand research | [PR #10](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/10) | Approved |
-| 5 | Baseline calculations and validation | [PR #21](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/21) | Awaiting peer review |
+| 5 | Baseline calculations and validation | [PR #21](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/21) | Approved |
 | 6 | Source-selection explanation template | [PR #11](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/11) | Approved |
 | 7 | Binding-constraints explanation template | [PR #9](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/9) | Approved |
 | 8 | Water-quality and safety-margin explanation template | [PR #13](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/13) | Approved |
 | 9 | Fallback explanation generator | [PR #14](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/14) | Approved |
 | 10 | Normal-year and dry-year scenarios | [PR #12](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/12) | Approved |
 | 11 | High-demand and plant-outage scenarios | [PR #16](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/16) | Scenario specification approved; final plant-outage integration remains |
-| 12 | Evaluation KPI set | [PR #18](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/18) | Awaiting peer review |
-| 13 | LLM evaluation rubric | [PR #8](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/8) | Awaiting peer review |
+| 12 | Evaluation KPI set | [PR #18](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/18) | Approved |
+| 13 | LLM evaluation rubric | [PR #8](https://github.com/Yxxsef/Aqua-Blend-Analysis-Ai/pull/8) | Approved |
 
 All submitted work was reviewed through the pull request process. Review comments were either resolved before approval or recorded as future integration work.
 
@@ -91,8 +91,6 @@ The Sprint 1 work was created while the input and output contracts were still de
 - [x] Water-quality and feasibility outcomes were considered.
 - [x] Differences between the baseline strategies were explained.
 
-**Status:** Awaiting peer review.
-
 ## 5. Demand and Scenario Review
 
 ### Demand Research
@@ -139,8 +137,6 @@ The scenario specifications are accepted as the Sprint 1 foundation. Final execu
 ## 6. KPI Review
 
 The KPI set includes the required measures for comparing baseline, optimiser and scenario results.
-
-**Status:** Awaiting peer review.
 
 ### Approved KPI Areas
 
@@ -204,7 +200,7 @@ The deterministic generator remains the required safe fallback. An LLM must not 
 
 ## 8. LLM Evaluation Review
 
-The LLM evaluation rubric has been submitted and is awaiting peer review.
+The LLM evaluation rubric has been reviewed and approved.
 
 ### Critical Checks
 
@@ -272,8 +268,6 @@ Sprint 1 has successfully produced the required Analysis & AI foundation:
 - Explanation templates
 - A deterministic fallback explanation approach
 - An LLM safety and evaluation rubric
-
-Baseline calculations (Task 5), the KPI set (Task 12) and the LLM evaluation rubric (Task 13) are awaiting peer review and are not yet covered by this approval.
 
 The completed deliverables are accepted as the basis for continued implementation and integration.
 
