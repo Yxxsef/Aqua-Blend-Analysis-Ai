@@ -1,21 +1,12 @@
 # Adding a task (extending sideways)
 
-> **Status: derived from the contract, skeleton executed.** No task exists yet
-> and `components()` raises `NotImplementedError` on the base, but a minimal
-> `BaseTask` subclass overriding `components` and `run` was constructed and
-> run successfully. The composed `run` body in the skeleton below is
-> illustrative — it has not been executed against real components. **You are
-> the first — correct this file as you go.**
+> **Status: derived from the contract, skeleton executed.** No task exists yet and `components()` raises `NotImplementedError` on the base, but a minimal `BaseTask` subclass overriding `components` and `run` was constructed and run successfully. The composed `run` body in the skeleton below is illustrative; it has not been executed against real components. **You are the first, so correct this file as you go.**
 
-**Read [00-the-contract.md](00-the-contract.md) first.** Policy:
-[CONTRIBUTING §2.6](../CONTRIBUTING.md#26-adding-a-task-extending-sideways).
-A task needs a **new template kind** — see
-[§1.4](../CONTRIBUTING.md#14-adding-a-new-kind-of-template).
+**Read [00-the-contract.md](00-the-contract.md) first.** Policy: [CONTRIBUTING §2.6](../CONTRIBUTING.md#26-adding-a-task-extending-sideways). A task needs a **new template kind**; see [§1.4](../CONTRIBUTING.md#14-adding-a-new-kind-of-template).
 
-**File:** `xxcluster/tasks/<task>/` — a subpackage, not a module.
+**File:** `xxcluster/tasks/<task>/`, a subpackage, not a module.
 
-A task is an **end-to-end analysis**: time-series clustering, anomaly
-detection, scenario generation, demand forecasting.
+A task is an **end-to-end analysis**: time-series clustering, anomaly detection, scenario generation, demand forecasting.
 
 ---
 
@@ -23,22 +14,17 @@ detection, scenario generation, demand forecasting.
 
 > **A task composes components; it does not implement algorithms.**
 
-Anything reusable belongs in the subpackage for its kind, where the registry
-and the comparison can reach it:
+Anything reusable belongs in the subpackage for its kind, where the registry and the comparison can reach it:
 
 | If your task needs | Put it in | Guide |
 |---|---|---|
 | a series dissimilarity | `measures/dissimilarity/` | [dissimilarity-measure.md](dissimilarity-measure.md) |
 | a clustering method | `cluster/<family>/<subfamily>/` | [clustering-method.md](clustering-method.md) |
-| a detector | on `BaseOutlierDetector` | — |
-| a generator | on `BaseGenerator` | — |
+| a detector | on `BaseOutlierDetector` | n/a |
+| a generator | on `BaseGenerator` | n/a |
 | an index | `measures/validation/` | [validity-index-internal.md](validity-index-internal.md) |
 
-**A component defined inside a task is invisible to the registry and to the
-comparison.** It cannot appear in Sect. 8, cannot be shortlisted by
-`REGISTRY.applicable`, and cannot be reused by the next task. If you find
-yourself writing a `_fit` inside `tasks/`, stop — that code belongs elsewhere
-and your task should be importing it.
+**A component defined inside a task is invisible to the registry and to the comparison.** It cannot appear in Sect. 8, cannot be shortlisted by `REGISTRY.applicable`, and cannot be reused by the next task. If you find yourself writing a `_fit` inside `tasks/`, stop; that code belongs elsewhere and your task should be importing it.
 
 ---
 
@@ -57,18 +43,16 @@ class BaseTask(ABC):
     def components(self) -> Mapping[str, Any]: ...
 ```
 
-A task is not fitted and has no `transform`. Forcing it into the estimator
-contract would only obscure that it **runs once and returns a report**. So:
+A task is not fitted and has no `transform`. Forcing it into the estimator contract would only obscure that it **runs once and returns a report**. So:
 
 - `run`, not `fit`. No trailing-underscore state, no `_required_fitted`.
-- No `_capabilities` — a task makes no claims about data it accepts.
-- `_kind` is `TASK`, inherited. `@register("<name>")` still works and is still
-  how a task is named in a configuration.
+- No `_capabilities`: a task makes no claims about data it accepts.
+- `_kind` is `TASK`, inherited. `@register("<name>")` still works and is still how a task is named in a configuration.
 - **Tasks do not read files.** `dataset` arrives already loaded.
 
 ---
 
-## `TaskResult` — what you must return
+## `TaskResult`: what you must return
 
 ```python
 @dataclass(frozen=True)
@@ -80,14 +64,9 @@ class TaskResult:
     caveats: Sequence[str] = ()
 ```
 
-The four fields are held together because **a task's output is an argument
-rather than a number**: the tables, the figures that qualify them, and the
-record of what produced both.
+The four fields are held together because **a task's output is an argument rather than a number**: the tables, the figures that qualify them, and the record of what produced both.
 
-**`caveats` is not optional padding.** An inconclusive selection, an unstable
-partition, a failed run — reported, not filtered. This is the field that keeps
-a task honest, and it feeds Sect. 4.5 directly. A task that returns an empty
-`caveats` on a real dataset is usually a task that is not looking.
+**`caveats` is not optional padding.** An inconclusive selection, an unstable partition, a failed run: reported, not filtered. This is the field that keeps a task honest, and it feeds Sect. 4.5 directly. A task that returns an empty `caveats` on a real dataset is usually a task that is not looking.
 
 ---
 
@@ -139,13 +118,9 @@ class TimeSeriesClustering(BaseTask):
         )
 ```
 
-**Implement `components()`.** It raises on the base, and it exists so a task's
-composition is inspectable *before* it is run, and so the reported result can
-name what produced it. A task whose composition is only visible by reading
-`run` is not auditable.
+**Implement `components()`.** It raises on the base, and it exists so a task's composition is inspectable *before* it is run, and so the reported result can name what produced it. A task whose composition is only visible by reading `run` is not auditable.
 
-**Take the protocol, do not build one.** Two tasks over the same data are
-comparable only if they share it.
+**Take the protocol, do not build one.** Two tasks over the same data are comparable only if they share it.
 
 ---
 
@@ -173,22 +148,15 @@ print('caveats ', r.caveats)
 "
 ```
 
-Check `components()` before `run()` — if it raises, the task is not inspectable
-and the contract is unmet.
+Check `components()` before `run()`: if it raises, the task is not inspectable and the contract is unmet.
 
 ---
 
 ## The document side
 
-A task needs its own section, and therefore **a new template kind**. Follow
-[CONTRIBUTING §1.4](../CONTRIBUTING.md#14-adding-a-new-kind-of-template):
-add `template/<kind>_template.tex`, keep the `.docx` in step via
-`template/build_docx.py`, and say in the pull request why an existing kind did
-not fit.
+A task needs its own section, and therefore **a new template kind**. Follow [CONTRIBUTING §1.4](../CONTRIBUTING.md#14-adding-a-new-kind-of-template): add `template/<kind>_template.tex`, keep the `.docx` in step via `template/build_docx.py`, and say in the pull request why an existing kind did not fit.
 
-**Scenario generation additionally feeds the MILP team — agree the output
-format with them before building it.** That is a cross-team dependency, not a
-detail to settle later.
+**Scenario generation additionally feeds the MILP team, so agree the output format with them before building it.** That is a cross-team dependency, not a detail to settle later.
 
 ---
 

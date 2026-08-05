@@ -1,39 +1,27 @@
 # Adding a relative criterion
 
-> **Status: derived from the contract, skeleton executed.** No relative
-> criterion exists yet, and `selection/n_clusters.py` is blocked on this file.
-> The `MaxCriterion` skeleton below was run: it picks the peak, loses NaN
-> candidates, and returns an ordered curve. It has **not** driven a selector,
-> because none is implemented. **You are the first — correct this file as you
-> go.**
+> **Status: derived from the contract, skeleton executed.** No relative criterion exists yet, and `selection/n_clusters.py` is blocked on this file. The `MaxCriterion` skeleton below was run: it picks the peak, loses NaN candidates, and returns an ordered curve. It has **not** driven a selector, because none is implemented. **You are the first, so correct this file as you go.**
 
-**Read [00-the-contract.md](00-the-contract.md) first.** Pairing table:
-[CONTRIBUTING §2.5](../CONTRIBUTING.md#25-adding-a-measure).
+**Read [00-the-contract.md](00-the-contract.md) first.** Pairing table: [CONTRIBUTING §2.5](../CONTRIBUTING.md#25-adding-a-measure).
 
-**File:** `xxcluster/measures/validation/relative.py` — append to it.
+**File:** `xxcluster/measures/validation/relative.py`; append to it.
 
 ---
 
-## This is not an index — it is a selection *rule*
+## This is not an index; it is a selection *rule*
 
 The distinction from the other two groups is the **unit of assessment**:
 
 - An internal or external index **scores one partition**.
 - A relative criterion **reads a sequence of scores and selects from it**.
 
-Most relative criteria are built on an internal index evaluated repeatedly, but
-the rule is separate from the index and worth naming: the same silhouette curve
-yields different answers under *"take the maximum"* and *"take the largest |C|
-within one standard error of the maximum"*. Those are two criteria over one
-curve, and the document must be able to say which produced a number.
+Most relative criteria are built on an internal index evaluated repeatedly, but the rule is separate from the index and worth naming: the same silhouette curve yields different answers under *"take the maximum"* and *"take the largest |C| within one standard error of the maximum"*. Those are two criteria over one curve, and the document must be able to say which produced a number.
 
-Consequently `BaseRelativeCriterion` derives from `ABC` directly — **not** from
-`BaseValidityIndex`. It has no `score`, no `higher_is_better`, no
-`handles_noise`. Do not try to inherit from the index base.
+Consequently `BaseRelativeCriterion` derives from `ABC` directly, **not** from `BaseValidityIndex`. It has no `score`, no `higher_is_better`, no `handles_noise`. Do not try to inherit from the index base.
 
 ---
 
-## Step 1 — The three methods
+## Step 1: The three methods
 
 ```python
 class BaseRelativeCriterion(ABC):
@@ -48,20 +36,15 @@ class BaseRelativeCriterion(ABC):
 
 | Method | Returns | Why it exists |
 |---|---|---|
-| `select` | the **key** the criterion prefers | Returning the key, not the score, keeps the rule independent of what is being swept — the same criterion then works over a density parameter |
+| `select` | the **key** the criterion prefers | Returning the key, not the score, keeps the rule independent of what is being swept, so the same criterion then works over a density parameter |
 | `curve` | the sequence it read | Selection is a judgement and a reader is entitled to see the curve behind it. Consumed by `viz.diagnostics.plot_selection_curve` |
 | `is_conclusive` | whether the curve supports a selection at all | A flat or monotone curve means the data does not distinguish the candidates |
 
-`select` is the only abstract one. `curve` and `is_conclusive` raise
-`NotImplementedError` on the base — but **implement both anyway**.
-`BaseNClustersSelector` promises `curve_` and `conclusive_` as fitted
-attributes, and it gets them from here.
+`select` is the only abstract one. `curve` and `is_conclusive` raise `NotImplementedError` on the base, but **implement both anyway**. `BaseNClustersSelector` promises `curve_` and `conclusive_` as fitted attributes, and it gets them from here.
 
 ### `base_index` is required in practice
 
-Name the index whose curve you read. *"The elbow"* is not a result on its own —
-the curve it was read from is part of the finding, and this attribute is what
-records it.
+Name the index whose curve you read. *"The elbow"* is not a result on its own: the curve it was read from is part of the finding, and this attribute is what records it.
 
 ```python
 base_index = "silhouette"     # or None for a criterion that computes its own
@@ -69,11 +52,7 @@ base_index = "silhouette"     # or None for a criterion that computes its own
 
 ### `is_conclusive` is the point of this class
 
-Returning an arbitrary argmax over a flat curve produces a number that later
-reads as a finding. Saying *"the data does not distinguish 2 through 10
-clusters"* is a **valid outcome and a better one**. Sect. 4.5 wants it, and
-`plot_selection_curve` draws the curve either way precisely so an inconclusive
-result stays visible.
+Returning an arbitrary argmax over a flat curve produces a number that later reads as a finding. Saying *"the data does not distinguish 2 through 10 clusters"* is a **valid outcome and a better one**. Sect. 4.5 wants it, and `plot_selection_curve` draws the curve either way precisely so an inconclusive result stays visible.
 
 Give it a real test, not a placeholder:
 
@@ -87,12 +66,11 @@ def is_conclusive(self, scores):
     return spread >= self.min_spread      # a declared parameter, not a constant
 ```
 
-Whatever rule you choose, **state it in the write-up**. A conclusiveness
-threshold is a modelling decision, and burying it in a magic number hides it.
+Whatever rule you choose, **state it in the write-up**. A conclusiveness threshold is a modelling decision, and burying it in a magic number hides it.
 
 ---
 
-## Step 2 — Skeleton
+## Step 2: Skeleton
 
 ```python
 @register("max_criterion")
@@ -101,7 +79,7 @@ class MaxCriterion(BaseRelativeCriterion):
 
     The simplest rule, and the honest baseline the others are compared
     against. Direction comes from the index rather than being assumed
-    here -- see `BaseValidityIndex.is_better`.
+    here; see `BaseValidityIndex.is_better`.
 
     Applied per Sect. 4.3.
     """
@@ -141,20 +119,13 @@ class MaxCriterion(BaseRelativeCriterion):
         )
 ```
 
-**Never hard-code `>`.** Half the indices in this package are minimised.
-Direction belongs to the index, and `BaseValidityIndex.is_better` is the single
-place it is applied — it is also NaN-safe, so a failed candidate loses rather
-than propagating. A criterion that assumes higher-is-better silently inverts
-every Davies–Bouldin sweep.
+**Never hard-code `>`.** Half the indices in this package are minimised. Direction belongs to the index, and `BaseValidityIndex.is_better` is the single place it is applied; it is also NaN-safe, so a failed candidate loses rather than propagating. A criterion that assumes higher-is-better silently inverts every Davies–Bouldin sweep.
 
-**Preserve insertion order in `curve`.** `plot_selection_curve` plots keys
-against values in the order it receives them; a dict comprehension over
-`range(2, 11)` is already ordered, and re-sorting would misalign the figure
-from the sweep.
+**Preserve insertion order in `curve`.** `plot_selection_curve` plots keys against values in the order it receives them; a dict comprehension over `range(2, 11)` is already ordered, and re-sorting would misalign the figure from the sweep.
 
 ---
 
-## Step 3 — Verify
+## Step 3: Verify
 
 ```bash
 python -c "
@@ -174,19 +145,18 @@ print('curve      ', list(c.curve(peaked)))
 "
 ```
 
-Then check it against a minimised index, which is where a hard-coded `>` shows
-up:
+Then check it against a minimised index, which is where a hard-coded `>` shows up:
 
 ```bash
 python -c "
 from xxcluster.measures.validation.internal import DaviesBouldin   # if it exists
 from xxcluster.measures.validation.relative import <Class>
 c = <Class>(index=DaviesBouldin())
-print(c.select({2: 0.9, 3: 0.4, 4: 1.2}), '  (expect 3 — lower is better)')
+print(c.select({2: 0.9, 3: 0.4, 4: 1.2}), '  (expect 3, lower is better)')
 "
 ```
 
-Finally, draw it — the figure is half the deliverable:
+Finally, draw it, since the figure is half the deliverable:
 
 ```bash
 python -c "
@@ -202,20 +172,15 @@ print('figure OK')
 
 ## What you unblock
 
-`selection/n_clusters.py` cannot be written without a concrete criterion —
-`BaseNClustersSelector` gets two of its three fitted attributes from
-`criterion.curve()` and `criterion.is_conclusive()`. Once yours exists, see
-[selection-selector.md](selection-selector.md).
+`selection/n_clusters.py` cannot be written without a concrete criterion: `BaseNClustersSelector` gets two of its three fitted attributes from `criterion.curve()` and `criterion.is_conclusive()`. Once yours exists, see [selection-selector.md](selection-selector.md).
 
-Until then, notebooks inline the rule by hand (`max(curve, key=curve.get)`),
-which is exactly the ambiguity this class removes.
+Until then, notebooks inline the rule by hand (`max(curve, key=curve.get)`), which is exactly the ambiguity this class removes.
 
 ---
 
 ## Write-up
 
-`template/measure_template.tex`, labels `sec:measure:<name>:*`. The paragraphs
-that carry a code counterpart:
+`template/measure_template.tex`, labels `sec:measure:<name>:*`. The paragraphs that carry a code counterpart:
 
 | Paragraph | Code |
 |---|---|

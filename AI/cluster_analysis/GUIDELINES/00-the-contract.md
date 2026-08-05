@@ -1,21 +1,16 @@
-# The contract — read this first
+# The contract: read this first
 
-> **Status: verified.** Every rule below is enforced by code in `core/` and
-> covered by `tests/`. The failure messages quoted are the real ones.
+> **Status: verified.** Every rule below is enforced by code in `core/` and covered by `tests/`. The failure messages quoted are the real ones.
 
-Six rules. They apply to everything you add, and they are all mechanically
-checked — you will meet them as error messages if you skip this page.
+Six rules. They apply to everything you add, and they are all mechanically checked: you will meet them as error messages if you skip this page.
 
-Reference: [`xxcluster/ARCHITECTURE.md`](../xxcluster/ARCHITECTURE.md) for why
-the contract is shaped this way, [CONTRIBUTING §2.7](../CONTRIBUTING.md#27-the-contract)
-for the rule as policy.
+Reference: [`xxcluster/ARCHITECTURE.md`](../xxcluster/ARCHITECTURE.md) for why the contract is shaped this way, [CONTRIBUTING §2.7](../CONTRIBUTING.md#27-the-contract) for the rule as policy.
 
 ---
 
 ## 1. Where everything comes from
 
-One import site per thing. A second path to the same object is how two
-registries, or two `ComponentKind`s, come to exist.
+One import site per thing. A second path to the same object is how two registries, or two `ComponentKind`s, come to exist.
 
 | Name | Import from |
 |---|---|
@@ -30,14 +25,14 @@ registries, or two `ComponentKind`s, come to exist.
 Use **relative** imports at your module's depth, as every existing module does:
 
 ```python
-# xxcluster/cluster/partitional/sse_based/kmeans.py  — four levels down
+# xxcluster/cluster/partitional/sse_based/kmeans.py  (four levels down)
 from ....core.adapters import AdaptedClusterer
 from ....core.registry import register
 from ....core.tags import Capabilities
 from ....core.types import Assignment, Backend, Family, Scaling, SubFamily
 from .base import BasePrototypeClusterer
 
-# xxcluster/measures/validation/internal.py  — three levels down
+# xxcluster/measures/validation/internal.py  (three levels down)
 from ...core.registry import register
 from ...core.validation import check_labels
 from .base import BaseValidityIndex
@@ -45,7 +40,7 @@ from .base import BaseValidityIndex
 
 ---
 
-## 2. The template method — override `_fit`, never `fit`
+## 2. The template method: override `_fit`, never `fit`
 
 `BaseComponent.fit` is concrete and does five things in a fixed order:
 
@@ -59,8 +54,7 @@ def fit(self, X, y=None, **fit_params):
     return self
 ```
 
-You write step 4 and nothing else. That fixed order is what makes Sect. 8 a
-comparison rather than a collection of differently-guarded runs.
+You write step 4 and nothing else. That fixed order is what makes Sect. 8 a comparison rather than a collection of differently-guarded runs.
 
 **Parameters go in `__init__` only, stored unmodified, never validated there.**
 
@@ -70,9 +64,7 @@ def __init__(self, n_clusters=2, *, tol=1e-4, random_state=None):
     self.random_state = random_state  # do NOT call check_random_state here
 ```
 
-`clone` and `check_estimator` both depend on parameters round-tripping through
-`get_params`/`set_params` untouched. Validate in `_fit`, or declare
-`_parameter_constraints` and let scikit-learn's machinery do it.
+`clone` and `check_estimator` both depend on parameters round-tripping through `get_params`/`set_params` untouched. Validate in `_fit`, or declare `_parameter_constraints` and let scikit-learn's machinery do it.
 
 **Fitted state carries a trailing underscore and does not exist before `fit`.**
 
@@ -93,12 +85,9 @@ Every attribute a class declares in `_required_fitted` must exist once
 fitting succeeds.
 ```
 
-Declarations are **collected across the MRO**, so you list only what you add to
-your parent's. A density-based method need not restate `labels_` to also
-require `n_noise_`.
+Declarations are **collected across the MRO**, so you list only what you add to your parent's. A density-based method need not restate `labels_` to also require `n_noise_`.
 
-This is not documentation — an attribute named only in a docstring is neither
-checked here nor copied by the adapter (rule 5).
+This is not documentation: an attribute named only in a docstring is neither checked here nor copied by the adapter (rule 5).
 
 ---
 
@@ -115,9 +104,7 @@ _capabilities = Capabilities(
 )
 ```
 
-`_check_capabilities` runs on every fit and checks **one direction**: a
-declaration must be backed by the interface it promises. Declaring more than
-you have fails; having more than you declare does not.
+`_check_capabilities` runs on every fit and checks **one direction**: a declaration must be backed by the interface it promises. Declaring more than you have fails; having more than you declare does not.
 
 | Declaring | Requires |
 |---|---|
@@ -133,21 +120,13 @@ Either mix in the capability or correct the declaration — the comparison
 table of Sect. 8.2 is generated from it.
 ```
 
-**A `Capabilities` field left at its default is a claim, not a blank.**
-`_capabilities` defaults to `Capabilities()`, which claims native, crisp,
-non-inductive, requires no `|C|`, handles nothing, medium scale. If you do not
-declare, Sect. 8.2 prints that as though you meant it. Fill every field you can
-justify from your write-up; see the pairing tables in
-[CONTRIBUTING §2.3.1](../CONTRIBUTING.md#231-what-must-agree) and
-[§2.5](../CONTRIBUTING.md#25-adding-a-measure).
+**A `Capabilities` field left at its default is a claim, not a blank.** `_capabilities` defaults to `Capabilities()`, which claims native, crisp, non-inductive, requires no `|C|`, handles nothing, medium scale. If you do not declare, Sect. 8.2 prints that as though you meant it. Fill every field you can justify from your write-up; see the pairing tables in [CONTRIBUTING §2.3.1](../CONTRIBUTING.md#231-what-must-agree) and [§2.5](../CONTRIBUTING.md#25-adding-a-measure).
 
 ---
 
 ## 5. Adapt a backend, or write it natively
 
-Adapting is the default. [CONTRIBUTING §2.3](../CONTRIBUTING.md#23-adding-a-clustering-method)
-step 4 states when to reimplement instead: no good implementation exists, or
-following the formulation *is* the point.
+Adapting is the default. [CONTRIBUTING §2.3](../CONTRIBUTING.md#23-adding-a-clustering-method) step 4 states when to reimplement instead: no good implementation exists, or following the formulation *is* the point.
 
 An adapter declares four things and inherits `_fit`:
 
@@ -158,13 +137,9 @@ An adapter declares four things and inherits `_fit`:
 | `_attr_map` | our fitted attribute → backend attribute |
 | `_fixed_params` | backend parameters we pin and do not expose |
 
-`_collect_fitted` copies **only what `_required_fitted` declares**, through
-`_attr_map`. Mirroring everything would put the backend's vocabulary into ours,
-which is the coupling the adapter exists to prevent. Anything else stays
-reachable on `backend_`.
+`_collect_fitted` copies **only what `_required_fitted` declares**, through `_attr_map`. Mirroring everything would put the backend's vocabulary into ours, which is the coupling the adapter exists to prevent. Anything else stays reachable on `backend_`.
 
-Attributes the backend does not report go in `_derive_missing`, calling
-`super()` first:
+Attributes the backend does not report go in `_derive_missing`, calling `super()` first:
 
 ```python
 def _derive_missing(self) -> None:
@@ -172,25 +147,17 @@ def _derive_missing(self) -> None:
     self.converged_ = bool(self.n_iter_ < self.max_iter)
 ```
 
-**One backend attribute may feed two contract names.** `_attr_map =
-{"criterion_": "inertia_"}` redirects `criterion_` to the backend's SSE while
-`inertia_` resolves to itself, because lookup defaults to the same name.
+**One backend attribute may feed two contract names.** `_attr_map = {"criterion_": "inertia_"}` redirects `criterion_` to the backend's SSE while `inertia_` resolves to itself, because lookup defaults to the same name.
 
 ### The native-hook rule, if you are writing a base class
 
-A hook that exists only for a native fitting loop — `_fit_once`,
-`_update_centers`, `_build_hierarchy`, `_partition_graph` — **must be a
-concrete method raising `NotImplementedError`, never `@abstractmethod`.** An
-adapted method never reaches it, so an abstract one makes the entire subfamily
-impossible to adapt: `ABCMeta` refuses to instantiate the class. Only `_fit`
-stays abstract, and the adapters supply it.
+A hook that exists only for a native fitting loop (`_fit_once`, `_update_centers`, `_build_hierarchy`, `_partition_graph`) **must be a concrete method raising `NotImplementedError`, never `@abstractmethod`.** An adapted method never reaches it, so an abstract one makes the entire subfamily impossible to adapt: `ABCMeta` refuses to instantiate the class. Only `_fit` stays abstract, and the adapters supply it.
 
-The exception is a hook every subclass must answer whichever route it took,
-such as `BaseHybridClusterer._check_steps`. Those stay abstract.
+The exception is a hook every subclass must answer whichever route it took, such as `BaseHybridClusterer._check_steps`. Those stay abstract.
 
 ---
 
-## 6. Register — and never pass `kind=`
+## 6. Register, and never pass `kind=`
 
 ```python
 @register("kmeans")
@@ -198,9 +165,7 @@ class KMeans(AdaptedClusterer, BasePrototypeClusterer):
     ...
 ```
 
-That is the whole declaration. `@register` takes the kind from the class's
-`_kind`, and **`_kind` is declared once per kind-level base**, so you inherit
-the right one:
+That is the whole declaration. `@register` takes the kind from the class's `_kind`, and **`_kind` is declared once per kind-level base**, so you inherit the right one:
 
 | Base | `_kind` |
 |---|---|
@@ -213,22 +178,15 @@ the right one:
 | `BaseTask` | `TASK` |
 | `BaseOutlierDetector`, `BaseGenerator`, `BasePredictor` | the matching member |
 
-**Never set `_kind` on a concrete class.** It can then disagree with the base
-the class actually derives from, and the registry believes the class.
-`tests/test_registry.py` asserts every `ComponentKind` member is claimed by
-exactly one base, so a new kind added without its base fails the suite rather
-than failing quietly at report time.
+**Never set `_kind` on a concrete class.** It can then disagree with the base the class actually derives from, and the registry believes the class. `tests/test_registry.py` asserts every `ComponentKind` member is claimed by exactly one base, so a new kind added without its base fails the suite rather than failing quietly at report time.
 
-A component is registered **when its module is imported**. If `REGISTRY.get`
-cannot find your name, that is usually the reason.
+A component is registered **when its module is imported**. If `REGISTRY.get` cannot find your name, that is usually the reason.
 
 ---
 
 ## 7. Mixin order
 
-scikit-learn's own mixins go **left** of `BaseComponent`, and our capability
-mixins go **left** of the family base. scikit-learn 1.8 checks this
-(`check_mixin_order`) and fails `check_estimator` otherwise.
+scikit-learn's own mixins go **left** of `BaseComponent`, and our capability mixins go **left** of the family base. scikit-learn 1.8 checks this (`check_mixin_order`) and fails `check_estimator` otherwise.
 
 ```python
 class BasePrototypeClusterer(InductiveMixin, TransformerMixin, BasePartitionalClusterer, ABC):
@@ -242,8 +200,7 @@ The general rule: more specialised precedes more general.
 class KMeans(AdaptedClusterer, BasePrototypeClusterer):
 ```
 
-The MRO must reach `AdaptedClusterer._fit` before the family base's `_fit`,
-which raises `NotImplementedError`. Check yours resolves as you expect:
+The MRO must reach `AdaptedClusterer._fit` before the family base's `_fit`, which raises `NotImplementedError`. Check yours resolves as you expect:
 
 ```bash
 python -c "
@@ -252,10 +209,7 @@ print(' -> '.join(c.__name__ for c in KMeans.__mro__[:8]))
 "
 ```
 
-**Mix in only what you have.** `InductiveMixin` only if you can label unseen
-observations; `NoiseAwareMixin` only if you can decline to assign one. And
-check your family base first — `BasePrototypeClusterer` already carries
-`InductiveMixin`, so adding it again is noise.
+**Mix in only what you have.** `InductiveMixin` only if you can label unseen observations; `NoiseAwareMixin` only if you can decline to assign one. And check your family base first: `BasePrototypeClusterer` already carries `InductiveMixin`, so adding it again is noise.
 
 ---
 
@@ -280,9 +234,7 @@ print(REGISTRY.capabilities('<name>').describe())
 "
 ```
 
-If `check_estimator` fails on something genuinely inapplicable to unsupervised
-work, record the exclusion and the reason in the pull request rather than
-weakening the class.
+If `check_estimator` fails on something genuinely inapplicable to unsupervised work, record the exclusion and the reason in the pull request rather than weakening the class.
 
 ---
 
@@ -293,7 +245,7 @@ weakening the class.
 | `_fit did not set: X` | `_required_fitted` declares `X`; your `_fit` (or `_attr_map`) does not provide it |
 | `declares <cap> but has no <method>` | `_capabilities` promises an interface you did not implement |
 | `Cannot clone object` | a parameter was mutated in `__init__`, or something that is not an estimator was passed as one |
-| `'X' object has no attribute 'backend_'` from `predict` | missing `ensure_fitted(self, "backend_")` — scikit-learn ≥ 1.6 requires `NotFittedError` before fit |
+| `'X' object has no attribute 'backend_'` from `predict` | missing `ensure_fitted(self, "backend_")`; scikit-learn ≥ 1.6 requires `NotFittedError` before fit |
 | `no component registered as 'X'` | the module was never imported |
 | `'X' is already registered to ...` | names are permanent; pick another |
 | `X adapts Y, which is not installed` | uncomment the backend in `requirements.txt` |

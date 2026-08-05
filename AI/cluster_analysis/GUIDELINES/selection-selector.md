@@ -1,36 +1,20 @@
 # Adding a selector
 
-> **Status: derived from the contract, and currently blocked.**
-> `BaseSelector` and `BaseNClustersSelector` were read directly, but
-> `BaseSelector._evaluate_candidate` and `BaseNClustersSelector._fit` both
-> raise `NotImplementedError`, and **no concrete `BaseRelativeCriterion`
-> exists**. Read the *What must land first* section before starting.
+> **Status: derived from the contract, and currently blocked.** `BaseSelector` and `BaseNClustersSelector` were read directly, but `BaseSelector._evaluate_candidate` and `BaseNClustersSelector._fit` both raise `NotImplementedError`, and **no concrete `BaseRelativeCriterion` exists**. Read the *What must land first* section before starting.
 
-**Read [00-the-contract.md](00-the-contract.md) first.** A selector's
-documentation counterpart is Sect. 4.3, not a template.
+**Read [00-the-contract.md](00-the-contract.md) first.** A selector's documentation counterpart is Sect. 4.3, not a template.
 
-**File:** `xxcluster/selection/n_clusters.py`, or a new module under
-`xxcluster/selection/` for a different parameter.
+**File:** `xxcluster/selection/n_clusters.py`, or a new module under `xxcluster/selection/` for a different parameter.
 
 ---
 
 ## What a selector is
 
-A selector **wraps a method, evaluates it over candidate configurations, and
-exposes the winner**. It is itself a `BaseComponent`, so it is composable,
-registrable and reportable like anything else — a selector wrapping a method is
-a legitimate thing to put in a pipeline, and the search it performed then
-becomes part of the recorded result rather than something a notebook did once.
+A selector **wraps a method, evaluates it over candidate configurations, and exposes the winner**. It is itself a `BaseComponent`, so it is composable, registrable and reportable like anything else: a selector wrapping a method is a legitimate thing to put in a pipeline, and the search it performed then becomes part of the recorded result rather than something a notebook did once.
 
-Selection without labels cannot be done by held-out error, so it rests on two
-substitutes: a **criterion curve** over candidate values (this page) and
-**reproducibility under perturbation** ([selection-perturbation.md](selection-perturbation.md)).
-They answer different questions, and a partition that is optimal by the first
-and unstable under the second is not a finding.
+Selection without labels cannot be done by held-out error, so it rests on two substitutes: a **criterion curve** over candidate values (this page) and **reproducibility under perturbation** ([selection-perturbation.md](selection-perturbation.md)). They answer different questions, and a partition that is optimal by the first and unstable under the second is not a finding.
 
-**This applies to more than |C|.** A density-based method has no |C| to choose
-but still has density parameters to sweep, and the same machinery serves both —
-which is why the package says "selection" rather than "choosing k".
+**This applies to more than |C|.** A density-based method has no |C| to choose but still has density parameters to sweep, and the same machinery serves both, which is why the package says "selection" rather than "choosing k".
 
 ---
 
@@ -38,10 +22,9 @@ which is why the package says "selection" rather than "choosing k".
 
 Three pieces, in this order. The first is the real blocker.
 
-### 1. A concrete `BaseRelativeCriterion` — see [validity-index-relative.md](validity-index-relative.md)
+### 1. A concrete `BaseRelativeCriterion`: see [validity-index-relative.md](validity-index-relative.md)
 
-`BaseNClustersSelector` promises three fitted attributes and gets two of them
-from the criterion:
+`BaseNClustersSelector` promises three fitted attributes and gets two of them from the criterion:
 
 | Attribute | Comes from |
 |---|---|
@@ -49,15 +32,9 @@ from the criterion:
 | `curve_` | `criterion.curve(scores)` |
 | `conclusive_` | `criterion.is_conclusive(scores)` |
 
-Both of the latter raise `NotImplementedError` on the base class. Without a
-concrete criterion there is nothing to call.
+Both of the latter raise `NotImplementedError` on the base class. Without a concrete criterion there is nothing to call.
 
-**Do not inline an argmax to get around this.** `n_clusters.py`'s own docstring
-forbids it: *"Three parts, deliberately separate: generate the candidate
-values, score each one, then apply a relative criterion from
-`measures.validation.relative`."* Separating them is what lets the criterion
-change without touching the sweep, several criteria be applied to one sweep,
-and the curve stay available whatever the criterion decides.
+**Do not inline an argmax to get around this.** `n_clusters.py`'s own docstring forbids it: *"Three parts, deliberately separate: generate the candidate values, score each one, then apply a relative criterion from `measures.validation.relative`."* Separating them is what lets the criterion change without touching the sweep, several criteria be applied to one sweep, and the curve stay available whatever the criterion decides.
 
 ### 2. `BaseSelector._evaluate_candidate`
 
@@ -67,16 +44,13 @@ def _evaluate_candidate(self, X, params: dict) -> dict[str, float]:
     raise NotImplementedError
 ```
 
-Roughly fifteen lines: clone the estimator, `set_params(**params)`, fit, score
-under each entry of `scoring`, return the dict. It lives on the base because
-every selector needs it — inlining it in `n_clusters.py` leaves the shared hook
-dead and makes the next selector rewrite it.
+Roughly fifteen lines: clone the estimator, `set_params(**params)`, fit, score under each entry of `scoring`, return the dict. It lives on the base because every selector needs it; inlining it in `n_clusters.py` leaves the shared hook dead and makes the next selector rewrite it.
 
 ### 3. Then `BaseNClustersSelector._fit`
 
 ---
 
-## Step 1 — Implement `_fit`
+## Step 1: Implement `_fit`
 
 ```python
 def _fit(self, X, y=None, **fit_params) -> None:
@@ -108,30 +82,21 @@ def _fit(self, X, y=None, **fit_params) -> None:
 
 Five things the contract requires of you here:
 
-**`results_` holds every candidate and every score, not only the winner.** It
-is the input to the selection figure, and the record that makes a selection
-auditable.
+**`results_` holds every candidate and every score, not only the winner.** It is the input to the selection figure, and the record that makes a selection auditable.
 
-**Where several `scoring` entries are given, all are recorded and the first
-decides.** Their disagreement is a result worth keeping —
-[CONTRIBUTING §2.7](../CONTRIBUTING.md#27-the-contract) and `BaseSelector`'s
-docstring both say so.
+**Where several `scoring` entries are given, all are recorded and the first decides.** Their disagreement is a result worth keeping; [CONTRIBUTING §2.7](../CONTRIBUTING.md#27-the-contract) and `BaseSelector`'s docstring both say so.
 
-**`labels_` makes a fitted selector stand in for a clusterer.** Set it when
-`refit` is on; that is what lets a selector sit in a pipeline.
+**`labels_` makes a fitted selector stand in for a clusterer.** Set it when `refit` is on; that is what lets a selector sit in a pipeline.
 
 **Clone, never mutate.** The estimator handed in is left as the caller left it.
 
-**Report `conclusive_` even when false.** Do not override an inconclusive curve
-with an arbitrary argmax — record it and let Sect. 4.5 say so.
+**Report `conclusive_` even when false.** Do not override an inconclusive curve with an arbitrary argmax; record it and let Sect. 4.5 say so.
 
 ---
 
-## Step 2 — Sweeping something other than |C|
+## Step 2: Sweeping something other than |C|
 
-`BaseSelector.param_grid` is the general case; `BaseNClustersSelector` is the
-special one that fixes the parameter name to `n_clusters`. For a density
-parameter, subclass `BaseSelector` directly:
+`BaseSelector.param_grid` is the general case; `BaseNClustersSelector` is the special one that fixes the parameter name to `n_clusters`. For a density parameter, subclass `BaseSelector` directly:
 
 ```python
 @register("eps_selector")
@@ -143,13 +108,11 @@ class EpsSelector(BaseSelector):
         ...
 ```
 
-Density-based methods are **out of scope for `BaseNClustersSelector` by
-construction** — applying it would impose a parameter they do not have. Sweep
-their own parameters instead.
+Density-based methods are **out of scope for `BaseNClustersSelector` by construction**, since applying it would impose a parameter they do not have. Sweep their own parameters instead.
 
 ---
 
-## Step 3 — Verify
+## Step 3: Verify
 
 ```bash
 python -c "
@@ -186,30 +149,21 @@ print('figure OK')
 "
 ```
 
-**Note:** `curve_` is documented as `dict` on `BaseNClustersSelector` and as a
-`Sequence[float]` on `BaseRelativeCriterion.curve`. Decide which when you
-implement this, make the two agree, and fix whichever docstring is wrong — this
-is exactly the kind of drift a first implementer is expected to catch.
+**Note:** `curve_` is documented as `dict` on `BaseNClustersSelector` and as a `Sequence[float]` on `BaseRelativeCriterion.curve`. Decide which when you implement this, make the two agree, and fix whichever docstring is wrong; this is exactly the kind of drift a first implementer is expected to catch.
 
 ---
 
-## Step 4 — Sect. 4.3
+## Step 4: Sect. 4.3
 
-No template. Write the procedure into
-`documentation/sections/methodology.tex`: the candidate range, the criterion,
-the conclusiveness rule, and the fact that the same procedure is applied
-identically to every method so none is advantaged by a more favourable choice.
+No template. Write the procedure into `documentation/sections/methodology.tex`: the candidate range, the criterion, the conclusiveness rule, and the fact that the same procedure is applied identically to every method so none is advantaged by a more favourable choice.
 
-The candidate range is **a judgement about the domain** — how many operating
-regimes could be acted on — as much as about the data, and belongs in the
-reported setup.
+The candidate range is **a judgement about the domain** (how many operating regimes could be acted on) as much as about the data, and belongs in the reported setup.
 
 ---
 
 ## Until this lands
 
-Notebooks do the sweep by hand. It is the same computation, and the curve is
-what `plot_selection_curve` consumes either way:
+Notebooks do the sweep by hand. It is the same computation, and the curve is what `plot_selection_curve` consumes either way:
 
 ```python
 curve = {k: Silhouette().score(X, KMeans(n_clusters=k, random_state=RANDOM_STATE)
@@ -218,8 +172,7 @@ curve = {k: Silhouette().score(X, KMeans(n_clusters=k, random_state=RANDOM_STATE
 selected = max(curve, key=curve.get)      # the "max" criterion, inlined
 ```
 
-State in the notebook's §10 that selection was done by hand and stability was
-not assessed. That is a caveat, not a gap to hide.
+State in the notebook's §10 that selection was done by hand and stability was not assessed. That is a caveat, not a gap to hide.
 
 ---
 
@@ -231,4 +184,4 @@ not assessed. That is a caveat, not a gap to hide.
 | Every sweep selects the largest candidate | criterion applies `>` instead of `index.is_better`, on a minimised index |
 | The estimator handed in comes back fitted | missing `clone` |
 | Only the winner is in `results_` | the record that makes the selection auditable is gone |
-| A density method swept for `n_clusters` | wrong selector — sweep its own parameters |
+| A density method swept for `n_clusters` | wrong selector; sweep its own parameters |
