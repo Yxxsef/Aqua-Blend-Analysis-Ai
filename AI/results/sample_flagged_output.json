@@ -1,0 +1,38 @@
+{
+  "scenario": "normal_year",
+  "status": "FEASIBLE",
+  "confidence": {
+    "flag": "PROVISIONAL",
+    "estimated_sources": [
+      "groundwater_bore_1"
+    ],
+    "reason": "One or more contributing sources contain estimated values."
+  },
+  "sources": [
+    {
+      "source_id": "silvan_reservoir",
+      "allocated_volume_ML": 350,
+      "has_estimated_values": false
+    },
+    {
+      "source_id": "yarra_kew",
+      "allocated_volume_ML": 150,
+      "has_estimated_values": false
+    },
+    {
+      "source_id": "groundwater_bore_1",
+      "allocated_volume_ML": 0,
+      "has_estimated_values": true
+    }
+  ],
+  "demand": {
+    "required_volume_ML": 500,
+    "delivered_volume_ML": 500
+  },
+  "cost": {
+    "total_cost_AUD": 0
+  },
+  "diagnostics": {
+    "validation_status": "PASSED"
+  }
+}
