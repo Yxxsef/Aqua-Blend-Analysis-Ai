@@ -1,0 +1,131 @@
+% ==================================================================
+%  DIMENSIONALITY REDUCTION TECHNIQUE TEMPLATE --- copy me, do not
+%  edit in place.
+%
+%    cp template/dimreduction_template.tex \
+%       documentation/sections/dimensionality/<linear|nonlinear>/NN-<name>.tex
+%
+%  Then: replace <NAME>, replace the label suffix `template' with the
+%  technique's short name, and add one \input line under the matching
+%  subsection (6.3 linear, 6.4 nonlinear) in dim_main.tex.
+%
+%  This file is NOT included in the build.
+%
+%  Levels: a technique is a \subsubsection sitting under its subsection
+%  in dim_main.tex, so the parts below are \paragraph.  Keep their
+%  order unchanged in every copy.
+%
+%  Differs from the clustering method template in three parts that have
+%  no counterpart there --- `Out-of-sample and inverse mapping',
+%  `Choosing the number of components', and a Results part reporting
+%  both structure preservation and the downstream effect on clustering.
+%  A reduction is never the deliverable; what it does to the clustering
+%  that follows it is.
+%
+%  Code counterpart: xxcluster/dim_red/<linear|nonlinear>/<name>.py.
+%  Parts 2, 4 and 7 must agree with that class's Capabilities
+%  declaration --- see CONTRIBUTING.md, Part 2.
+% ==================================================================
+\subsubsection{<NAME>}
+\label{sec:dr:template}
+
+\paragraph{Overview}
+\label{sec:dr:template:overview}
+\placeholder{What the technique does, in one paragraph: what it
+maps from, what it maps to, and what it tries to preserve in doing so.
+State whether it is linear or nonlinear, and for a nonlinear technique,
+its relation to the manifold hypothesis of
+Section~\ref{sec:dimensionality}.}
+
+\paragraph{Assumptions and applicability}
+\label{sec:dr:template:assumptions}
+\placeholder{What the technique assumes about the data --- linearity,
+local versus global structure, density, scale, noise --- and the
+conditions under which it is a sensible choice for the data described
+in Section~\ref{sec:data}. State explicitly whether it is intended for
+visualisation, for reducing input to a clustering method, or for both:
+these are different jobs and a technique good at one may distort what
+the other needs.}
+
+\paragraph{Formulation}
+\label{sec:dr:template:formulation}
+\placeholder{The objective being optimised and the mapping obtained,
+using the symbols declared in the notation table. Cite the original
+source.}
+
+\paragraph{Out-of-sample and inverse mapping}
+\label{sec:dr:template:mapping}
+\placeholder{Two questions, answered explicitly, because the rest of the
+pipeline depends on both.
+
+First: is the technique inductive or transductive? That is, does it
+learn a mapping that applies to observations unseen during fitting, or
+does it embed only the sample it was given? A transductive technique
+cannot precede a clustering step in a pipeline that will later see new
+data.
+
+Second: does an inverse mapping exist? If so, a component can be read
+back in terms of the measured features; if not, say so, and say where
+the interpretation of the reduced space will come from instead.}
+
+\paragraph{Hyperparameters and tuning}
+\label{sec:dr:template:hyperparameters}
+\placeholder{Each hyperparameter, the range searched, and the value
+selected --- with the reason. For neighbourhood-based techniques, state
+what the neighbourhood size does to the balance between local and
+global structure, since it is the parameter most likely to change the
+conclusions drawn from a figure.}
+
+\paragraph{Choosing the number of components}
+\label{sec:dr:template:ncomponents}
+\placeholder{How the target dimension was chosen, and on what evidence:
+an explained-variance criterion, an intrinsic dimension estimate (see
+Section~\ref{sec:dimensionality}), a reconstruction error, or the
+requirements of a downstream method. Choosing two because two is what
+plots is a legitimate choice for a figure and not for an analysis ---
+if that is the reason, say so.}
+
+\paragraph{Complexity}
+\label{sec:dr:template:complexity}
+\placeholder{Time and space complexity, and what that means at
+\projectname{} data volumes. Note any step that is quadratic in the
+number of observations, since that is what decides whether the
+technique is usable on the full dataset or only on a sample.}
+
+\paragraph{Application to \projectname{} data}
+\label{sec:dr:template:application}
+\placeholder{Implementation: library and version, random seeds, and how
+the run is reproduced. Then any deviation from the shared preprocessing
+pipeline of Section~\ref{sec:data:preprocessing}, and why it was
+necessary --- scaling in particular, since most of these techniques are
+not scale-invariant.}
+
+\paragraph{Results}
+\label{sec:dr:template:results}
+\placeholder{Two things, in this order.
+
+Structure preservation: how faithfully the embedding represents the
+input, reported quantitatively --- explained variance, trustworthiness,
+stress, or reconstruction error, whichever the technique admits --- and
+not by appeal to the appearance of a scatter plot.
+
+Effect on downstream clustering: the validity measures of
+Section~\ref{sec:methodology:metrics} for the same clustering method
+fitted with and without this reduction. This is the part that decides
+whether the technique earns its place in the pipeline.}
+
+\paragraph{Limitations}
+\label{sec:dr:template:limitations}
+\placeholder{Where this technique distorted the data, or would be
+expected to. Distinguish what was observed on our data from what is
+known from the literature. For nonlinear techniques, state plainly which
+properties of the embedding must not be read as properties of the data
+--- typically inter-cluster distances, relative cluster sizes, and
+apparent density.}
+
+\paragraph{Summary}
+\label{sec:dr:template:summary}
+\placeholder{Two or three sentences: the verdict on this technique, and
+whether it is recommended for visualisation, for the clustering
+pipeline, for both, or for neither. Phrased so it can be carried
+directly into Section~\ref{sec:comparison}.}
