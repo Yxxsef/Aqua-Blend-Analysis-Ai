@@ -25,7 +25,13 @@ Two families of tests:
 
 import copy
 import sys
+from pathlib import Path
+
 import pytest
+
+EXPLANATIONS_DIR = Path(__file__).resolve().parent
+if str(EXPLANATIONS_DIR) not in sys.path:
+    sys.path.insert(0, str(EXPLANATIONS_DIR))
 
 from json_explainer import (
     ExplainerInputError,
