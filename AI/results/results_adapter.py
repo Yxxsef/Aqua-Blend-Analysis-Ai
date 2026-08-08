@@ -1,69 +1,124 @@
 """
 results_adapter.py
 
-Provides a stable internal adapter for Results JSON.
+Provides a stable internal adapter for the confirmed
+Results JSON contract.
 
-The external MILP/Results JSON field names must remain unchanged.
-Internal application names are handled here.
+External MILP field names remain unchanged.
+Internal naming differences are handled here.
 """
+
+from typing import Any
 
 
 class AdapterError(Exception):
-    """
-    Raised when Results JSON cannot be adapted.
-    """
+    """Raised when Results JSON cannot be adapted."""
+
     pass
 
 
-def adapt_results(results):
+REQUIRED_FIELDS = [
+    "scenario_id",
+    "status",
+    "objective",
+    "demand_zones",
+    "sources",
+    "transfer_paths",
+    "plants",
+    "water_quality",
+    "constraints",
+    "diagnostics",
+    "data_flags",
+]
+
+
+def adapt_results(
+    results: dict[str, Any],
+) -> dict[str, Any]:
     """
-    Convert external Results JSON into internal format.
+    Convert external Results JSON into the internal format.
 
-    Args:
-        results (dict):
-            Validated Results JSON.
-
-    Returns:
-        dict:
-            Internal AquaBlend representation.
+    The adapter:
+    - preserves MILP result values;
+    - converts approved external field names to internal names;
+    - preserves source, constraint, plant, transfer and quality structures;
+    - safely handles optional fields;
+    - raises AdapterError for missing required fields.
     """
 
+    # Ensure the input is a dictionary.
     if not isinstance(results, dict):
         raise AdapterError(
             "Results must be a dictionary."
         )
 
-    try:
-        adapted = {
+    # Check all required fields before accessing them.
+    missing_fields = [
+        field
+        for field in REQUIRED_FIELDS
+        if field not in results
+    ]
 
-            # Keep scenario information
-            "scenario": results["scenario"],
-
-            # Solver status
-            "status": results["status"],
-
-            # Source allocation details
-            "sources": results["sources"],
-
-            # Demand information
-            "demand": results["demand"],
-
-            # Cost information
-            "cost": results["cost"],
-
-            # Constraint information
-            "constraints": results["constraints"],
-
-            # Quality information
-            "qualityStage": results["quality_stage"],
-
-            # Diagnostic information
-            "diagnostics": results["diagnostics"],
-        }
-
-    except KeyError as error:
+    if missing_fields:
         raise AdapterError(
-            f"Missing required field: {error.args[0]}"
+            "Missing required field(s): "
+            + ", ".join(missing_fields)
         )
+
+    # Convert the confirmed external field names
+    # into the stable internal representation.
+    adapted = {
+        "scenarioId": results["scenario_id"],
+        "status": results["status"],
+        "objective": results["objective"],
+        "demandZones": results["demand_zones"],
+        "sources": results["sources"],
+        "transferPaths": results["transfer_paths"],
+        "plants": results["plants"],
+        "waterQuality": results["water_quality"],
+        "constraints": results["constraints"],
+        "diagnostics": results["diagnostics"],
+    }
+
+    # data_flags is required externally.
+    #
+    # If data_flags.sources is an empty list, there is
+    # no provenance information to adapt, so the internal
+    # representation uses an empty dictionary.
+    #
+    # Otherwise, preserve the complete data flag structure.
+    data_flags = results["data_flags"]
+
+    if not isinstance(data_flags, dict):
+        raise AdapterError(
+            "data_flags must be a dictionary."
+        )
+
+    if data_flags.get("sources") == []:
+        adapted["dataFlags"] = {}
+    else:
+        adapted["dataFlags"] = data_flags
+
+    # Optional fields are copied only when supplied.
+    # Missing optional fields are not invented.
+    optional_fields = {
+        "solved_at": "solvedAt",
+        "binding_constraints_summary": (
+            "bindingConstraintsSummary"
+        ),
+        "alternative_feasible_solutions": (
+            "alternativeFeasibleSolutions"
+        ),
+        "sensitivity_to_key_assumptions": (
+            "sensitivityToKeyAssumptions"
+        ),
+        "explanation": "explanation",
+    }
+
+    for external_name, internal_name in optional_fields.items():
+        if external_name in results:
+            adapted[internal_name] = results[
+                external_name
+            ]
 
     return adapted
