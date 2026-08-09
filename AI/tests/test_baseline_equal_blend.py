@@ -15,18 +15,23 @@ Three families of tests:
    `scenario_normal.json` and `scenario_plant_outage.json` so a change to those
    files cannot silently break it.
 
-Run from inside `AI/baselines/`:
+Run from anywhere:
 
-    python3 -m pytest test_baseline_equal_blend.py -v
+    python3 -m pytest AI/tests/test_baseline_equal_blend.py -v
 """
 
 import copy
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-from ..baselines.baseline_equal_blend import (
+# The module under test lives in a sibling folder, so put it on the import path
+# before importing it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "baselines"))
+
+from baseline_equal_blend import (  # noqa: E402
     BaselineInputError,
     allocate_equal_blend,
     run_equal_blend,
