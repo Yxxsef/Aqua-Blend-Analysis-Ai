@@ -31,7 +31,7 @@ import pytest
 # before importing it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "baselines"))
 
-from baseline_equal_blend import (  # noqa: E402
+from baseline_equal_blend import (
     BaselineInputError,
     allocate_equal_blend,
     run_equal_blend,
