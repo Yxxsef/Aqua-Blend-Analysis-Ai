@@ -35,7 +35,7 @@ Still blocked, and on what:
 - **`io/artifacts.py`** and `PersistableMixin`: a storage format decision.
 - **`io/loaders/supabase.py`**: the Data Engineering team publishing its view.
 
-Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. That is the first task on the current list.
+The suite is committed and runs with `python -m pytest` from `cluster_analysis/`. Each family base is driven through a native stand-in defined in its test file, because the one registered method is adapted and an adapted method bypasses every family hook.
 
 ## Layout
 
