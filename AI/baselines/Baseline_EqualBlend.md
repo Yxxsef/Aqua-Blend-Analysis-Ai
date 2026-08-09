@@ -2,11 +2,11 @@
 
 Task: 1: Define the equal-blend baseline
 Owner: Ali Alabdouli
-Status: Safe to start
+Status: Updated with confirmed toy-model configuration
 First draft due: Thursday 23 July 2026
 Final draft due: Sunday 26 July 2026
 Temporary submission: Analysis & AI Teams chat
-Units: Volume (ML); Cost (AUD)
+Units: Volume (ML); Cost (AUD, pending confirmed cost_per_ML)
 
 ## 1. Description
 
@@ -28,13 +28,13 @@ Rounding is not applied during intermediate steps. Equal-share division, capacit
 
 ## 3. Worked Numerical Example
 
-Toy-model configuration used (illustrative values, see note below):
+Toy-model configuration used (sources and capacities now confirmed by the Optimisation team; cost still pending):
 
-| `sources[].source_id` | `sources[].source_name` | `sources[].source_type` | `sources[].capacity_ML` (daily) | `sources[].cost_per_ML` (AUD) |
+| `sources[].source_id` | `sources[].source_name` | `sources[].source_type` | `sources[].capacity_ML` (daily) | `sources[].cost_per_ML` |
 |---|---|---|---|---|
-| silvan_reservoir | Silvan Reservoir | reservoir | 220 | 400 |
-| thomson_reservoir | Thomson Reservoir | reservoir | 260 | 380 |
-| sugarloaf_reservoir | Sugarloaf Reservoir | reservoir | 150 | 420 |
+| silvan_reservoir | Silvan Reservoir | reservoir | 350 | pending |
+| yarra_kew | Yarra River, Kew | river | 300 | pending |
+| groundwater_bore_1 | Groundwater Bore 1 | groundwater | 60 | pending |
 
 Demand zone: `zone_id = zone_1`, `demand_zones[].required_volume_ML = 500`
 
@@ -44,32 +44,32 @@ Step 1: Equal share across 3 active sources
 500 ÷ 3 = 166.666... ML each (full precision carried forward, not rounded).
 
 Step 2: Capacity check
-- Silvan: 220 ≥ 166.666... → OK
-- Thomson: 260 ≥ 166.666... → OK
-- Sugarloaf: 150 < 166.666... → exceeds capacity
+- Silvan: 350 ≥ 166.666... → OK
+- Yarra Kew: 300 ≥ 166.666... → OK
+- Groundwater Bore 1: 60 < 166.666... → exceeds capacity
 
-Step 3: Cap Sugarloaf at its full capacity and redistribute
-Sugarloaf is capped at 150 ML and removed from further redistribution.
-Remaining demand = 500 − 150 = 350 ML, split equally across the 2 remaining sources: 350 ÷ 2 = 175 ML each (exact, no rounding needed at this step).
+Step 3: Cap Groundwater Bore 1 at its full capacity and redistribute
+Groundwater Bore 1 is capped at 60 ML and removed from further redistribution.
+Remaining demand = 500 − 60 = 440 ML, split equally across the 2 remaining sources: 440 ÷ 2 = 220 ML each (exact, no rounding needed at this step).
 
 Step 4: Re-check capacity
-- Silvan: 220 ≥ 175 → OK
-- Thomson: 260 ≥ 175 → OK
+- Silvan: 350 ≥ 220 → OK
+- Yarra Kew: 300 ≥ 220 → OK
 
 No further exceedance. Allocation is complete. Final volumes are rounded to one decimal place only now, at output.
 
 Final result:
 
-| `sources[].source_id` | Volume Drawn (ML) | `sources[].percent_of_blend` | Cost Contribution (AUD) |
+| `sources[].source_id` | Volume Drawn (ML) | `sources[].percent_of_blend` | Cost Contribution |
 |---|---|---|---|
-| silvan_reservoir | 175.0 | 35.0% | 70,000 |
-| thomson_reservoir | 175.0 | 35.0% | 66,500 |
-| sugarloaf_reservoir | 150.0 | 30.0% | 63,000 |
-| Total | 500.0 | 100.0% | 199,500 |
+| silvan_reservoir | 220.0 | 44.0% | pending |
+| yarra_kew | 220.0 | 44.0% | pending |
+| groundwater_bore_1 | 60.0 | 12.0% | pending |
+| Total | 500.0 | 100.0% | pending |
 
 Demand supplied: 500.0 / 500 ML required → feasible, 0 ML unmet.
 
-> Note on example values: `capacity_ML` and `cost_per_ML` above are illustrative placeholders consistent with the toy model's documented scope (3 named Melbourne Water reservoirs, reservoirs treated as lowest-cost tier). They are not the confirmed official toy-model configuration values. These will be replaced with the real confirmed figures once the official config becomes available.
+> Note on example values: `sources[].source_id`, `sources[].source_name`, `sources[].source_type`, and `sources[].capacity_ML` above are now the confirmed official toy-model configuration values, as confirmed by the Optimisation team. `sources[].cost_per_ML` remains pending from Data Engineering; cost contribution figures cannot be computed until it is provided, so they are shown as "pending" rather than an illustrative placeholder, to avoid implying a confirmed cost that does not yet exist.
 
 ## 4. Checklist
 
@@ -79,9 +79,9 @@ Demand supplied: 500.0 / 500 ML required → feasible, 0 ML unmet.
 - [x] Remaining demand is redistributed correctly
 - [x] Infeasibility case is explained (Step 7)
 - [x] Full configuration field paths are used (`sources[].source_id`, `sources[].capacity_ML`, `sources[].cost_per_ML`, `demand_zones[].required_volume_ML`, `sources[].percent_of_blend`); `volume_drawn_ML` and `cost_contribution` are shown as plain table labels pending confirmation as Results JSON fields
-- [x] A small numerical example is included
+- [x] A small numerical example is included, using confirmed sources and capacities; cost is shown as pending rather than invented
 - [x] Rounding rules are explained, with rounding deferred to the final output only to avoid compounding precision error
 
 ## 5. Deliverable
 
-- `Baseline_EqualBlend.md` (this document)
+- `Baseline_EqualBlend.md` (this document) — updated with confirmed toy-model sources and capacities

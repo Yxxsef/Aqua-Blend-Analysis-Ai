@@ -2,11 +2,11 @@
 
 Task: 2: Define the cheapest-first baseline
 Owner: Ali Alabdouli
-Status: Safe to start
+Status: Updated with confirmed toy-model configuration
 First draft due: Thursday 23 July 2026
 Final draft due: Sunday 26 July 2026
 Temporary submission: Analysis & AI Teams chat
-Units: Volume (ML); cost_per_ML (AUD/ML); total cost values (AUD)
+Units: Volume (ML); cost_per_ML (AUD/ML, pending); total cost values (AUD, pending)
 
 ## 1. Description
 
@@ -15,13 +15,13 @@ This baseline uses the cheapest active source first, moving on to the next-cheap
 ## 2. Rule
 
 1. Identify all active and connected sources (`sources[].source_id`, `sources[].capacity_ML`, `sources[].cost_per_ML`) for the demand zone.
-2. Sort sources from lowest to highest `sources[].cost_per_ML`.
-3. Before drawing from any source, validate its maximum daily withdrawal limit. `sources[].capacity_ML` is not assumed to be fully drawable in a single day: this baseline uses the separate `sources[].max_daily_withdrawal_ML` field (distinct from `capacity_ML`) as each source's usable draw limit, consistent with the project's own documented distinction between storage capacity and maximum daily withdrawal (AquaBlend MILP Configuration, Section 3, "Source capacity clarification").
-4. Starting with the cheapest source, draw either its `sources[].max_daily_withdrawal_ML` or the remaining unmet demand, whichever is smaller.
+2. Sort sources from lowest to highest `sources[].cost_per_ML`. Real `cost_per_ML` values are still pending from Data Engineering; until they arrive, this baseline uses a documented placeholder order based on the project's stated cost tiering (reservoir cheapest, river mid-range, groundwater most expensive), applied at the source-type level. This placeholder order is flagged explicitly wherever it is used below, and must be re-run once real `cost_per_ML` values are confirmed.
+3. Before drawing from any source, validate its maximum daily withdrawal limit. `sources[].capacity_ML` is not assumed to be fully drawable in a single day: this baseline uses the separate `sources[].max_daily_withdrawal_ML` field (distinct from `capacity_ML`) as each source's usable draw limit, consistent with the project's own documented distinction between storage capacity and maximum daily withdrawal (AquaBlend MILP Configuration, Section 3, "Source capacity clarification"). Confirmed `max_daily_withdrawal_ML` values are not yet available either; the worked example below uses `capacity_ML` as a stand-in until they are, flagged explicitly where used.
+4. Starting with the cheapest source (real, or placeholder-ordered pending real costs), draw either its usable draw limit or the remaining unmet demand, whichever is smaller.
 5. If demand remains, move to the next-cheapest source and repeat step 4.
-6. Continue until `demand_zones[].required_volume_ML` is fully met, or all active sources have reached their `sources[].max_daily_withdrawal_ML`.
-7. If the total of all active sources' `sources[].max_daily_withdrawal_ML` is less than `demand_zones[].required_volume_ML`, mark the result as infeasible and report the unmet volume.
-8. Tie-break rule: if two or more sources share the same `sources[].cost_per_ML`, they are ordered by ascending `sources[].source_id` (alphabetical) for reproducibility.
+6. Continue until `demand_zones[].required_volume_ML` is fully met, or all active sources have reached their usable draw limit.
+7. If the total usable draw limit across all active sources is less than `demand_zones[].required_volume_ML`, mark the result as infeasible and report the unmet volume.
+8. Tie-break rule: if two or more sources share the same `sources[].cost_per_ML`, they are ordered by ascending `sources[].source_id` (alphabetical) for reproducibility. This applies once real cost values are confirmed; it is not exercised by the current placeholder tiering, since the three source types are distinct.
 
 ### Rounding rule
 
@@ -33,73 +33,74 @@ This rule ranks sources on `sources[].cost_per_ML` only. It does not evaluate or
 
 ## 3. Worked Numerical Example
 
-Toy-model configuration used (same illustrative values as the equal-blend baseline, for direct comparison):
+Toy-model configuration used (sources and capacities now confirmed by the Optimisation team; cost still pending):
 
-| `sources[].source_id` | `sources[].source_name` | `sources[].source_type` | `sources[].capacity_ML` (daily) | `sources[].max_daily_withdrawal_ML` | `sources[].cost_per_ML` (AUD/ML) |
-|---|---|---|---|---|---|
-| silvan_reservoir | Silvan Reservoir | reservoir | 220 | 180 | 400 |
-| thomson_reservoir | Thomson Reservoir | reservoir | 260 | 230 | 380 |
-| sugarloaf_reservoir | Sugarloaf Reservoir | reservoir | 150 | 120 | 420 |
+| `sources[].source_id` | `sources[].source_name` | `sources[].source_type` | `sources[].capacity_ML` (daily) | `sources[].cost_per_ML` |
+|---|---|---|---|---|
+| silvan_reservoir | Silvan Reservoir | reservoir | 350 | pending |
+| yarra_kew | Yarra River, Kew | river | 300 | pending |
+| groundwater_bore_1 | Groundwater Bore 1 | groundwater | 60 | pending |
 
 Demand zone: `zone_id = zone_1`, `demand_zones[].required_volume_ML = 500`
 
 Assumption: all three sources in this example are assumed to be active and connected to the demand zone.
 
-Step 1: Sort by `sources[].cost_per_ML` ascending
+Step 1: Sort using the placeholder cost tiering (real `cost_per_ML` pending)
 
-1. Thomson (380 AUD/ML)
-2. Silvan (400 AUD/ML)
-3. Sugarloaf (420 AUD/ML)
+Real costs are not yet available, so sources are ordered using the documented placeholder tiering by source type (reservoir cheapest, river mid-range, groundwater most expensive):
 
-Step 2: Draw from Thomson (cheapest) first
+1. Silvan Reservoir (reservoir, placeholder cheapest)
+2. Yarra Kew (river, placeholder mid-range)
+3. Groundwater Bore 1 (groundwater, placeholder most expensive)
 
-min(`max_daily_withdrawal_ML` 230, remaining demand 500) = 230 ML drawn.
+This order is a placeholder only and must be re-run once real `cost_per_ML` values are confirmed by Data Engineering.
 
-Remaining demand = 500 − 230 = 270 ML.
+Step 2: Draw from Silvan Reservoir (placeholder cheapest) first
 
-Step 3: Move to Silvan (next-cheapest)
+`max_daily_withdrawal_ML` is not yet confirmed either, so `capacity_ML` is used as the draw limit for now.
 
-min(`max_daily_withdrawal_ML` 180, remaining demand 270) = 180 ML drawn.
+min(`capacity_ML` 350, remaining demand 500) = 350 ML drawn.
 
-Remaining demand = 270 − 180 = 90 ML.
+Remaining demand = 500 − 350 = 150 ML.
 
-Step 4: Move to Sugarloaf (most expensive)
+Step 3: Move to Yarra Kew (placeholder mid-range)
 
-min(`max_daily_withdrawal_ML` 120, remaining demand 90) = 90 ML drawn.
+min(`capacity_ML` 300, remaining demand 150) = 150 ML drawn.
 
-Remaining demand = 90 − 90 = 0 ML. Demand fully met.
+Remaining demand = 150 − 150 = 0 ML. Demand fully met.
+
+Step 4: Groundwater Bore 1 is not required
+
+Since demand was fully met after Yarra Kew, Groundwater Bore 1 (placeholder most expensive) draws 0 ML.
 
 All draw amounts above are exact at full precision; no rounding was needed until the final output table below.
 
 Final result:
 
-| `sources[].source_id` | Volume drawn (ML) | `sources[].percent_of_blend` | Cost contribution (AUD) |
+| `sources[].source_id` | Volume drawn (ML) | `sources[].percent_of_blend` | Cost contribution |
 |---|---|---|---|
-| thomson_reservoir | 230.0 | 46.0% | 87,400 |
-| silvan_reservoir | 180.0 | 36.0% | 72,000 |
-| sugarloaf_reservoir | 90.0 | 18.0% | 37,800 |
-| Total | 500.0 | 100.0% | 197,200 |
+| silvan_reservoir | 350.0 | 70.0% | pending |
+| yarra_kew | 150.0 | 30.0% | pending |
+| groundwater_bore_1 | 0.0 | 0.0% | pending |
+| Total | 500.0 | 100.0% | pending |
 
 Demand supplied: 500.0 / 500 ML required → feasible, 0 ML unmet.
 
-Comparison with the equal-blend baseline: cheapest-first totals 197,200 AUD under this rule.
-
-Note: the equal-blend baseline's published example (199,500 AUD) does not yet apply `max_daily_withdrawal_ML` as a separate constraint from `capacity_ML`, so the two totals are not directly comparable until both baselines are reconciled to use the same withdrawal assumption. This is flagged as an open follow-up item rather than silently compared.
-
-> Note on example values: as in the equal-blend baseline, `capacity_ML`, `max_daily_withdrawal_ML`, and `cost_per_ML` are illustrative placeholders, not the confirmed official toy-model configuration. This rule will be re-run against the official config once it becomes available.
+> Note on example values: `sources[].source_id`, `sources[].source_name`, `sources[].source_type`, and `sources[].capacity_ML` above are now the confirmed official toy-model configuration values, as confirmed by the Optimisation team. `sources[].cost_per_ML` remains pending from Data Engineering, so the Step 1 sort order is a documented placeholder (source-type tiering), not a real cost ranking, and `max_daily_withdrawal_ML` is not yet confirmed either, so `capacity_ML` is used as the draw limit for now. Once real `cost_per_ML` and `max_daily_withdrawal_ML` values are confirmed, the sort order, draw-down sequence, and final numbers all need a follow-up pass to verify they still hold.
 
 ## 4. Checklist
 
-- [x] Sorting rule is clear (ascending `sources[].cost_per_ML`)
+- [x] Sorting rule is clear (ascending `sources[].cost_per_ML`, with a documented placeholder tiering used until real costs are confirmed)
 - [x] Capacity exhaustion is handled (move to next-cheapest source)
-- [x] Maximum daily withdrawal is validated: sources are drawn up to `sources[].max_daily_withdrawal_ML`, not the higher `sources[].capacity_ML`, consistent with the project's own distinction between storage capacity and daily withdrawal
-- [x] Cost ties are handled (alphabetical `sources[].source_id` tie-break)
+- [x] Maximum daily withdrawal is validated in principle; `capacity_ML` is used as a stand-in until `max_daily_withdrawal_ML` is confirmed
+- [x] Cost ties are handled (alphabetical `sources[].source_id` tie-break), for use once real costs are confirmed
 - [x] Infeasibility is handled
 - [x] Full configuration field paths are used (`sources[].source_id`, `sources[].capacity_ML`, `sources[].max_daily_withdrawal_ML`, `sources[].cost_per_ML`, `demand_zones[].required_volume_ML`, `sources[].percent_of_blend`); `Volume drawn` and `Cost contribution` are shown as plain table labels pending confirmation as Results JSON fields
-- [x] A numerical example is included
+- [x] A numerical example is included, using confirmed sources and capacities; cost and sort order are clearly flagged as pending/placeholder
 - [x] Rounding rules are explained, with rounding deferred to the final output only to avoid compounding precision error
 - [x] The rule does not claim to optimise water quality (see Scope note)
+- [ ] Re-run sort order, draw-down sequence, and final numbers once real `cost_per_ML` and `max_daily_withdrawal_ML` are confirmed (open item)
 
 ## 5. Deliverable
 
-- `Baseline_CheapestFirst.md` (this document)
+- `Baseline_CheapestFirst.md` (this document) — updated with confirmed toy-model sources and capacities; cost-based sort order remains a placeholder pending real `cost_per_ML`
