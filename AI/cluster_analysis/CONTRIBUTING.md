@@ -271,6 +271,24 @@ check_estimator(YourMethod(n_clusters=3))
 
 Some checks will not apply: precomputed metrics, transductive transforms, parameters with no sensible default. Record the exclusions rather than loosening the contract, and treat every other failure as a real bug.
 
+Record them as `expected_failed_checks`, which runs every other check and reports if an expected failure starts passing. Skipping the estimator instead leaves it unchecked:
+
+```python
+check_estimator(YourMethod(), expected_failed_checks={"check_name": "why it is expected"})
+```
+
+### 2.7.1 Running the tests
+
+One command, from `cluster_analysis/`:
+
+```bash
+python -m pytest
+```
+
+Nothing beyond `requirements.txt` is needed; `conftest.py` puts the package on `sys.path`. Run it before opening a pull request and after every commit that touches `xxcluster/`.
+
+The family base classes are covered by `tests/test_*_base.py`, each driving its base through a **native stand-in defined in the test file, not in the package**. That matters: the only registered method, K-Means, is adapted, and an adapted method bypasses every family hook. A base exercised only through it is not exercised at all.
+
 ## 2.8 When things change
 
 | Change | What to touch |
