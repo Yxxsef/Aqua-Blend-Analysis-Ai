@@ -3,7 +3,6 @@
 | File | |
 |---|---|
 | [`baseline_cheapest_first.py`](baseline_cheapest_first.py) | the implementation |
-| [`baseline_common.py`](baseline_common.py) | shared scenario reading and result assembly |
 | [`Baseline_CheapestFirst.md`](Baseline_CheapestFirst.md) | the approved rule it codes |
 | [`../tests/test_baseline_cheapest_first.py`](../tests/test_baseline_cheapest_first.py) | 36 tests |
 
@@ -103,4 +102,4 @@ Reported, never corrected, since correcting them would change the approved rule:
 
 - Water quality is not computed, since per-source raw values are not available to this team.
 - `FEASIBLE` needs confirming with the Optimisation team; the Results JSON only shows `OPTIMAL`.
-- `baseline_common.py` is new here. Once the equal-blend baseline merges it should be moved onto the same module rather than keeping its own copy of the scenario-reading layer.
+- The scenario-reading layer is duplicated from the equal-blend baseline, since each baseline is self-contained. Worth extracting into one shared module once all three are merged.

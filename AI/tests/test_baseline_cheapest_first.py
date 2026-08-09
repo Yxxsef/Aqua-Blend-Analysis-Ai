@@ -29,11 +29,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "baselines"))
 
 from baseline_cheapest_first import (  # noqa: E402
+    BaselineInputError,
     allocate_cheapest_first,
     cost_rank,
     run_cheapest_first,
 )
-from baseline_common import BaselineInputError  # noqa: E402
 
 # Volumes and percentages are reported to one decimal place, so half of that
 # last place is the tightest meaningful bound; money is reported to two.
