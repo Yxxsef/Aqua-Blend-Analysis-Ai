@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.synctex.gz
+*.toc
+
+# Python / Jupyter
+.env
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+# tests/
+.pytest_cache/
+
+# Local task-list tooling.
+.tasks/
