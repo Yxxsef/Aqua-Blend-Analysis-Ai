@@ -1,0 +1,123 @@
+% ==================================================================
+%  MEASURE TEMPLATE --- copy me, do not edit in place.
+%
+%  Covers both kinds of measurement in Section~\ref{sec:clustering_methods}:
+%    * a dissimilarity measure d(.,.) --- the input a method consumes;
+%    * a validity index --- the output a comparison is built from,
+%      whether internal, external or relative.
+%  Delete the prompts in Parts 3 and 4 that do not apply to your kind.
+%
+%    cp template/measure_template.tex \
+%       documentation/sections/clustering_methods/measures/NN-<name>.tex
+%
+%  Then: replace <NAME>, replace the label suffix `template' with the
+%  measure's short name, and add one \input line under Section 7.1 in
+%  cluster_main.tex.
+%
+%  This file is NOT included in the build.
+%
+%  Levels: a measure is a \subsubsection under Section 7.1, so the parts
+%  below are \paragraph.  Keep their order unchanged in every copy.
+%
+%  Code counterpart:
+%    xxcluster/measures/dissimilarity/<name>.py, or
+%    xxcluster/measures/validation/{internal,external,relative}.py.
+%  Part 3 must agree with the class attributes declared there ---
+%  `is_metric' and `is_symmetric' for a dissimilarity,
+%  `higher_is_better', `range_' and `handles_noise' for an index.
+%  See CONTRIBUTING.md, Part 2.
+%
+% ------------------------------------------------------------------
+%  REFERENCES --- a source is declared, not merely cited.
+%
+%  1. Add every source you use to the shared citation key mapping
+%     sheet.  Everyone declares their references there and nowhere
+%     else:
+%     https://deakin365-my.sharepoint.com/:x:/g/personal/s224236373_deakin_edu_au/IQDSW3PBbHhZSq6vzGGQqi3WAbgJ1id1-t02k5B6fduX5Ys?e=nShY5e
+%  2. Each entry in the sheet carries a key of the form ref_<n>.  Cite
+%     it in the text as \cite{ref_<n>}.  Do not invent your own key,
+%     and do not edit documentation/literature.bib yourself --- the
+%     document lead applies the mapping there.
+%  3. Record every source in the REFERENCES USED block at the end of
+%     this file, including anything you read but did not cite.
+%
+%  Cite in the part where the claim is made, not in a lump at the end.
+%  A measure carries more inherited claims than most sections: the
+%  definition, the metric properties or the attainable range, and any
+%  reported failure mode are all cited where they are stated, unless
+%  you demonstrate them yourself in `Behaviour'.
+%
+%  ACADEMIC INTEGRITY --- an uncited claim, figure, equation, table or
+%  code fragment is plagiarism, whether it came from a paper, a
+%  library's documentation, a teammate, or a generative AI tool.
+%  Quote and cite it, or write it yourself.  Declare AI assistance as
+%  Deakin policy requires.
+%
+%  Before opening the pull request, run your section through Turnitin.
+%  Do not commit the report --- the repository is not where it belongs.
+%  Paste the similarity summary into the pull request as an image, or
+%  send it to the document lead privately; the lead may also run the
+%  check later.  Policy and procedure:
+%     https://d2l.deakin.edu.au/d2l/le/content/93067/viewContent/5882569/View
+% ==================================================================
+\subsubsection{<Calinski--Harabasz Index>}
+\label{sec:measure:calinski_harabasz}
+
+\paragraph{Overview}
+\label{sec:measure:calinski_harabasz:overview}
+
+The Calinski--Harabasz Index is an internal clustering validity index that evaluates the quality of a partition using only the dataset and the assigned cluster labels. It measures the ratio of between-cluster dispersion to within-cluster dispersion, rewarding partitions that produce compact clusters that are well separated. Since it does not require ground-truth labels, it is suitable for comparing clustering results on unlabeled datasets and is widely used for centroid-based clustering methods such as K-means.
+
+\paragraph{Definition}
+\label{sec:measure:calinski_harabasz:definition}
+
+Given a dataset with \(n\) observations partitioned into \(k\) clusters, the Calinski--Harabasz Index is defined as
+
+\[
+CH=\frac{\operatorname{Tr}(B_k)}{\operatorname{Tr}(W_k)}
+\times
+\frac{n-k}{k-1},
+\]
+
+where \(B_k\) is the between-cluster scatter matrix and \(W_k\) is the within-cluster scatter matrix. Larger values indicate better clustering because they correspond to greater separation between clusters relative to their internal dispersion \cite{ref_17}.
+
+\paragraph{Properties}
+\label{sec:measure:calinski_harabasz:properties}
+
+The Calinski--Harabasz Index ranges from \(0\) to positive infinity, with larger values indicating better clustering quality. It is not corrected for chance and therefore should primarily be used for comparing partitions of the same dataset. The index is defined only when at least two clusters are present and assumes compact, isotropic cluster structure. Noise-labelled observations are not supported and are rejected by the implementation.
+
+\paragraph{Applicability}
+\label{sec:measure:calinski_harabasz:applicability}
+
+The index is applicable to numerical datasets where Euclidean distances between observations are meaningful. It is particularly suitable for centroid-based clustering algorithms but can also evaluate any hard partition with cluster labels. Because it operates on crisp assignments, it is not directly applicable to fuzzy clustering methods and does not support partitions containing noise labels.
+
+\paragraph{Computation and complexity}
+\label{sec:measure:calinski_harabasz:complexity}
+
+The implementation delegates the computation to the corresponding scikit-learn routine after validating the supplied labels. Computing cluster centroids and scatter matrices requires a single pass through the dataset, giving approximately linear time complexity with respect to the number of observations and features. Memory usage is dominated by the input dataset rather than additional auxiliary structures.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:calinski_harabasz:application}
+
+Within \projectname{}, the Calinski--Harabasz Index is used as an internal validation metric for comparing clustering methods when no reference labels are available. It provides a quantitative measure of cluster compactness and separation, allowing different clustering algorithms or parameter settings to be ranked objectively.
+
+\paragraph{Behaviour}
+\label{sec:measure:calinski_harabasz:behaviour}
+
+The index rewards partitions with compact clusters whose centroids are well separated. As within-cluster dispersion decreases and between-cluster dispersion increases, the score becomes larger. Consequently, the index naturally favours clustering methods that produce approximately spherical, evenly separated clusters.
+
+\paragraph{Limitations}
+\label{sec:measure:calinski_harabasz:limitations}
+
+The Calinski--Harabasz Index may favour solutions containing many small compact clusters and assumes approximately isotropic cluster shapes. Its values are meaningful primarily for comparing partitions of the same dataset and should not be interpreted as absolute measures of clustering quality across unrelated datasets.
+
+\paragraph{Summary}
+\label{sec:measure:calinski_harabasz:summary}
+
+The Calinski--Harabasz Index is an efficient internal clustering validity measure that compares between-cluster separation with within-cluster compactness. It is most appropriate for evaluating hard partitions on numerical data and serves as one of the internal validation metrics available in \projectname{}.
+
+% ==================================================================
+%  % REFERENCES USED
+
+% ref_17  Calinski & Harabasz (1974), A Dendrite Method for Cluster Analysis
+% ==================================================================
