@@ -20,8 +20,6 @@ OUTAGE_PATH = SCENARIO_DIR / "high-demand-outage" / "scenario_plant_outage.json"
 
 
 class ScenarioLoaderTests(unittest.TestCase):
-    """Tests for strict UTF-8 and JSON loading."""
-
     def test_load_valid_utf8_json(self) -> None:
         scenario = load_scenario(NORMAL_PATH)
         self.assertEqual(scenario["scenario_id"], "toy_model_normal_year")
@@ -31,25 +29,21 @@ class ScenarioLoaderTests(unittest.TestCase):
             load_scenario(SCENARIO_DIR / "does_not_exist.json")
 
     def test_malformed_json_raises_scenario_load_error(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "scenario_bad.json"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scenario_bad.json"
             path.write_text('{"scenario_id": ', encoding="utf-8")
-
             with self.assertRaises(ScenarioLoadError):
                 load_scenario(path)
 
     def test_non_object_top_level_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "scenario_bad.json"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scenario_bad.json"
             path.write_text("[]", encoding="utf-8")
-
             with self.assertRaises(ScenarioLoadError):
                 load_scenario(path)
 
 
 class ScenarioValidatorTests(unittest.TestCase):
-    """Contract, scenario-rule, capacity, and connectivity tests."""
-
     @classmethod
     def setUpClass(cls) -> None:
         cls.validator = ScenarioValidator()
@@ -60,87 +54,141 @@ class ScenarioValidatorTests(unittest.TestCase):
 
     def test_valid_normal_scenario(self) -> None:
         report = self.validator.validate(
-            self.normal,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            self.normal, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertTrue(report.valid, report.errors)
         self.assertEqual(report.scenario_type, "NORMAL")
         self.assertEqual(
-            report.capacity_check["remaining_capacity_ml_per_day"],
-            100,
+            report.capacity_check["remaining_capacity_ml_per_day"], 100
         )
         self.assertFalse(report.capacity_check["possible_infeasible"])
 
-    def test_valid_dry_year_records_all_approved_changes(self) -> None:
+    def test_valid_dry_year_records_all_approved_changes_by_id(self) -> None:
         report = self.validator.validate(
-            self.dry,
-            reference=self.normal,
-            scenario_type="DRY_YEAR",
+            self.dry, reference=self.normal, scenario_type="DRY_YEAR"
         )
-
         self.assertTrue(report.valid, report.errors)
 
         changed_paths = {
-            change["path"]
-            for change in report.changes_from_reference
+            change["path"] for change in report.changes_from_reference
         }
 
         self.assertIn(
-            "network.source_to_plant_links[0].maximum_flow_ml_per_day",
+            "network.source_to_plant_links[source_id=silvan_reservoir,plant_id=facility_1].maximum_flow_ml_per_day",
             changed_paths,
         )
         self.assertIn(
-            "network.source_to_plant_links[1].maximum_flow_ml_per_day",
+            "network.source_to_plant_links[source_id=yarra_kew,plant_id=facility_1].maximum_flow_ml_per_day",
             changed_paths,
         )
         self.assertIn(
-            "network.source_to_plant_links[2].maximum_flow_ml_per_day",
+            "network.source_to_plant_links[source_id=groundwater_bore_1,plant_id=facility_1].maximum_flow_ml_per_day",
             changed_paths,
         )
         self.assertEqual(
-            report.capacity_check["remaining_capacity_ml_per_day"],
-            65,
+            report.capacity_check["remaining_capacity_ml_per_day"], 65
         )
+
+    def test_dry_year_link_order_does_not_affect_validation(self) -> None:
+        scenario = deepcopy(self.dry)
+        scenario["network"]["source_to_plant_links"] = list(
+            reversed(scenario["network"]["source_to_plant_links"])
+        )
+
+        report = self.validator.validate(
+            scenario, reference=self.normal, scenario_type="DRY_YEAR"
+        )
+        self.assertTrue(report.valid, report.errors)
+
+    def test_source_order_does_not_create_false_changes(self) -> None:
+        scenario = deepcopy(self.normal)
+        scenario["sources"] = list(reversed(scenario["sources"]))
+
+        report = self.validator.validate(
+            scenario, reference=self.normal, scenario_type="NORMAL"
+        )
+        self.assertTrue(report.valid, report.errors)
+        self.assertEqual(report.changes_from_reference, [])
+
+    def test_current_minimum_processing_capacity_field_is_accepted(self) -> None:
+        scenario = deepcopy(self.normal)
+        reference = deepcopy(self.normal)
+
+        plant = scenario["network"]["plants"][0]
+        value = plant.pop("minimum_operating_flow_ml_per_day")
+        plant["minimum_processing_capacity_ml_per_day"] = value
+
+        ref_plant = reference["network"]["plants"][0]
+        ref_value = ref_plant.pop("minimum_operating_flow_ml_per_day")
+        ref_plant["minimum_processing_capacity_ml_per_day"] = ref_value
+
+        report = self.validator.validate(
+            scenario, reference=reference, scenario_type="NORMAL"
+        )
+        self.assertTrue(report.valid, report.errors)
+
+    def test_legacy_minimum_plant_field_is_accepted_with_warning(self) -> None:
+        report = self.validator.validate(
+            self.normal, reference=self.normal, scenario_type="NORMAL"
+        )
+        self.assertTrue(report.valid, report.errors)
+        self.assertTrue(
+            any(
+                "legacy" in warning.lower()
+                and "minimum_operating_flow_ml_per_day" in warning
+                for warning in report.warnings
+            )
+        )
+
+    def test_minimum_withdrawal_field_is_accepted(self) -> None:
+        scenario = deepcopy(self.normal)
+        reference = deepcopy(self.normal)
+
+        for source in scenario["sources"]:
+            source["minimum_withdrawal_ml_per_day"] = 0
+        for source in reference["sources"]:
+            source["minimum_withdrawal_ml_per_day"] = 0
+
+        report = self.validator.validate(
+            scenario, reference=reference, scenario_type="NORMAL"
+        )
+        self.assertTrue(report.valid, report.errors)
 
     def test_valid_high_demand_field_and_zero_margin(self) -> None:
         report = self.validator.validate(
-            self.high,
-            reference=self.normal,
-            scenario_type="HIGH_DEMAND",
+            self.high, reference=self.normal, scenario_type="HIGH_DEMAND"
         )
-
         self.assertTrue(report.valid, report.errors)
         self.assertEqual(
-            report.capacity_check["required_demand_ml_per_day"],
-            600,
+            report.capacity_check["required_demand_ml_per_day"], 600
         )
         self.assertEqual(
-            report.capacity_check["remaining_capacity_ml_per_day"],
-            0,
+            report.capacity_check["remaining_capacity_ml_per_day"], 0
         )
         self.assertFalse(report.capacity_check["possible_infeasible"])
 
     def test_valid_plant_outage_detects_capacity_and_connectivity_risk(self) -> None:
         report = self.validator.validate(
-            self.outage,
-            reference=self.normal,
-            scenario_type="PLANT_OUTAGE",
+            self.outage, reference=self.normal, scenario_type="PLANT_OUTAGE"
         )
-
         self.assertTrue(report.valid, report.errors)
         self.assertEqual(
-            report.capacity_check["active_plant_capacity_ml_per_day"],
-            0,
+            report.capacity_check["active_plant_capacity_ml_per_day"], 0
         )
         self.assertTrue(report.capacity_check["possible_infeasible"])
         self.assertFalse(
             report.connectivity_check["all_required_zones_reachable"]
         )
         self.assertIn(
-            "zone_1",
-            report.connectivity_check["unreachable_zone_ids"],
+            "zone_1", report.connectivity_check["unreachable_zone_ids"]
+        )
+
+        changed_paths = {
+            change["path"] for change in report.changes_from_reference
+        }
+        self.assertIn(
+            "network.plants[plant_id=facility_1].enabled",
+            changed_paths,
         )
 
     def test_unknown_top_level_field_is_rejected(self) -> None:
@@ -148,17 +196,11 @@ class ScenarioValidatorTests(unittest.TestCase):
         scenario["invented_field"] = 123
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
-            any(
-                "unknown field" in error.lower()
-                for error in report.errors
-            )
+            any("unknown field" in error.lower() for error in report.errors)
         )
 
     def test_unknown_nested_field_is_rejected(self) -> None:
@@ -166,55 +208,31 @@ class ScenarioValidatorTests(unittest.TestCase):
         scenario["network"]["plants"][0]["unexpected"] = True
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
-        self.assertTrue(
-            any(
-                "unexpected" in error
-                for error in report.errors
-            )
-        )
+        self.assertTrue(any("unexpected" in error for error in report.errors))
 
     def test_missing_required_field_is_rejected(self) -> None:
         scenario = deepcopy(self.normal)
         del scenario["network"]
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
-        self.assertTrue(
-            any(
-                "network" in error
-                for error in report.errors
-            )
-        )
+        self.assertTrue(any("network" in error for error in report.errors))
 
     def test_wrong_type_is_rejected(self) -> None:
         scenario = deepcopy(self.normal)
-        scenario["network"]["demand_zones"][0][
-            "demand_ml_per_day"
-        ] = "500"
+        scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = "500"
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
-            any(
-                "demand_ml_per_day" in error
-                for error in report.errors
-            )
+            any("demand_ml_per_day" in error for error in report.errors)
         )
 
     def test_duplicate_source_id_is_rejected(self) -> None:
@@ -224,11 +242,8 @@ class ScenarioValidatorTests(unittest.TestCase):
         )
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
             any(
@@ -244,17 +259,11 @@ class ScenarioValidatorTests(unittest.TestCase):
         ] = "unknown_source"
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
-            any(
-                "unknown source" in error.lower()
-                for error in report.errors
-            )
+            any("unknown source" in error.lower() for error in report.errors)
         )
 
     def test_output_only_field_is_rejected(self) -> None:
@@ -262,31 +271,20 @@ class ScenarioValidatorTests(unittest.TestCase):
         scenario["objective"] = {"total_cost": 1}
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="NORMAL",
+            scenario, reference=self.normal, scenario_type="NORMAL"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
-            any(
-                "output-only" in error.lower()
-                for error in report.errors
-            )
+            any("output-only" in error.lower() for error in report.errors)
         )
 
     def test_dry_year_unapproved_demand_change_is_rejected(self) -> None:
         scenario = deepcopy(self.dry)
-        scenario["network"]["demand_zones"][0][
-            "demand_ml_per_day"
-        ] = 510
+        scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 510
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="DRY_YEAR",
+            scenario, reference=self.normal, scenario_type="DRY_YEAR"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
             any(
@@ -297,23 +295,13 @@ class ScenarioValidatorTests(unittest.TestCase):
 
     def test_high_demand_wrong_value_is_rejected(self) -> None:
         scenario = deepcopy(self.high)
-        scenario["network"]["demand_zones"][0][
-            "demand_ml_per_day"
-        ] = 590
+        scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 590
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="HIGH_DEMAND",
+            scenario, reference=self.normal, scenario_type="HIGH_DEMAND"
         )
-
         self.assertFalse(report.valid)
-        self.assertTrue(
-            any(
-                "must be 600" in error
-                for error in report.errors
-            )
-        )
+        self.assertTrue(any("must be 600" in error for error in report.errors))
 
     def test_plant_outage_extra_change_is_rejected(self) -> None:
         scenario = deepcopy(self.outage)
@@ -322,11 +310,8 @@ class ScenarioValidatorTests(unittest.TestCase):
         ] = 0
 
         report = self.validator.validate(
-            scenario,
-            reference=self.normal,
-            scenario_type="PLANT_OUTAGE",
+            scenario, reference=self.normal, scenario_type="PLANT_OUTAGE"
         )
-
         self.assertFalse(report.valid)
         self.assertTrue(
             any(
@@ -337,9 +322,7 @@ class ScenarioValidatorTests(unittest.TestCase):
 
     def test_capacity_shortfall_is_warning_not_fake_solver_status(self) -> None:
         scenario = deepcopy(self.high)
-        scenario["network"]["demand_zones"][0][
-            "demand_ml_per_day"
-        ] = 650
+        scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 650
 
         capacity = self.validator.check_capacity(scenario)
 
@@ -350,7 +333,6 @@ class ScenarioValidatorTests(unittest.TestCase):
         )
 
         serialised = json.dumps(capacity)
-
         self.assertNotIn("OPTIMAL", serialised)
         self.assertNotIn("INFEASIBLE", serialised)
 
