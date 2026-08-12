@@ -57,3 +57,31 @@ class Silhouette(BaseInternalIndex):
         from sklearn.metrics import silhouette_score
         labels = check_labels(labels, allow_noise = self.handles_noise)
         return silhouette_score(X, labels, metric = metric)
+
+@register("calinski_harabasz")
+class CalinskiHarabasz(BaseInternalIndex):
+    """Calinski-Harabasz internal validity index."""
+    
+    name = "calinski_harabasz"
+    higher_is_better = True
+    range_ = (0.0, float("inf"))
+    handles_noise = False
+    assumes_shape = "compact, isotropic"
+    
+    def score(
+        self,
+        X=None,
+        labels=None,
+        *,
+        labels_true=None,
+        metric="euclidean",
+        **kwargs,
+    ):
+        from sklearn.metrics import calinski_harabasz_score
+    
+        labels = check_labels(labels, allow_noise=self.handles_noise)
+    
+        if len(set(labels)) < 2:
+            raise ValueError("Calinski-Harabasz requires at least two clusters.")
+    
+        return float(calinski_harabasz_score(X, labels))
