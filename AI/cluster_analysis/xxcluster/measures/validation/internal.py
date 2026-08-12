@@ -85,3 +85,31 @@ class CalinskiHarabasz(BaseInternalIndex):
             raise ValueError("Calinski-Harabasz requires at least two clusters.")
     
         return float(calinski_harabasz_score(X, labels))
+
+@register("davies_bouldin")
+class DaviesBouldin(BaseInternalIndex):
+    """Davies-Bouldin internal validity index."""
+
+    name = "davies_bouldin"
+    higher_is_better = False
+    range_ = (0.0, float("inf"))
+    handles_noise = False
+    assumes_shape = "compact, isotropic"
+
+    def score(
+        self,
+        X=None,
+        labels=None,
+        *,
+        labels_true=None,
+        metric="euclidean",
+        **kwargs,
+    ):
+        from sklearn.metrics import davies_bouldin_score
+
+        labels = check_labels(labels, allow_noise=self.handles_noise)
+
+        if len(set(labels)) < 2:
+            raise ValueError("Davies-Bouldin requires at least two clusters.")
+
+        return float(davies_bouldin_score(X, labels))
