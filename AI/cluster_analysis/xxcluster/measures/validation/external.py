@@ -21,7 +21,8 @@ second argument changes.
 from __future__ import annotations
 
 from abc import ABC
-
+from ...core.registry import register
+from ...core.validation import check_labels
 from .base import BaseValidityIndex
 
 
@@ -46,3 +47,39 @@ class BaseExternalIndex(BaseValidityIndex, ABC):
 
     chance_corrected: bool = False
     symmetric: bool = True
+
+@register("adjusted_rand")
+class AdjustedRand(BaseExternalIndex):
+    """Adjusted Rand external validity index."""
+
+    name = "adjusted_rand"
+    higher_is_better = True
+    range_ = (-0.5, 1.0)
+    chance_corrected = True
+    symmetric = True
+    handles_noise = False
+
+    def score(
+        self,
+        X=None,
+        labels=None,
+        *,
+        labels_true=None,
+        metric="euclidean",
+        **kwargs,
+    ):
+        labels = check_labels(labels, allow_noise=self.handles_noise)
+        labels_true = check_labels(
+            labels_true, allow_noise=self.handles_noise
+        )
+
+        if labels.shape != labels_true.shape:
+            raise ValueError(
+                f"labels has {labels.shape[0]} entries but labels_true has "
+                f"{labels_true.shape[0]}; the two must describe the same "
+                f"observations."
+            )
+
+        from sklearn.metrics import adjusted_rand_score
+
+        return float(adjusted_rand_score(labels_true, labels))
