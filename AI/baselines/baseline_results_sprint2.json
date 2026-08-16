@@ -1,0 +1,246 @@
+{
+  "scenario_id": "toy_model_sprint1",
+  "zone_id": null,
+  "baselines": {
+    "equal_blend": {
+      "baseline": "equal_blend",
+      "scenario_id": "toy_model_sprint1",
+      "status": "FEASIBLE",
+      "feasible": true,
+      "demand_zones": [
+        {
+          "zone_id": "zone_1",
+          "zone_name": "Zone 1",
+          "demand_ml_per_day": 500.0,
+          "volume_supplied_ml_per_day": 500.0
+        }
+      ],
+      "unmet_demand_ml_per_day": 0.0,
+      "sources": {
+        "selected": [
+          {
+            "source_id": "silvan_reservoir",
+            "source_name": "Silvan Reservoir",
+            "source_type": "reservoir",
+            "volume_drawn_ml_per_day": 220.0,
+            "percent_of_blend": 44.0,
+            "capacity_ml_per_day": 350.0,
+            "capacity_usage_percent": 62.9,
+            "cost_per_ml": 400.0,
+            "draw_cost": 88000.0
+          },
+          {
+            "source_id": "yarra_kew",
+            "source_name": "Yarra River, Kew",
+            "source_type": "river",
+            "volume_drawn_ml_per_day": 220.0,
+            "percent_of_blend": 44.0,
+            "capacity_ml_per_day": 300.0,
+            "capacity_usage_percent": 73.3,
+            "cost_per_ml": 235.0,
+            "draw_cost": 51700.0
+          },
+          {
+            "source_id": "groundwater_bore_1",
+            "source_name": "Groundwater Bore 1",
+            "source_type": "groundwater",
+            "volume_drawn_ml_per_day": 60.0,
+            "percent_of_blend": 12.0,
+            "capacity_ml_per_day": 60.0,
+            "capacity_usage_percent": 100.0,
+            "cost_per_ml": null,
+            "draw_cost": null
+          }
+        ],
+        "unused": []
+      },
+      "objective": {
+        "total_cost": null,
+        "total_cost_lower_bound": 171700.0,
+        "currency": "AUD",
+        "unit": "cost for one representative day",
+        "cost_is_complete": false,
+        "sources_missing_cost": [
+          "groundwater_bore_1"
+        ],
+        "cost_breakdown": {
+          "source_activation_cost": 0.0,
+          "plant_activation_cost": 0.0,
+          "source_draw_cost": null,
+          "plant_treatment_cost": 32000.0
+        }
+      },
+      "warnings": [
+        "Source silvan_reservoir has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source yarra_kew has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source groundwater_bore_1 has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone."
+      ],
+      "priority_order": null,
+      "metadata": null
+    },
+    "cheapest_first": {
+      "baseline": "cheapest_first",
+      "scenario_id": "toy_model_sprint1",
+      "status": "FEASIBLE",
+      "feasible": true,
+      "demand_zones": [
+        {
+          "zone_id": "zone_1",
+          "zone_name": "Zone 1",
+          "demand_ml_per_day": 500.0,
+          "volume_supplied_ml_per_day": 500.0
+        }
+      ],
+      "unmet_demand_ml_per_day": 0.0,
+      "sources": {
+        "selected": [
+          {
+            "source_id": "silvan_reservoir",
+            "source_name": "Silvan Reservoir",
+            "source_type": "reservoir",
+            "volume_drawn_ml_per_day": 200.0,
+            "percent_of_blend": 40.0,
+            "capacity_ml_per_day": 350.0,
+            "capacity_usage_percent": 57.1,
+            "cost_per_ml": 400.0,
+            "draw_cost": 80000.0
+          },
+          {
+            "source_id": "yarra_kew",
+            "source_name": "Yarra River, Kew",
+            "source_type": "river",
+            "volume_drawn_ml_per_day": 300.0,
+            "percent_of_blend": 60.0,
+            "capacity_ml_per_day": 300.0,
+            "capacity_usage_percent": 100.0,
+            "cost_per_ml": 235.0,
+            "draw_cost": 70500.0
+          }
+        ],
+        "unused": [
+          {
+            "source_id": "groundwater_bore_1",
+            "source_name": "Groundwater Bore 1",
+            "source_type": "groundwater",
+            "capacity_ml_per_day": 60.0,
+            "reason": "no volume was required from it for this scenario"
+          }
+        ]
+      },
+      "objective": {
+        "total_cost": 182500.0,
+        "total_cost_lower_bound": 182500.0,
+        "currency": "AUD",
+        "unit": "cost for one representative day",
+        "cost_is_complete": true,
+        "sources_missing_cost": [],
+        "cost_breakdown": {
+          "source_activation_cost": 0.0,
+          "plant_activation_cost": 0.0,
+          "source_draw_cost": 150500.0,
+          "plant_treatment_cost": 32000.0
+        }
+      },
+      "warnings": [
+        "Source silvan_reservoir has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source yarra_kew has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source groundwater_bore_1 has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Sources groundwater_bore_1 have no cost_per_ml and cannot be ranked by cost; they are drawn last."
+      ],
+      "priority_order": null,
+      "metadata": null
+    },
+    "fixed_priority": {
+      "baseline": "fixed_priority",
+      "scenario_id": "toy_model_sprint1",
+      "status": "FEASIBLE",
+      "feasible": true,
+      "demand_zones": [
+        {
+          "zone_id": "zone_1",
+          "zone_name": "Zone 1",
+          "demand_ml_per_day": 500.0,
+          "volume_supplied_ml_per_day": 500.0
+        }
+      ],
+      "unmet_demand_ml_per_day": 0.0,
+      "sources": {
+        "selected": [
+          {
+            "source_id": "silvan_reservoir",
+            "source_name": "Silvan Reservoir",
+            "source_type": "reservoir",
+            "volume_drawn_ml_per_day": 350.0,
+            "percent_of_blend": 70.0,
+            "capacity_ml_per_day": 350.0,
+            "capacity_usage_percent": 100.0,
+            "cost_per_ml": 400.0,
+            "draw_cost": 140000.0
+          },
+          {
+            "source_id": "yarra_kew",
+            "source_name": "Yarra River, Kew",
+            "source_type": "river",
+            "volume_drawn_ml_per_day": 150.0,
+            "percent_of_blend": 30.0,
+            "capacity_ml_per_day": 300.0,
+            "capacity_usage_percent": 50.0,
+            "cost_per_ml": 235.0,
+            "draw_cost": 35250.0
+          }
+        ],
+        "unused": [
+          {
+            "source_id": "groundwater_bore_1",
+            "source_name": "Groundwater Bore 1",
+            "source_type": "groundwater",
+            "capacity_ml_per_day": 60.0,
+            "reason": "no volume was required from it for this scenario"
+          }
+        ]
+      },
+      "objective": {
+        "total_cost": 207250.0,
+        "total_cost_lower_bound": 207250.0,
+        "currency": "AUD",
+        "unit": "cost for one representative day",
+        "cost_is_complete": true,
+        "sources_missing_cost": [],
+        "cost_breakdown": {
+          "source_activation_cost": 0.0,
+          "plant_activation_cost": 0.0,
+          "source_draw_cost": 175250.0,
+          "plant_treatment_cost": 32000.0
+        }
+      },
+      "priority_order": [
+        "silvan_reservoir",
+        "yarra_kew",
+        "groundwater_bore_1"
+      ],
+      "metadata": {
+        "strategy": "fixed_priority",
+        "justification": "Assumed benchmark, not real operator practice. Allocates in a fixed source preference order regardless of cost."
+      },
+      "warnings": [
+        "Source silvan_reservoir has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source yarra_kew has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone.",
+        "Source groundwater_bore_1 has no maximum_withdrawal_ml_per_day; capacity falls back to its link limits alone."
+      ]
+    }
+  },
+  "comparison": {
+    "feasible": [
+      "equal_blend",
+      "cheapest_first",
+      "fixed_priority"
+    ],
+    "infeasible": [],
+    "total_costs": {
+      "equal_blend": null,
+      "cheapest_first": 182500.0,
+      "fixed_priority": 207250.0
+    },
+    "cheapest_by_total_cost": "cheapest_first"
+  }
+}
