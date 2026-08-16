@@ -53,6 +53,21 @@ Equal-blend's raw result carries two keys (`source_draw_cost`, `plant_treatment_
 
 All three baselines round volumes and percentages to one decimal place and money to two, applied once on output, never mid-calculation. No case was found where this produced a mismatch against the hand-calculated figures.
 
+### 2.4 The plant minimum-throughput field name is inverted relative to the real input contract, in all three baselines
+
+`model_input_contract.json` and `model_input_specification.md` section 3.4 define the plant field as `minimum_operating_flow_ml_per_day`. No field named `minimum_processing_capacity_ml_per_day` exists anywhere in the real input contract.
+
+All three baselines treat it the other way around — they look for `minimum_processing_capacity_ml_per_day` first, and call `minimum_operating_flow_ml_per_day` a fallback "alias" in their own docstrings, when it is actually the only real field name.
+
+**Effect differs by baseline:**
+
+- **Cheapest-first and fixed-priority** (`_plant_minimum()`) fall back to the real field name when the primary lookup misses, so they still read the correct value against real contract-shaped data. The naming is backwards, but the behaviour is not broken.
+- **Equal-blend** has no fallback at all — it only reads `minimum_processing_capacity_ml_per_day`. Against a real scenario (which only ever carries `minimum_operating_flow_ml_per_day`), this always reads `None` and silently defaults to `0.0`. Its plant-minimum-throughput warning can never fire against real data, not because no plant has a minimum, but because it is checking a field name that was never real to begin with.
+
+**Why this stayed invisible:** all three baselines' own test suites, and the toy scenario used throughout this validation, set `minimum_processing_capacity_ml_per_day` in their fixtures — matching what the baselines expect, not what the real input contract actually produces. Every test exercising this path has been testing against a fabricated field name.
+
+**Resolution:** not fixed here, for the same reason as 2.1 and 2.2 — editing another baseline's file isn't this task's call. Flagged for whoever owns each of the three baselines to correct: swap which name is primary and which is the fallback, and equal-blend specifically needs the fallback added, since it currently has none.
+
 ## 3. Water quality
 
 No baseline computes water quality. `baseline_runner.py` treats a `water_quality` key appearing on any baseline's result as an error rather than passing it through, since no baseline is currently approved to make that claim. This matches all three baselines' own stated position (per their implementation docs) and the Task 18 checklist's "include water-quality values only when approved code calculates them."
