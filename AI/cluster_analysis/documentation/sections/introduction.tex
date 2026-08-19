@@ -1,0 +1,57 @@
+% ------------------------------------------------------------------
+%  Introduction.
+% ------------------------------------------------------------------
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{Motivation}
+\label{sec:introduction:motivation}
+% \placeholder{Why clustering is being investigated for \projectname{}:
+% the decision it is meant to support and the cost of not having it.}
+
+Arising from the desire of improving the project proposal, allowing the core mathematical models to become more proactive, rather than being reactive by nature.
+In addition, realising the potential of the AquaBlend dataset can be further explored and studied to improve the performance of future Mixed–Integer Nonlinear Programming (MINLP) model,
+along with insightful patterns undiscovered in the dataset, which is impactful in future research on related problems about water systems based in Melbourne, and possibly adopted to study water systems in other locations.
+
+This document is made to accomodate the needs of summarizing the deliverables of the codebase provided in the project's repository and solid theoretical and practical foundations for exploring and analysing AquaBlend dataset,
+to facilitate a broad range of functionalities of the project deliverables, including but not limited to, Time–series analysis, Demand Forecasting, Anomaly Detection and Scenarios Generation.
+
+
+\subsection{Objectives}
+\label{sec:introduction:objectives}
+% \placeholder{The questions this document answers, as a short list.}
+This section outlines questions addressed in this document.
+
+\begin{enumerate}
+  \item What potential clustering methods and dimensionality reduction techniques can be applied to specifically study the AquaBlend dataset?
+  \item How well the selected methods perform on the AquaBlend dataset subject to certain standard evaluation metrics/scores?
+  \item Can there be an appropriate Exploratory Data Analysis and Data Mining pipeline to discover patterns in the AquaBlend dataset? If so, can it be standardised to apply to related problems? Otherwise, why is it impossible?
+  \item Is ``Manifold Hypothesis'' valid in the dataset? If so, what can be done to improve the clustering results? Otherwise, is there strong statistical evidence attained from the AquaBlend dataset?
+\end{enumerate}
+
+
+\subsection{Scope and limitations}
+\label{sec:introduction:scope}
+% \placeholder{What is in scope, and --- just as important --- what is deliberately excluded and why.}
+Cluster Analysis is a broad research area, thereby we limit ourselves to discussing on specific methods and problems associated, mentioning other methods without going in details.
+However, this document will be extended to include more clustering methods in the upcoming work.
+
+For the current version, we limit ourselves to those methods and techniques particularly useful to uncover knowledge from AquaBlend dataset.
+In recent future, we shall improve the pipeline to become adaptable to discover knowledge from relevant datasets aiming to optimise Operational Water Resources Management sector.
+
+More importantly, this document is not a comprehensive survey of all existing studies of Cluster Analysis, and thereby, there may exist more effective and appropriate techniques yet to mentioned within this document.
+Hence, this document can only be used as a reference for a collection of potential methods, and how they can be practically implemented to solve certain problems.
+
+\subsection{Document structure}
+\label{sec:introduction:structure}
+% \placeholder{One sentence per section, so a reader can jump straight to what they need.}
+% \textcolor{red}{One sentence per section, so a reader can jump straight to what they need. Can be completed when all section has draft content}
+
+The document is organised as follows.
+\begin{enumerate}
+  \item Survey recent development in Cluster Analysis, see \textbf{Sect. \ref{sec:background}}.
+  \item Introduce dataset used (see \textbf{Sect. \ref{sec:data}}) and experimental setup to benchmark different clustering strategies (see \textbf{Sect. \ref{sec:methodology}} and \textbf{App. \ref{app:reproducibility}}).
+  \item Deliver the Exploratory Data Analysis process and Data Mining pipeline conducted, see \textbf{Sect. \ref{sec:eda}}.
+  \item Discuss on various problems associated with data dimensionality and possible solutions, see \textbf{Sect. \ref{sec:dimensionality}}.
+  \item Summarise the theory behind the implementation of clustering methods, see \textbf{Sect. \ref{sec:clustering_methods}}.
+\end{enumerate}
