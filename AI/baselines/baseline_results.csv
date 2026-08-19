@@ -1,0 +1,38 @@
+EQUAL-BLEND
+source_id,volume_ML,percent_of_blend,cost_per_ML_AUD,source_cost_AUD,source_capacity_ML,source_capacity_usage_percent,treatment_cost_AUD,plant_capacity_ML,plant_capacity_usage_percent,total_cost_AUD,demand_ML,volume_supplied_ML,unmet_ML,feasible,notes
+silvan_reservoir,220.0,44.0,400,88000.00,350,62.9,,,,,500,500.0,0.0,TRUE,
+yarra_kew,220.0,44.0,235,51700.00,300,73.3,,,,,500,500.0,0.0,TRUE,
+groundwater_bore_1,60.0,12.0,unconfirmed,unconfirmed,60,100.0,,,,,500,500.0,0.0,TRUE,cost_per_ML not disclosed for unused sources in reference output
+TOTAL,500.0,100.0,,139700.00,,,32000.00,600,83.3,">=171700.00",500,500.0,0.0,TRUE,minimum bound only; excludes groundwater_bore_1 cost contribution
+
+
+CHEAPEST-FIRST (documented 300 ML/day cap for yarra_kew)
+source_id,volume_ML,percent_of_blend,cost_per_ML_AUD,source_cost_AUD,source_capacity_ML,source_capacity_usage_percent,treatment_cost_AUD,plant_capacity_ML,plant_capacity_usage_percent,total_cost_AUD,demand_ML,volume_supplied_ML,unmet_ML,feasible,notes
+yarra_kew,300.0,60.0,235,70500.00,300,100.0,,,,,500,500.0,0.0,TRUE,uses documented 300 ML/day link capacity
+silvan_reservoir,200.0,40.0,400,80000.00,350,57.1,,,,,500,500.0,0.0,TRUE,
+groundwater_bore_1,0.0,0.0,unconfirmed,0.00,60,0.0,,,,,500,500.0,0.0,TRUE,not required
+TOTAL,500.0,100.0,,150500.00,,,32000.00,600,83.3,182500.00,500,500.0,0.0,TRUE,FLAGGED: lower than confirmed MILP optimum (184150.00) - see capacity discrepancy note
+
+
+CHEAPEST-FIRST (real 290 ML/day cap for yarra_kew - per confirmed reference solve)
+source_id,volume_ML,percent_of_blend,cost_per_ML_AUD,source_cost_AUD,source_capacity_ML,source_capacity_usage_percent,treatment_cost_AUD,plant_capacity_ML,plant_capacity_usage_percent,total_cost_AUD,demand_ML,volume_supplied_ML,unmet_ML,feasible,notes
+yarra_kew,290.0,58.0,235,68150.00,290,100.0,,,,,500,500.0,0.0,TRUE,uses 290 ML/day capacity implied by the confirmed reference solve's binding constraint
+silvan_reservoir,210.0,42.0,400,84000.00,350,60.0,,,,,500,500.0,0.0,TRUE,
+groundwater_bore_1,0.0,0.0,unconfirmed,0.00,60,0.0,,,,,500,500.0,0.0,TRUE,not required
+TOTAL,500.0,100.0,,152150.00,,,32000.00,600,83.3,184150.00,500,500.0,0.0,TRUE,matches confirmed MILP optimum exactly
+
+
+FIXED-PRIORITY
+source_id,volume_ML,percent_of_blend,cost_per_ML_AUD,source_cost_AUD,source_capacity_ML,source_capacity_usage_percent,treatment_cost_AUD,plant_capacity_ML,plant_capacity_usage_percent,total_cost_AUD,demand_ML,volume_supplied_ML,unmet_ML,feasible,notes
+silvan_reservoir,350.0,70.0,400,140000.00,350,100.0,,,,,500,500.0,0.0,TRUE,
+yarra_kew,150.0,30.0,235,35250.00,300,50.0,,,,,500,500.0,0.0,TRUE,
+groundwater_bore_1,0.0,0.0,unconfirmed,0.00,60,0.0,,,,,500,500.0,0.0,TRUE,not required
+TOTAL,500.0,100.0,,175250.00,,,32000.00,600,83.3,207250.00,500,500.0,0.0,TRUE,
+
+
+MILP OPTIMUM (reference - for comparison only)
+source_id,volume_ML,percent_of_blend,cost_per_ML_AUD,source_cost_AUD,source_capacity_ML,source_capacity_usage_percent,treatment_cost_AUD,plant_capacity_ML,plant_capacity_usage_percent,total_cost_AUD,demand_ML,volume_supplied_ML,unmet_ML,feasible,notes
+silvan_reservoir,210.0,42.0,400,84000.00,350,60.0,,,,,500,500.0,0.0,TRUE,confirmed reference solve
+yarra_kew,290.0,58.0,235,68150.00,300,96.7,,,,,500,500.0,0.0,TRUE,"confirmed reference solve; 100.0% if the real 290 ML/day capacity is used as the denominator instead of the documented 300"
+groundwater_bore_1,0.0,0.0,unconfirmed,0.00,60,0.0,,,,,500,500.0,0.0,TRUE,unused in reference solve
+TOTAL,500.0,100.0,,152150.00,,,32000.00,600,83.3,184150.00,500,500.0,0.0,TRUE,"source: model_output_contract.json, scenario_2026_07_17_001"

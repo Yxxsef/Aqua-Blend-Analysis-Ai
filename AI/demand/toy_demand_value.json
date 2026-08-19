@@ -1,0 +1,142 @@
+{
+  "scenario_id": "toy_model_baseline",
+  "demand_zones": [
+    {
+      "zone_id": "Z1",
+      "zone_name": "Toy demand zone (representative Melbourne metropolitan supply region)",
+      "required_volume_ML": 500,
+      "time_basis": "per_day"
+    }
+  ],
+  "provenance": {
+    "task": "4. Research and select the toy-model demand value",
+    "owner": "Mansoor Shaik",
+    "units": "ML",
+    "final_value": {
+      "required_volume_ML_per_day": 500,
+      "required_volume_ML_per_year": 182500,
+      "time_basis": "per_day",
+      "status": "confirmed_configuration_value",
+      "confirmed_by": "Optimisation team, official AquaBlend toy-model configuration"
+    },
+    "derivation": {
+      "method": "confirmed_value_reconciled_against_published_per_capita_demand",
+      "method_note": "500 ML/day is a confirmed configuration input, not derived bottom-up. The published total per-capita rate is used in reverse to record the served population the confirmed value implies, so the value carries a traceable basis in published data.",
+      "per_capita_L_per_person_per_day": 242,
+      "per_capita_basis": "total (residential + business + system losses)",
+      "per_capita_derivation": "1284 ML/day system mean / 5,300,000 people",
+      "implied_population": 2066000,
+      "implied_population_derivation": "500,000,000 L/day / 242 L/person/day = about 2,066,000 people",
+      "forward_check": "242 L/person/day x 2,066,000 people = 499,972,000 L/day = about 500 ML/day",
+      "implied_population_justification": {
+        "status": "assumed_toy_model_characterisation",
+        "ground_1_real_world_anchor": "About 2,066,000 is a major metropolitan supply region, not one council area: roughly 39 percent of Greater Melbourne's 5.3 million, equivalent to about twelve mid-sized LGAs (metropolitan average about 171,000 across 31 LGAs; City of Monash 209,268 and City of Whitehorse 183,462 at 30 June 2024). A regional zone is the scale consistent with the confirmed source set, since Silvan is a principal distribution point rather than a local storage and the Yarra extraction and production bore are likewise system-scale inputs with capacities in the hundreds of ML/day.",
+        "ground_2_calibration_window": "At 242 L/person/day the toy is only non-trivial for demand above the largest single confirmed capacity (350 ML/day) and no greater than the total (710 ML/day), which corresponds to a population above about 1,446,000 and up to about 2,934,000. The confirmed 500 ML/day and its implied 2,066,000 sit inside that band with room on both sides.",
+        "sensitivity": [
+          {"implied_population": 1446000, "demand_ML_per_day": 350, "toy_valid": false, "reason": "equals largest single confirmed capacity"},
+          {"implied_population": 2066000, "demand_ML_per_day": 500, "toy_valid": true, "reason": "confirmed value, inside window"},
+          {"implied_population": 2934000, "demand_ML_per_day": 710, "toy_valid": false, "reason": "exhausts total supply, zero headroom"}
+        ],
+        "note": "Representative regional zone size, not a measured Melbourne Water service area boundary.",
+        "supersedes": "Earlier version derived 50 ML/day from an assumed single-LGA population of 207,000. That derivation suited the provisional reservoir-only capacities and no longer applies."
+      },
+      "cross_check_fraction_of_system_demand_percent": 38.9,
+      "residential_per_capita_reference_L_per_person_per_day": 166
+    },
+    "original_published_figures": {
+      "system_mean_demand_ML_per_day": 1284,
+      "system_2025_mean_demand_ML_per_day": 1344,
+      "system_min_demand_ML_per_day": 775,
+      "system_peak_demand_ML_per_day": 2190,
+      "system_mean_demand_ML_per_year": 468660,
+      "residential_per_capita_L_per_person_per_day": 166,
+      "residential_per_capita_2024_25_L_per_person_per_day": 169
+    },
+    "capacity_calibration_rule": {
+      "no_single_source_meets_demand": "max(source daily-extractable capacity) < required_volume_ML",
+      "blend_is_feasible": "sum(source daily-extractable capacity) >= required_volume_ML"
+    },
+    "confirmed_toy_source_set": {
+      "status": "confirmed_by_optimisation_team",
+      "capacity_status": "confirmed_configuration_inputs",
+      "source_types": "mixed (surface storage, river extraction, groundwater). The toy is no longer reservoir-only.",
+      "note": "Large / mid / small trio. Both silvan_reservoir and yarra_kew are structurally required in every feasible solution; groundwater_bore_1 is not needed in the baseline and only activates under stress, exercising the binary activation logic.",
+      "sources": [
+        {"source_id": "silvan_reservoir", "type": "surface_storage", "full_supply_capacity_ML": 40445, "full_supply_capacity_status": "sourced", "daily_extractable_cap_ML_per_day": 350, "daily_extractable_cap_status": "confirmed", "role": "large"},
+        {"source_id": "yarra_kew", "type": "river_extraction", "full_supply_capacity_ML": null, "full_supply_capacity_status": "not_applicable_no_storage", "daily_extractable_cap_ML_per_day": 300, "daily_extractable_cap_status": "confirmed", "role": "mid"},
+        {"source_id": "groundwater_bore_1", "type": "groundwater_bore", "full_supply_capacity_ML": null, "full_supply_capacity_status": "not_applicable_no_storage", "daily_extractable_cap_ML_per_day": 60, "daily_extractable_cap_status": "confirmed", "role": "small"}
+      ],
+      "sum_daily_extractable_cap_ML_per_day": 710,
+      "max_single_daily_cap_ML_per_day": 350,
+      "max_single_share_percent": 49,
+      "headroom_ML_per_day": 210,
+      "headroom_percent_of_demand": 42,
+      "headroom_percent_of_total_capacity": 30,
+      "minimum_feasible_combinations": [
+        {"sources": ["silvan_reservoir", "yarra_kew"], "supply_ML_per_day": 650},
+        {"sources": ["silvan_reservoir", "yarra_kew", "groundwater_bore_1"], "supply_ML_per_day": 710}
+      ],
+      "structurally_required_sources": ["silvan_reservoir", "yarra_kew"],
+      "baseline_inactive_sources": ["groundwater_bore_1"],
+      "calibration": {
+        "state": "confirmed",
+        "rule_1_no_single_source_meets_demand": true,
+        "rule_2_blend_is_feasible": true,
+        "passes": true,
+        "note": "350 < 500 and 710 >= 500, so both rules hold on the confirmed values. Demand and capacities are mutually consistent and ready for Task 5 hand validation.",
+        "supersedes": "Earlier provisional calibration against assumed caps of 40, 25 and 5 ML/day at a demand of 50 ML/day."
+      }
+    },
+    "sources": [
+      {
+        "name": "Melbourne Water Open Data Hub daily usage series",
+        "file": "melbourne_water_5_year_complete.csv",
+        "field": "daily_usage_ML",
+        "coverage": "2021-07-24 to 2026-07-24",
+        "date_recorded": "2026-07-24"
+      },
+      {
+        "name": "Melbourne's Annual Water Outlook 2026",
+        "publisher": "Melbourne Water",
+        "published": "2025-12",
+        "quarterly_update": "2026-03-01",
+        "url": "https://www.melbournewater.com.au/about/publications/water-outlook"
+      },
+      {
+        "name": "AquaBlend official toy-model configuration",
+        "publisher": "Optimisation team",
+        "note": "Source of the confirmed demand value of 500 ML/day, the source set silvan_reservoir / yarra_kew / groundwater_bore_1, and the daily-extractable capacities of 350, 300 and 60 ML/day."
+      },
+      {
+        "name": "Melbourne Water daily reservoir history",
+        "file": "melbourne_reservoir_daily_history.csv",
+        "coverage": "2000-01-01 to 2026-07-24",
+        "note": "Per-reservoir full-supply capacity for the ten major Melbourne Water reservoirs; used here for the Silvan full-supply capacity of 40,445 ML."
+      },
+      {
+        "name": "Regional Population, estimated resident population by local government area, 30 June 2024",
+        "publisher": "Australian Bureau of Statistics",
+        "url": "https://profile.id.com.au/monash/about",
+        "note": "Used only to give scale to the implied toy demand-zone population. City of Monash 209,268; City of Whitehorse 183,462."
+      }
+    ],
+    "data_flags": {
+      "estimated_fields": [
+        "implied_population"
+      ],
+      "notes": [
+        "required_volume_ML of 500 is a confirmed configuration value from the Optimisation team, not a value selected in this task.",
+        "required_volume_ML is expressed on a total per-capita basis (residential + business + system losses), consistent with the total daily_usage_ML series.",
+        "implied_population of 2,066,000 is a reconciliation of the confirmed demand against published per-capita demand, not a measured demand zone. Justification is recorded under derivation.implied_population_justification.",
+        "Confirmed source set: silvan_reservoir, yarra_kew, groundwater_bore_1. Mixed source types, not reservoir-only.",
+        "Daily-extractable capacities of 350, 300 and 60 ML/day are confirmed configuration inputs, not published Melbourne Water safe-yield figures. No independent public capacity figure exists for yarra_kew or groundwater_bore_1 in the datasets used.",
+        "Both calibration rules hold against the confirmed capacities.",
+        "Supersedes the earlier version of this file: demand 50 ML/day, sources Sugarloaf / Silvan / O'Shannassy, provisional caps 40 / 25 / 5 ML/day, assumed population 207,000. The earlier reservoir-only source-selection analysis, including the exclusion of Thomson and Upper Yarra and the resolution of Barawon and Yashai127 as monitoring station identifiers, no longer applies."
+      ]
+    },
+    "coordination": {
+      "data_engineering_confirmation_required": false,
+      "note": "Closed. The source set and per-source daily-extractable capacities are confirmed in the Optimisation team's official toy-model configuration, so no capacity confirmation from Data Engineering remains outstanding for this task."
+    }
+  }
+}

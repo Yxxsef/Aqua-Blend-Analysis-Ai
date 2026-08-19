@@ -23,6 +23,7 @@ __pycache__/
 venv/
 # tests/
 .pytest_cache/
+# conftest.py
 
 # Local task-list tooling.
 .tasks/
