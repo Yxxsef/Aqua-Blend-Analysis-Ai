@@ -1,0 +1,91 @@
+{
+  "scenario_id": "scenario_2026_07_17_001",
+  "status": "OPTIMAL",
+  "confidence": {
+    "confidence": "PROVISIONAL",
+    "estimated_sources": [
+      "silvan_reservoir",
+      "yarra_kew",
+      "groundwater_bore_1"
+    ]
+  },
+  "objective": {
+    "total_cost": 184150.0,
+    "currency": "AUD"
+  },
+  "sources": {
+    "selected": [
+      {
+        "source_id": "silvan_reservoir",
+        "source_name": "Silvan Reservoir",
+        "source_type": "reservoir",
+        "volume_drawn_ml_per_day": 210,
+        "percent_of_blend": 42.0,
+        "cost_per_ml": 400,
+        "draw_cost": 84000.0
+      },
+      {
+        "source_id": "yarra_kew",
+        "source_name": "Yarra River, Kew",
+        "source_type": "river",
+        "volume_drawn_ml_per_day": 290,
+        "percent_of_blend": 58.0,
+        "cost_per_ml": 235,
+        "draw_cost": 68150.0
+      }
+    ],
+    "unused": [
+      {
+        "source_id": "groundwater_bore_1",
+        "source_name": "Groundwater Bore 1",
+        "source_type": "groundwater",
+        "reason": "Higher cost per ML than the selected sources"
+      }
+    ]
+  },
+  "data_flags": {
+    "sources": [
+      {
+        "source_id": "silvan_reservoir",
+        "has_estimated_values": true,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "estimate",
+          "reference_flow": "estimate",
+          "max_available": "estimate",
+          "cost": "estimate",
+          "alkalinity": "estimate"
+        }
+      },
+      {
+        "source_id": "yarra_kew",
+        "has_estimated_values": true,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "estimate",
+          "reference_flow": "estimate",
+          "max_available": "estimate",
+          "cost": "estimate",
+          "alkalinity": "estimate"
+        }
+      },
+      {
+        "source_id": "groundwater_bore_1",
+        "has_estimated_values": true,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "estimate",
+          "reference_flow": "estimate",
+          "max_available": "estimate",
+          "cost": "estimate",
+          "alkalinity": "estimate"
+        }
+      }
+    ]
+  },
+  "diagnostics": {
+    "solver": "HiGHS",
+    "solve_time_seconds": 0.084,
+    "optimality_gap": 0.0
+  }
+}
