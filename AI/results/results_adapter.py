@@ -82,11 +82,10 @@ def adapt_results(
 
     # data_flags is required externally.
     #
-    # If data_flags.sources is an empty list, there is
-    # no provenance information to adapt, so the internal
-    # representation uses an empty dictionary.
-    #
-    # Otherwise, preserve the complete data flag structure.
+    # Preserve the complete data_flags structure exactly as
+    # provided by the external Results JSON contract. An empty
+    # sources list does not imply that other metadata (for
+    # example notes or future fields) should be discarded.
     data_flags = results["data_flags"]
 
     if not isinstance(data_flags, dict):
@@ -94,10 +93,7 @@ def adapt_results(
             "data_flags must be a dictionary."
         )
 
-    if data_flags.get("sources") == []:
-        adapted["dataFlags"] = {}
-    else:
-        adapted["dataFlags"] = data_flags
+    adapted["dataFlags"] = data_flags
 
     # Optional fields are copied only when supplied.
     # Missing optional fields are not invented.

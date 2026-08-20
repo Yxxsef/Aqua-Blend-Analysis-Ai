@@ -50,9 +50,28 @@ def test_adapter_converts_fields():
     assert result["demandZones"] == []
     assert result["waterQuality"] == {}
 
-    # Empty data_flags.sources should produce
-    # an empty internal dataFlags object.
-    assert result["dataFlags"] == {}
+    # The adapter preserves the complete data_flags
+    # structure, even when sources is empty.
+    assert result["dataFlags"] == {
+        "sources": []
+    }
+
+
+def test_adapter_preserves_additional_data_flags_fields():
+    results = sample_results()
+
+    results["data_flags"]["notes"] = [
+        "Estimated demand data"
+    ]
+
+    result = adapt_results(results)
+
+    assert result["dataFlags"] == {
+        "sources": [],
+        "notes": [
+            "Estimated demand data"
+        ],
+    }
 
 
 def test_adapter_preserves_sources():
