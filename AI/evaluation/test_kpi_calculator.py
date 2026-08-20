@@ -206,6 +206,16 @@ class TestTotalCost:
         r = calculate_total_cost(results, feas)
         assert r.status == "N/A"
 
+    def test_ok_for_time_limit_with_verified_incumbent(self):
+        # Regression test for the bug flagged in review: a verified TIME_LIMIT
+        # incumbent is confirmed feasible by calculate_feasibility() and must
+        # be treated as such here too, not silently fall back to N/A.
+        feas = calculate_feasibility({"status": "TIME_LIMIT", "incumbent_feasible": True})
+        results = {"objective": {"total_cost": 150000.0, "currency": "AUD"}}
+        r = calculate_total_cost(results, feas)
+        assert r.status == "OK"
+        assert r.value == 150000.0
+
     def test_na_when_missing(self):
         feas = calculate_feasibility({"status": "OPTIMAL"})
         r = calculate_total_cost({}, feas)

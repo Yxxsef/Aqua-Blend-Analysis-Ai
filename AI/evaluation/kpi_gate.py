@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from kpi_calculator import KPIReport, FEASIBLE_STATUSES, calculate_kpis
+from kpi_calculator import KPIReport, is_confirmed_feasible, calculate_kpis
 
 
 @dataclass
@@ -50,9 +50,12 @@ def evaluate_gate(report: KPIReport) -> GateResult:
         return GateResult("FAIL", ["Result is INFEASIBLE."])
     if feas.value in ("UNBOUNDED", "ERROR"):
         return GateResult("FAIL", [f"Solver status '{feas.value}' is not a valid result."])
-    if feas.value not in FEASIBLE_STATUSES:
+    if not is_confirmed_feasible(feas):
         # Covers TIME_LIMIT-without-incumbent and any other non-feasible,
-        # non-error status that still isn't a clean feasible result.
+        # non-error status that still isn't a confirmed feasible result.
+        # (A verified TIME_LIMIT incumbent passes is_confirmed_feasible()
+        # and falls through to the demand/quality gates below, instead of
+        # being incorrectly reported as UNABLE_TO_EVALUATE.)
         return GateResult(
             "UNABLE_TO_EVALUATE",
             [f"Status '{feas.value}' does not confirm feasibility."],

@@ -29,6 +29,24 @@ INVALID_STATUSES = {"UNBOUNDED", "ERROR"}
 # INFEASIBLE and TIME_LIMIT are handled explicitly, not via a set membership
 # check, because they each need their own message (see calculate_feasibility).
 
+# The full set of feasibility.value outcomes that mean "safe to treat this
+# result as feasible" — used by anything downstream that needs a single
+# feasible/not-feasible decision (calculate_total_cost, evaluate_gate).
+# Deliberately NOT the same as checking feasibility.status == "OK": that
+# field means "we have a confirmed, definitive answer", which is also true
+# for INFEASIBLE, UNBOUNDED, and ERROR. Confusing the two would make cost
+# and the gate treat an infeasible result as usable.
+CONFIRMED_FEASIBLE_VALUES = FEASIBLE_STATUSES | {"TIME_LIMIT_FEASIBLE_INCUMBENT"}
+
+
+def is_confirmed_feasible(feasibility: "KPIResult") -> bool:
+    """True only for a feasibility result the rest of the pipeline can treat
+    as a usable, feasible solution: OPTIMAL, FEASIBLE, or a TIME_LIMIT result
+    with a verified feasible incumbent. Everything else (INFEASIBLE,
+    UNBOUNDED, ERROR, UNKNOWN, an unconfirmed TIME_LIMIT) is False.
+    """
+    return feasibility.status == "OK" and feasibility.value in CONFIRMED_FEASIBLE_VALUES
+
 # KPI_Set.md §3.7 / the input contract's quality_limits.parameters: the three
 # parameters the current toy configuration checks. This is used only to
 # detect *incompleteness* in KPI 4/5 (a plant reporting fewer than the
@@ -183,8 +201,12 @@ def calculate_demand_satisfaction(results: dict) -> KPIResult:
 def calculate_total_cost(results: dict, feasibility: KPIResult) -> KPIResult:
     # "If the result is infeasible: report N/A for comparison purposes, even
     # if the solver output contains a temporary objective value." — so this
-    # checks feasibility status FIRST, not just field presence.
-    if feasibility.value not in FEASIBLE_STATUSES:
+    # checks confirmed feasibility FIRST, not just field presence. Uses
+    # is_confirmed_feasible() rather than a raw value-in-set check so a
+    # verified TIME_LIMIT incumbent is correctly included (see that
+    # function's docstring for why feasibility.status == "OK" alone is not
+    # the right test here).
+    if not is_confirmed_feasible(feasibility):
         return KPIResult(
             "total_cost", "N/A", None, None,
             "Result is not confirmed feasible; total cost is not valid for "

@@ -84,6 +84,42 @@ pytest test_kpi_calculator.py test_kpi_gate.py -v
 - Gate logic: pass, each individual fail reason, each `UNABLE_TO_EVALUATE` trigger, and the
   cost-never-gates guarantee.
 
+## Fixed after review
+
+**TIME_LIMIT-with-verified-incumbent feasibility bug** (flagged by AbdullaAlmannaee, refined by
+Amxntha): `calculate_feasibility()` correctly marked a `TIME_LIMIT` result with a verified
+incumbent as feasible (`status="OK"`, `value="TIME_LIMIT_FEASIBLE_INCUMBENT"`), but
+`calculate_total_cost()` and `evaluate_gate()` each checked `feasibility.value in
+FEASIBLE_STATUSES` directly, a set that didn't include that value — so both silently
+contradicted the calculator's own answer (cost came back `N/A`, gate came back
+`UNABLE_TO_EVALUATE`).
+
+**Why the naive fix (`feasibility.status == "OK"`) would have been worse:** `status="OK"` means
+"we have a confirmed, definitive answer," not "feasible" — `INFEASIBLE`, `UNBOUNDED`, and
+`ERROR` all also return `status="OK"`. Switching the check to `status == "OK"` would have made
+`calculate_total_cost()` report a real cost for infeasible results too, which is the exact
+behaviour `KPI_Set.md` explicitly forbids (see `test_na_when_infeasible_even_if_value_present`,
+which still passes after this fix).
+
+**Actual fix:** added `is_confirmed_feasible()`, a single shared helper checking against
+`CONFIRMED_FEASIBLE_VALUES = {"OPTIMAL", "FEASIBLE", "TIME_LIMIT_FEASIBLE_INCUMBENT"}`, used by
+both `calculate_total_cost()` and `evaluate_gate()`, per Amxntha's suggestion. Added a
+calculator-level test (`test_ok_for_time_limit_with_verified_incumbent`) and an end-to-end
+gate-level test (`test_time_limit_with_verified_incumbent_passes_when_otherwise_complete`), so
+this path is now covered at both layers.
+
+## Other review feedback
+
+- **Trminh06-work** suggested moving the test files into a `tests/` subfolder. Flagging that
+  `AI/explanations/test_json_explainer.py` (Task 9) lives alongside its source file rather than
+  in a nested folder, so moving these would be inconsistent with that existing precedent unless
+  the team wants to standardise on `tests/` going forward, happy to move it either way once
+  that's settled.
+- **Trminh06-work** also noted no official `model_output_contract.json` exists from the MILP
+  team yet. Confirmed, already flagged below under Known open items, `reference_output.json`
+  is what the AI stream has today, not yet an official MILP-team-published file, will revisit
+  if/when one is published.
+
 ## Known open items
 
 - Not yet tested against real coded-baseline output (Tasks 15–17), since their confirmed

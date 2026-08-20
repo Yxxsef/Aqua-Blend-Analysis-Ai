@@ -52,6 +52,35 @@ def test_time_limit_without_incumbent_is_unable_to_evaluate():
     assert gate.overall_status == "UNABLE_TO_EVALUATE"
 
 
+def test_time_limit_with_verified_incumbent_passes_when_otherwise_complete():
+    # Regression test for the bug flagged in review: previously this fell
+    # through to UNABLE_TO_EVALUATE even though calculate_feasibility() had
+    # already confirmed it feasible. End-to-end via evaluate(), covering the
+    # exact path Abdulla/Amxntha flagged (gate, not just the calculator).
+    results = {
+        "status": "TIME_LIMIT",
+        "incumbent_feasible": True,
+        "demand_zones": [
+            {"zone_id": "zone_1", "demand_ml_per_day": 500, "volume_supplied_ml_per_day": 500}
+        ],
+        "objective": {"total_cost": 150000.0, "currency": "AUD"},
+        "plants": {"active": [{"plant_id": "facility_1"}]},
+        "water_quality": {
+            "by_plant": {
+                "facility_1": {
+                    "pH": {"status": "PASS", "safety_margin_percent": 30.5},
+                    "alkalinity": {"status": "PASS", "safety_margin_percent": 22.6},
+                    "turbidity": {"status": "PASS", "safety_margin_percent": 34.0},
+                }
+            }
+        },
+    }
+    report, gate = evaluate(results)
+    assert report.total_cost.status == "OK"
+    assert report.total_cost.value == 150000.0
+    assert gate.overall_status == "PASS"
+
+
 def test_demand_below_100_percent_fails():
     results = {
         "status": "OPTIMAL",
