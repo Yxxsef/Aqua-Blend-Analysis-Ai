@@ -1,309 +1,290 @@
-Scenario Input Contract Notes
+# Scenario Input Contract Notes
 
-AquaBlend Analysis & AI — Sprint 2, Task 20Owner: Sravya TudiStatus: Review update aligned with the current MILP input contract.
+**AquaBlend Analysis & AI — Sprint 2, Task 20**  
+**Owner:** Sravya Tudi  
+**Status:** Review update aligned with the current MILP input contract.
 
-1. Scope
+## 1. Scope
 
 Task 20 loads and validates the existing Sprint 1 AquaBlend toy scenarios:
 
-normal-year-dry-year/scenario_normal.json
+- `normal-year-dry-year/scenario_normal.json`
+- `normal-year-dry-year/scenario_dry_year.json`
+- `high-demand-outage/scenario_high_demand.json`
+- `high-demand-outage/scenario_plant_outage.json`
 
-normal-year-dry-year/scenario_dry_year.json
+These scenario JSON files are upstream inputs to the MILP workflow. Task 20 validates the inputs before downstream use. It does not make MILP optimisation decisions and does not fabricate solver outputs.
 
-high-demand-outage/scenario_high_demand.json
+## 2. Task 20 Files
 
-high-demand-outage/scenario_plant_outage.json
+The Task 20 implementation is organised under `AI/scenarios/`:
 
-These scenario JSON files are upstream inputs. Task 20 does not make MILP decisions and does not fabricate optimiser outputs.
-
-2. Task 20 files
-
+```text
 AI/scenarios/
 ├── normal-year-dry-year/
 ├── high-demand-outage/
+├── tests/
+│   └── test_scenario_validator.py
 ├── scenario_loader.py
 ├── scenario_validator.py
-├── test_scenario_validator.py
 └── Scenario_Input_Contract_Notes.md
+```
 
-scenario_plant_outage.json already existed from the Sprint 1 scenario work. Task 20 consumes and validates that existing file rather than adding a duplicate copy.
+The main responsibilities are:
 
-3. Loader behaviour
+- `scenario_loader.py` — loads scenario JSON files using strict UTF-8 and performs basic JSON loading checks.
+- `scenario_validator.py` — validates scenario structure, contract fields, scenario-specific changes, capacity, and connectivity.
+- `tests/test_scenario_validator.py` — contains the `pytest` test suite for the loader and validator.
+- `Scenario_Input_Contract_Notes.md` — documents the contract assumptions and validation behaviour used by Task 20.
 
-scenario_loader.py:
+`scenario_plant_outage.json` already existed from the Sprint 1 scenario work. Task 20 consumes and validates this existing file rather than adding a duplicate copy.
 
-Reads JSON using strict UTF-8.
+## 3. Loader Behaviour
 
-Rejects malformed JSON.
+The loader implementation is provided in `scenario_loader.py`.
 
-Requires a JSON object at the top level.
+It:
 
-Discovers scenario_*.json files recursively in deterministic path order.
+- reads JSON using strict UTF-8;
+- rejects malformed JSON;
+- requires the top-level JSON value to be an object;
+- discovers `scenario_*.json` files recursively in deterministic path order; and
+- leaves contract and scenario-rule validation to `scenario_validator.py`.
 
-Leaves contract validation to scenario_validator.py.
+This keeps file loading separate from the validation logic.
 
-4. Current MILP input-contract alignment
+## 4. Current MILP Input-Contract Alignment
 
 Task 20 uses the current MILP input contract/specification as the input authority.
 
-Important current fields include:
+Important fields used by the validator include:
 
-network.demand_zones[].demand_ml_per_day
+- `network.demand_zones[].demand_ml_per_day`
+- `network.plants[].enabled`
+- `network.plants[].minimum_processing_capacity_ml_per_day`
+- `network.plants[].maximum_processing_capacity_ml_per_day`
+- `network.source_to_plant_links[].maximum_flow_ml_per_day`
+- `network.plant_to_zone_links[].maximum_flow_ml_per_day`
+- `sources[].minimum_withdrawal_ml_per_day`
 
-network.plants[].enabled
+The current MILP specification documents `minimum_operating_flow_ml_per_day` as a legacy fallback for the plant minimum-capacity field. The existing Sprint 1 scenario files still use that legacy name.
 
-network.plants[].minimum_processing_capacity_ml_per_day
+For compatibility, `scenario_validator.py` accepts the legacy field and reports a warning, while treating `minimum_processing_capacity_ml_per_day` as the preferred current field.
 
-network.plants[].maximum_processing_capacity_ml_per_day
+Task 20 does not silently rewrite the existing upstream Sprint 1 scenario JSON files.
 
-network.source_to_plant_links[].maximum_flow_ml_per_day
+## 5. ID-Based Scenario Comparison
 
-network.plant_to_zone_links[].maximum_flow_ml_per_day
+Scenario comparison is implemented in `scenario_validator.py`.
 
-sources[].minimum_withdrawal_ml_per_day
+The current MILP specification uses IDs as join keys. Therefore, the validator compares known arrays using stable IDs instead of relying on array positions.
 
-The current MILP specification documents minimum_operating_flow_ml_per_day as a legacy fallback for the plant minimum-capacity field. The existing Sprint 1 scenario files still use that legacy name. Task 20 therefore accepts it for compatibility and reports a warning, while treating minimum_processing_capacity_ml_per_day as the preferred current field.
+Examples of the validator's internal path notation are:
 
-Task 20 does not silently rewrite the upstream Sprint 1 scenario files.
-
-5. ID-based comparison
-
-The current MILP specification defines IDs as join keys. The updated validator therefore compares known arrays using stable IDs instead of relying on list positions.
-
-Examples of the validator's internal path notation:
-
+```text
 network.demand_zones[zone_id=zone_1].demand_ml_per_day
 network.plants[plant_id=facility_1].enabled
 network.source_to_plant_links[source_id=silvan_reservoir,plant_id=facility_1].maximum_flow_ml_per_day
+```
 
-This prevents harmless array reordering from being reported as a scenario change.
+This means that reordering entries in arrays such as `sources` or `source_to_plant_links` does not incorrectly appear as an operational scenario change.
 
-6. Stable scenario IDs and types
+This behaviour is covered by regression tests in `tests/test_scenario_validator.py`.
 
-Internal type
+## 6. Stable Scenario IDs and Types
 
-Stable scenario ID
+The validator uses the following internal scenario types and existing stable scenario IDs:
 
-NORMAL
+| Internal type | Stable scenario ID |
+|---|---|
+| `NORMAL` | `toy_model_normal_year` |
+| `DRY_YEAR` | `toy_model_dry_year` |
+| `HIGH_DEMAND` | `scenario_2026_07_17_high_demand` |
+| `PLANT_OUTAGE` | `scenario_2026_07_17_plant_outage` |
 
-toy_model_normal_year
+The validator infers an internal scenario type from the existing scenario information. It does not add a new `scenario_type` field to the input JSON.
 
-DRY_YEAR
+## 7. Approved Scenario Changes
 
-toy_model_dry_year
+Scenario-specific change validation is handled by `scenario_validator.py`.
 
-HIGH_DEMAND
+The normal scenario is used as the reference. Metadata differences are limited to:
 
-scenario_2026_07_17_high_demand
+- `scenario_id`
+- `scenario_name`
+- `description`
 
-PLANT_OUTAGE
+Operational changes are restricted according to the scenario type.
 
-scenario_2026_07_17_plant_outage
+### 7.1 Normal Scenario
 
-The validator infers an internal scenario type from existing metadata and does not add a new scenario_type field to the input JSON.
+No operational field may differ from the approved normal reference input.
 
-7. Approved scenario changes
+### 7.2 Dry-Year Scenario
 
-Scenario comparisons use the normal scenario as the reference. Metadata differences are limited to scenario_id, scenario_name, and description.
+The approved dry-year changes are the three source-to-plant maximum-flow changes below:
 
-7.1 Normal
+| Source | Plant | Normal | Dry year |
+|---|---|---:|---:|
+| `silvan_reservoir` | `facility_1` | 350 ML/day | 280 ML/day |
+| `yarra_kew` | `facility_1` | 300 ML/day | 240 ML/day |
+| `groundwater_bore_1` | `facility_1` | 60 ML/day | 45 ML/day |
 
-No operational field may differ from the approved reference input.
+These changes are validated using `source_id` and `plant_id`, rather than array positions.
 
-7.2 Dry year
+Demand remains `500 ML/day`.
 
-The three approved source-to-plant maximum-flow changes are validated by source and plant IDs:
+### 7.3 High-Demand Scenario
 
-Source
+For `zone_1`, the approved operational change is:
 
-Plant
-
-Normal
-
-Dry year
-
-silvan_reservoir
-
-facility_1
-
-350 ML/day
-
-280 ML/day
-
-yarra_kew
-
-facility_1
-
-300 ML/day
-
-240 ML/day
-
-groundwater_bore_1
-
-facility_1
-
-60 ML/day
-
-45 ML/day
-
-Demand remains 500 ML/day.
-
-7.3 High demand
-
-For zone_1:
-
+```text
 network.demand_zones[zone_id=zone_1].demand_ml_per_day
+```
 
-changes from 500 to 600 ML/day. Other operational fields must remain unchanged.
+The value changes from `500 ML/day` to `600 ML/day`.
 
-7.4 Plant outage
+Other operational fields must remain unchanged.
 
-The existing Sprint 1 outage scenario uses the current contract's plant activation field:
+### 7.4 Plant-Outage Scenario
 
+The existing Sprint 1 plant-outage scenario uses the plant activation field:
+
+```text
 network.plants[plant_id=facility_1].enabled
+```
 
-For facility_1, the value changes from true to false.
+For `facility_1`, the value changes from `true` to `false`.
 
-Task 20 validates this existing outage scenario, then checks active connectivity and remaining active capacity.
+Task 20 validates this existing outage scenario and then uses the capacity and connectivity checks in `scenario_validator.py` to identify the resulting pre-solve risk.
 
-8. Pre-solve capacity check
+## 8. Pre-Solve Capacity Check
 
-The validator calculates:
+The capacity check is implemented in `scenario_validator.py`.
 
-active source-to-plant link capacity;
+It calculates:
 
-active plant processing capacity;
-
-active plant-to-zone capacity;
-
-mandatory demand;
-
-aggregate effective capacity;
-
-remaining aggregate capacity.
+- active source-to-plant link capacity;
+- active plant processing capacity;
+- active plant-to-zone capacity;
+- mandatory demand;
+- aggregate effective capacity; and
+- remaining aggregate capacity.
 
 The aggregate effective capacity is the minimum of the three active capacity layers.
 
-Expected current screening results:
+Expected screening results for the current scenarios are:
 
-Scenario
+| Scenario | Effective capacity | Demand | Remaining |
+|---|---:|---:|---:|
+| Normal | 600 ML/day | 500 ML/day | 100 ML/day |
+| Dry year | 565 ML/day | 500 ML/day | 65 ML/day |
+| High demand | 600 ML/day | 600 ML/day | 0 ML/day |
+| Plant outage | 0 ML/day | 500 ML/day | -500 ML/day |
 
-Effective capacity
+These checks are conservative **pre-solve screening checks only**.
 
-Demand
+A capacity warning does not prove MILP infeasibility, and passing the static check does not prove MILP feasibility. The validator does not create a solver status such as `OPTIMAL` or `INFEASIBLE`.
 
-Remaining
+## 9. Connectivity Check
 
-Normal
+The connectivity check in `scenario_validator.py` checks whether each positive mandatory-demand zone has an active path through the network:
 
-600 ML/day
-
-500 ML/day
-
-100 ML/day
-
-Dry year
-
-565 ML/day
-
-500 ML/day
-
-65 ML/day
-
-High demand
-
-600 ML/day
-
-600 ML/day
-
-0 ML/day
-
-Plant outage
-
-0 ML/day
-
-500 ML/day
-
--500 ML/day
-
-These are pre-solve screening checks only. Passing the static check does not prove MILP feasibility, and the validator never creates a solver status.
-
-9. Connectivity check
-
-For each positive mandatory-demand zone, the validator checks for an active path:
-
+```text
 enabled source
 → enabled source-to-plant link
 → enabled plant
 → enabled plant-to-zone link
 → demand zone
+```
 
-With facility_1 disabled, the existing plant-outage scenario has no active treatment path to zone_1, so the validator reports possible infeasibility before solving.
+When `facility_1` is disabled in the existing plant-outage scenario, there is no active treatment path to `zone_1`.
 
-10. No fake outputs
+The validator therefore reports a possible pre-solve feasibility risk without claiming a MILP solver result.
 
-The validator rejects result/output-only fields from scenario input, including:
+## 10. Protection Against Output-Only Fields
 
-objective
+Scenario inputs must not contain fields that belong to downstream MILP results.
 
-total_cost
+`scenario_validator.py` rejects output-only fields including:
 
-volume_drawn_ml_per_day
+- `objective`
+- `total_cost`
+- `volume_drawn_ml_per_day`
+- `volume_supplied_ml_per_day`
+- `percent_of_blend`
+- `binding_constraints_summary`
+- `water_quality`
+- `diagnostics`
+- `data_flags`
+- `alternatives`
+- `sensitivity_to_key_assumptions`
 
-volume_supplied_ml_per_day
+Task 20 does not generate selected volumes, blend shares, costs, binding constraints, water-quality results, or an `OPTIMAL`/`INFEASIBLE` solver result.
 
-percent_of_blend
+## 11. Tests
 
-binding_constraints_summary
+Tests are stored in:
 
-water_quality
+```text
+AI/scenarios/tests/test_scenario_validator.py
+```
 
-diagnostics
+The test suite uses `pytest` for consistency with the repository's other test work.
 
-data_flags
+From `AI/scenarios/`, run:
 
-alternatives
+```bash
+python -m pytest -v tests/test_scenario_validator.py
+```
 
-sensitivity_to_key_assumptions
+The current suite contains **24 tests** covering:
 
-Task 20 does not generate selected volumes, blend shares, costs, binding constraints, quality results, or an OPTIMAL/INFEASIBLE solver result.
+- valid normal, dry-year, high-demand, and plant-outage scenarios;
+- strict UTF-8 and malformed JSON handling;
+- non-object top-level JSON rejection;
+- required and unknown field validation;
+- incorrect data types;
+- duplicate source IDs;
+- unknown link references;
+- output-only field rejection;
+- scenario-specific approved-change rules;
+- capacity screening;
+- connectivity screening;
+- ID-based comparison and array-order independence;
+- current `minimum_processing_capacity_ml_per_day` support;
+- legacy `minimum_operating_flow_ml_per_day` compatibility warning; and
+- `minimum_withdrawal_ml_per_day` support.
 
-11. Tests
+The suite is implemented using `pytest` assertions, fixtures, and `pytest.raises()` rather than `unittest`.
 
-Run from AI/scenarios:
+## 12. Review Updates Addressed
 
-python -m unittest -v test_scenario_validator.py
+The following review points have been addressed:
 
-The updated suite covers the original Task 20 tests plus contract/review regression cases, including:
+1. **Test location**  
+   `test_scenario_validator.py` has been moved to `AI/scenarios/tests/`.
 
-valid normal, dry-year, high-demand and plant-outage scenarios;
+2. **Test framework**  
+   The test suite has been converted from `unittest` to `pytest`.
 
-UTF-8 and malformed JSON handling;
+3. **ID-based validation**  
+   Scenario comparisons use stable source, plant, and zone IDs instead of depending on array positions.
 
-required and unknown fields;
+4. **Plant-outage field**  
+   The existing outage scenario uses `network.plants[].enabled`. For `facility_1`, the scenario changes `enabled` from `true` to `false`.
 
-duplicate IDs and unknown link references;
+5. **Existing outage scenario**  
+   `scenario_plant_outage.json` already existed from Sprint 1 and is reused by Task 20.
 
-output-only field rejection;
+6. **Current plant minimum-capacity field**  
+   The validator accepts `minimum_processing_capacity_ml_per_day` while retaining compatibility with the documented legacy field used by the existing Sprint 1 scenarios.
 
-scenario-specific change rules;
+7. **Documentation formatting**  
+   File names, JSON fields, IDs, paths, and code references are formatted using Markdown code notation and are linked clearly to the relevant Task 20 implementation files.
 
-capacity and connectivity screening;
+## 13. Future Integration Note
 
-list-order independence through ID-based matching;
+The MILP team also has a `data_loader.py` implementation that may be useful for future alignment between the Analysis & AI and MILP streams.
 
-current minimum_processing_capacity_ml_per_day acceptance;
-
-legacy plant minimum-capacity compatibility warning;
-
-minimum_withdrawal_ml_per_day acceptance.
-
-12. Review points addressed
-
-Outage field: network.plants[].enabled is present in the current MILP input contract/specification. The existing Sprint 1 outage scenario sets facility_1.enabled to false.
-
-Existing outage JSON: scenario_plant_outage.json already landed in the Sprint 1 scenario work and is reused by Task 20, so it was not newly added in the original Task 20 diff.
-
-ID-based validation: approved scenario changes are now matched by stable source/plant/zone IDs rather than array positions.
-
-Current plant minimum-capacity field: the validator accepts minimum_processing_capacity_ml_per_day and the documented legacy fallback used by the upstream Sprint 1 scenarios.
+This is currently treated as a **non-blocking follow-up**, as noted in the review. No Task 20 implementation change is being made for `data_loader.py` until the expected integration or alignment is confirmed with the team.
