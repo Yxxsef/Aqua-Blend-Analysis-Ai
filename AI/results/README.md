@@ -2,86 +2,122 @@
 
 ## Overview
 
-This module provides validation, adaptation and confidence checking for AquaBlend Results JSON output.
+This module provides validation, adaptation, and confidence checking for AquaBlend Results JSON output.
 
-The purpose is to ensure that optimisation results received from the MILP layer are complete, consistent and safe to use by downstream systems.
+The purpose is to ensure that optimisation results received from the MILP layer are complete, consistent, and safe for downstream systems while preserving the external Results JSON contract.
 
-The implementation supports:
+The implementation provides:
+
 - Results JSON validation
 - Stable internal result adaptation
 - Confidence disclosure based on source provenance
-- Automated testing for valid, incomplete, malformed and provenance scenarios
+- Automated testing for valid, incomplete, malformed, and provenance scenarios
 
 ---
 
-## Components
+# Components
 
-### results_validator.py
+## results_validator.py
 
-The Results JSON validator checks that required fields exist and contain valid data.
+The Results JSON validator verifies that the external Results JSON conforms to the confirmed contract.
 
-Validated areas include:
+It validates:
+
+- Required top-level fields
+- Required data types
+- Valid optimisation status values
+- Sources structure
+- Constraints structure
+- Data flag structure
+- Source provenance structure
+
+The validator checks:
 
 - Scenario information
 - Solver status
-- Source allocations
-- Demand information
-- Cost information
+- Objective
+- Demand zones
+- Sources
+- Transfer paths
+- Plants
+- Water quality
 - Constraints
-- Quality stage
 - Diagnostics
+- Data flags
 
-The validator returns clear errors when:
-- Required fields are missing
-- Data types are incorrect
-- Results structure is malformed
+The validator:
 
-The validator does not modify the original Results JSON contract.
-
----
-
-### results_adapter.py
-
-The adapter provides a stable internal representation of Results JSON.
-
-The external MILP Results JSON field names remain unchanged.
-
-Any internal naming differences are handled only inside the adapter layer.
-
-This allows:
-- Safe integration between teams
-- Future MILP contract updates
-- Consistent internal processing
+- validates structure only;
+- does not modify optimisation results;
+- does not recalculate values;
+- does not introduce missing values.
 
 ---
 
-### confidence_flagger.py
+## results_adapter.py
 
-The confidence flagger determines whether optimisation results rely on estimated or confirmed data.
+The adapter converts the validated external Results JSON into the stable internal representation.
 
-Confidence levels:
+Responsibilities include:
 
-| Flag | Meaning |
-|---|---|
-| PROVISIONAL | Estimated source values were used |
-| MEASURED | All contributing sources have confirmed measured data |
-| UNKNOWN | Provenance information is missing |
+- Converting approved external field names to internal names
+- Preserving optimisation results
+- Preserving source structures
+- Preserving plant structures
+- Preserving transfer-path structures
+- Preserving water-quality structures
+- Preserving constraint structures
+- Preserving diagnostics
+- Preserving data flags
+- Safely passing optional fields
 
-If estimated values are detected, the affected source IDs are returned.
+The adapter does not:
+
+- modify optimisation decisions;
+- recalculate costs;
+- invent missing values;
+- modify the external Results JSON.
 
 ---
 
-## Confidence Behaviour
+## confidence_flagger.py
 
-### PROVISIONAL
+The confidence flagger evaluates source-data provenance using:
 
-Returned when any contributing source contains:
-
-```json
-"has_estimated_values": true
+```
+data_flags.sources
 ```
 
-Example:
+It does **not** read provenance from:
+
+```
+sources.selected
+sources.unused
+```
+
+The confidence flagger returns one of:
+
+| Confidence | Meaning |
+|------------|---------|
+| PROVISIONAL | One or more contributing sources contain estimated values |
+| MEASURED | All sources are confirmed measured |
+| UNKNOWN | Provenance is missing, incomplete, or invalid |
+
+---
+
+# Confidence Behaviour
+
+## PROVISIONAL
+
+Returned when at least one source contains:
+
+```json
+{
+    "has_estimated_values": true
+}
+```
+
+Example output:
 
 ```json
 {
@@ -92,21 +128,20 @@ Example:
 }
 ```
 
-The output identifies which sources relied on estimated values.
+Only actual source IDs are returned.
 
 ---
 
-### MEASURED
+## MEASURED
 
-Returned only when all contributing sources confirm that no estimated values were used.
+Returned only when every source:
+
+- has a valid source_id;
+- has has_estimated_values = false;
+- contains a valid provenance object;
+- contains all five required provenance fields.
 
 Example:
-
-```json
-"has_estimated_values": false
-```
-
-Example output:
 
 ```json
 {
@@ -117,29 +152,31 @@ Example output:
 
 ---
 
-### UNKNOWN
+## UNKNOWN
 
-Returned when provenance information is missing and the system cannot confirm whether values are measured or estimated.
+Returned when provenance cannot confirm measured data.
+
+Examples include:
+
+- missing provenance;
+- incomplete provenance;
+- empty source list;
+- invalid source_id;
+- non-boolean has_estimated_values;
+- invalid provenance structure.
 
 Example:
 
 ```json
 {
-    "source_id": "silvan_reservoir"
-}
-```
-
-Output:
-
-```json
-{
-    "confidence": "UNKNOWN"
+    "confidence": "UNKNOWN",
+    "estimated_sources": []
 }
 ```
 
 ---
 
-## Testing
+# Testing
 
 Tests are located in:
 
@@ -156,59 +193,80 @@ python -m pytest AI/results/tests/
 Current test result:
 
 ```
-28 passed
-```
+============================= test session starts =============================
 
-Test coverage includes:
+collected 28 items
+
+AI/results/tests/test_confidence_flagger.py .........      [ 32%]
+AI/results/tests/test_results_adapter.py .......           [ 57%]
+AI/results/tests/test_results_validator.py ............    [100%]
+
+============================== 28 passed ==============================
+```
 
 ### Validator Tests
 
 - Valid Results JSON
 - Missing required fields
+- Invalid status values
 - Invalid data types
-- Malformed input handling
+- Invalid sources structure
+- Invalid constraints structure
+- Invalid data_flags structure
+- Invalid source IDs
 
 ### Adapter Tests
 
-- Successful field adaptation
-- Missing field handling
-- Invalid input handling
+- Field mapping
+- Source preservation
+- Constraint preservation
+- Optional field handling
+- Missing required fields
+- Invalid input type
+- Data flag preservation
 
 ### Confidence Tests
 
-- PROVISIONAL results with estimated sources
-- MEASURED results with confirmed provenance
-- UNKNOWN results with missing provenance
+- PROVISIONAL with estimated sources
+- MEASURED with complete provenance
+- UNKNOWN with missing provenance
+- UNKNOWN with incomplete provenance
+- UNKNOWN with invalid booleans
+- UNKNOWN with missing source IDs
+- Empty source list
+- Mixed provenance scenarios
 
 ---
 
-## Task 21 Deliverables Completed
+# Task 21 Deliverables
 
 Implemented:
 
 - Results JSON validator
-- Stable internal adapter
-- Confidence flagging system
-- Validator tests
-- Adapter tests
-- Confidence flag tests
+- Stable Results JSON adapter
+- Confidence flagger
+- Validator test suite
+- Adapter test suite
+- Confidence test suite
 - Sample flagged output
-- Results JSON field mapping documentation
+- Results JSON Field Map documentation
 
 ---
 
-## Design Notes
+# Design Notes
 
-- External MILP Results JSON field names remain unchanged.
-- Internal naming changes are handled only inside the adapter.
-- Optional fields such as alternatives, sensitivity and explanations are handled safely.
-- Estimated data usage is disclosed through confidence flags.
-- Optimisation results remain the source of truth.
-- Confidence flags only describe data reliability and do not modify optimisation decisions.
+- The external MILP Results JSON remains the source of truth.
+- External field names remain unchanged.
+- Internal naming differences are handled only in `results_adapter.py`.
+- The validator performs structural validation only.
+- The adapter never changes optimisation results.
+- The confidence flagger evaluates provenance only.
+- Optional fields are safely preserved when present.
+- Missing optional fields never cause validation failure.
 
 ---
 
-## File Structure
+# File Structure
 
 ```
 AI/results/
@@ -228,12 +286,15 @@ AI/results/
 
 ---
 
-## Task 21 Status
+# Task 21 Status
 
-Implementation completed.
+Implementation completed successfully.
 
-All tests passing:
+- Results Validator implemented
+- Results Adapter implemented
+- Confidence Flagger implemented
+- Results JSON Field Map completed
+- Sample flagged output included
+- Automated test suite completed
 
-```
-28 passed
-```
+**All tests passing (28/28).**
