@@ -31,7 +31,7 @@ def estimated_provenance():
 
 
 def test_provisional_when_estimated_values_used():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "groundwater_bore_1",
             "has_estimated_values": True,
@@ -39,7 +39,16 @@ def test_provisional_when_estimated_values_used():
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "groundwater_bore_1",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "PROVISIONAL"
     assert result["estimated_sources"] == [
@@ -48,7 +57,7 @@ def test_provisional_when_estimated_values_used():
 
 
 def test_measured_when_all_sources_confirmed():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "silvan_reservoir",
             "has_estimated_values": False,
@@ -61,27 +70,48 @@ def test_measured_when_all_sources_confirmed():
         },
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        },
+        {
+            "source_id": "yarra_kew",
+        },
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "MEASURED"
     assert result["estimated_sources"] == []
 
 
 def test_unknown_when_provenance_missing():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "silvan_reservoir",
             "has_estimated_values": False,
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "UNKNOWN"
 
 
 def test_unknown_when_provenance_incomplete():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "silvan_reservoir",
             "has_estimated_values": False,
@@ -92,13 +122,22 @@ def test_unknown_when_provenance_incomplete():
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "UNKNOWN"
 
 
 def test_unknown_when_estimated_flag_is_not_boolean():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "silvan_reservoir",
             "has_estimated_values": "true",
@@ -106,13 +145,22 @@ def test_unknown_when_estimated_flag_is_not_boolean():
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "UNKNOWN"
 
 
 def test_unknown_when_estimated_flag_is_null():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "silvan_reservoir",
             "has_estimated_values": None,
@@ -120,34 +168,55 @@ def test_unknown_when_estimated_flag_is_null():
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "UNKNOWN"
 
 
 def test_unknown_when_source_id_missing():
-    sources = [
+    provenance_sources = [
         {
             "has_estimated_values": True,
             "provenance": estimated_provenance(),
         }
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "groundwater_bore_1",
+        }
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "UNKNOWN"
     assert result["estimated_sources"] == []
 
 
 def test_unknown_when_source_list_empty():
-    result = determine_confidence([])
+    result = determine_confidence(
+        [],
+        [],
+    )
 
     assert result["confidence"] == "UNKNOWN"
     assert result["estimated_sources"] == []
 
 
 def test_mixed_estimated_and_missing_provenance():
-    sources = [
+    provenance_sources = [
         {
             "source_id": "groundwater_bore_1",
             "has_estimated_values": True,
@@ -159,9 +228,66 @@ def test_mixed_estimated_and_missing_provenance():
         },
     ]
 
-    result = determine_confidence(sources)
+    selected_sources = [
+        {
+            "source_id": "groundwater_bore_1",
+        },
+        {
+            "source_id": "silvan_reservoir",
+        },
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
 
     assert result["confidence"] == "PROVISIONAL"
     assert result["estimated_sources"] == [
         "groundwater_bore_1"
     ]
+
+
+def test_unused_estimated_source_does_not_affect_confidence():
+    """
+    Regression test requested during review.
+
+    The selected sources are fully measured.
+    An unused source has estimated values.
+    Confidence must remain MEASURED.
+    """
+
+    provenance_sources = [
+        {
+            "source_id": "silvan_reservoir",
+            "has_estimated_values": False,
+            "provenance": complete_provenance(),
+        },
+        {
+            "source_id": "yarra_kew",
+            "has_estimated_values": False,
+            "provenance": complete_provenance(),
+        },
+        {
+            "source_id": "groundwater_bore_1",
+            "has_estimated_values": True,
+            "provenance": estimated_provenance(),
+        },
+    ]
+
+    selected_sources = [
+        {
+            "source_id": "silvan_reservoir",
+        },
+        {
+            "source_id": "yarra_kew",
+        },
+    ]
+
+    result = determine_confidence(
+        provenance_sources,
+        selected_sources,
+    )
+
+    assert result["confidence"] == "MEASURED"
+    assert result["estimated_sources"] == []

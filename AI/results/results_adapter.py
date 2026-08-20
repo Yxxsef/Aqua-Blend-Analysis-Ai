@@ -13,7 +13,6 @@ from typing import Any
 
 class AdapterError(Exception):
     """Raised when Results JSON cannot be adapted."""
-
     pass
 
 
@@ -46,13 +45,11 @@ def adapt_results(
     - raises AdapterError for missing required fields.
     """
 
-    # Ensure the input is a dictionary.
     if not isinstance(results, dict):
         raise AdapterError(
             "Results must be a dictionary."
         )
 
-    # Check all required fields before accessing them.
     missing_fields = [
         field
         for field in REQUIRED_FIELDS
@@ -65,8 +62,23 @@ def adapt_results(
             + ", ".join(missing_fields)
         )
 
-    # Convert the confirmed external field names
-    # into the stable internal representation.
+    data_flags = results["data_flags"]
+
+    if not isinstance(data_flags, dict):
+        raise AdapterError(
+            "'data_flags' must be a dictionary."
+        )
+
+    if "sources" not in data_flags:
+        raise AdapterError(
+            "'data_flags' must contain 'sources'."
+        )
+
+    if not isinstance(data_flags["sources"], list):
+        raise AdapterError(
+            "'data_flags.sources' must be a list."
+        )
+
     adapted = {
         "scenarioId": results["scenario_id"],
         "status": results["status"],
@@ -78,25 +90,12 @@ def adapt_results(
         "waterQuality": results["water_quality"],
         "constraints": results["constraints"],
         "diagnostics": results["diagnostics"],
+
+        # Preserve the complete provenance metadata exactly as
+        # supplied by the confirmed Results JSON contract.
+        "dataFlags": data_flags,
     }
 
-    # data_flags is required externally.
-    #
-    # Preserve the complete data_flags structure exactly as
-    # provided by the external Results JSON contract. An empty
-    # sources list does not imply that other metadata (for
-    # example notes or future fields) should be discarded.
-    data_flags = results["data_flags"]
-
-    if not isinstance(data_flags, dict):
-        raise AdapterError(
-            "data_flags must be a dictionary."
-        )
-
-    adapted["dataFlags"] = data_flags
-
-    # Optional fields are copied only when supplied.
-    # Missing optional fields are not invented.
     optional_fields = {
         "solved_at": "solvedAt",
         "binding_constraints_summary": (
