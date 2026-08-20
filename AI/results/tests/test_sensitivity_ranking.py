@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+import pytest
+
 from AI.results.sensitivity_ranking import (
     STATUS_INSUFFICIENT_DATA,
     STATUS_INVALID_INPUT,
@@ -7,6 +9,7 @@ from AI.results.sensitivity_ranking import (
 )
 
 
+@pytest.fixture
 def sample_results():
     return {
         "scenario_id": "scenario_2026_07_17_001",
@@ -64,8 +67,8 @@ def sample_results():
     }
 
 
-def test_valid_current_contract_returns_insufficient_data():
-    result = rank_sensitivities(sample_results())
+def test_valid_current_contract_returns_insufficient_data(sample_results):
+    result = rank_sensitivities(sample_results)
 
     assert result["status"] == STATUS_INSUFFICIENT_DATA
     assert result["ranking"] == []
@@ -76,58 +79,58 @@ def test_valid_current_contract_returns_insufficient_data():
     assert result["verified_entries"][1]["provenance_field"] == "max_available"
 
 
-def test_missing_sensitivity_returns_insufficient_data():
-    results = sample_results()
-    del results["sensitivity_to_key_assumptions"]
+def test_missing_sensitivity_returns_insufficient_data(sample_results):
+    del sample_results["sensitivity_to_key_assumptions"]
 
-    result = rank_sensitivities(results)
+    result = rank_sensitivities(sample_results)
 
     assert result["status"] == STATUS_INSUFFICIENT_DATA
     assert result["ranking"] == []
     assert result["verified_entries"] == []
 
 
-def test_empty_sensitivity_returns_insufficient_data():
-    results = sample_results()
-    results["sensitivity_to_key_assumptions"] = []
+def test_empty_sensitivity_returns_insufficient_data(sample_results):
+    sample_results["sensitivity_to_key_assumptions"] = []
 
-    result = rank_sensitivities(results)
+    result = rank_sensitivities(sample_results)
 
     assert result["status"] == STATUS_INSUFFICIENT_DATA
 
 
-def test_malformed_sensitivity_root_returns_invalid_input():
-    results = sample_results()
-    results["sensitivity_to_key_assumptions"] = {}
+@pytest.mark.parametrize(
+    "invalid_sensitivity",
+    [
+        {},
+        ["bad-entry"],
+    ],
+)
+def test_malformed_sensitivity_returns_invalid_input(
+    sample_results,
+    invalid_sensitivity,
+):
+    sample_results["sensitivity_to_key_assumptions"] = invalid_sensitivity
 
-    result = rank_sensitivities(results)
+    result = rank_sensitivities(sample_results)
 
     assert result["status"] == STATUS_INVALID_INPUT
     assert result["ranking"] == []
 
 
-def test_malformed_entry_returns_invalid_input():
-    results = sample_results()
-    results["sensitivity_to_key_assumptions"] = ["bad-entry"]
+def test_missing_impact_returns_invalid_input(sample_results):
+    del sample_results["sensitivity_to_key_assumptions"][0]["impact"]
 
-    result = rank_sensitivities(results)
-
-    assert result["status"] == STATUS_INVALID_INPUT
-
-
-def test_missing_impact_returns_invalid_input():
-    results = sample_results()
-    del results["sensitivity_to_key_assumptions"][0]["impact"]
-
-    result = rank_sensitivities(results)
+    result = rank_sensitivities(sample_results)
 
     assert result["status"] == STATUS_INVALID_INPUT
 
 
-def test_unverified_provenance_is_not_ranked():
-    results = deepcopy(sample_results())
+def test_unverified_provenance_is_not_ranked(sample_results):
+    results = deepcopy(sample_results)
+
     results["data_flags"]["sources"][0]["provenance"]["cost"] = "measured"
-    results["data_flags"]["sources"][1]["provenance"]["max_available"] = "measured"
+    results["data_flags"]["sources"][1]["provenance"][
+        "max_available"
+    ] = "measured"
 
     result = rank_sensitivities(results)
 
