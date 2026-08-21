@@ -1,0 +1,23 @@
+fixture_id,category,source_report,description,critical_result,failed_rules,warning_rules,runtime_ms,reviewer_1_style_score,reviewer_2_style_score
+F01,correct,Sample 1 (OPTIMAL),"Faithful, differently-worded rewrite of the full 12-section report",PASS,,,N/A - no live model run in this pass,pending,pending
+F02,correct,Sample 1 (OPTIMAL),Template fallback returned unchanged (no rewrite attempted),PASS,,,N/A - no live model run in this pass,pending,pending
+F03,correct,short report,Faithful rewrite of a short report missing optional sections,PASS,,,N/A - no live model run in this pass,pending,pending
+F04,correct,Sample 2 (INFEASIBLE),Faithful rewrite of a short status-only report,PASS,,,N/A - no live model run in this pass,pending,pending
+F05,incorrect_number,Sample 1 (OPTIMAL),Blend-share percentage changed (58.0 -> 60.0),FAIL,NUMBER_INVENTED;NUMBER_MISSING_OR_CHANGED,,N/A - no live model run in this pass,pending,pending
+F06,incorrect_number,Sample 1 (OPTIMAL),"A new, unsupported number added",FAIL,NUMBER_INVENTED,,N/A - no live model run in this pass,pending,pending
+F07,incorrect_number,Sample 1 (OPTIMAL),A safety-margin figure dropped entirely,FAIL,NUMBER_MISSING_OR_CHANGED,,N/A - no live model run in this pass,pending,pending
+F08,incorrect_unit,Sample 1 (OPTIMAL),Currency code dropped throughout,FAIL,UNIT_OR_CODE_MISSING,,N/A - no live model run in this pass,pending,pending
+F09,incorrect_identifier,Sample 1 (OPTIMAL),Source display name replaced with a generic description,FAIL,IDENTIFIER_MISSING,,N/A - no live model run in this pass,pending,pending
+F10,incorrect_identifier,Sample 1 (OPTIMAL),A provenance field name dropped,FAIL,IDENTIFIER_MISSING,,N/A - no live model run in this pass,pending,pending
+F11,incorrect_status,Sample 1 (OPTIMAL),Solver status silently flipped,FAIL,STATUS_INVENTED;STATUS_MISSING,,N/A - no live model run in this pass,pending,pending
+F12,incorrect_content,Sample 1 (OPTIMAL),Invented cost-ranking reason for source selection,FAIL,INVENTED_CONTENT,,N/A - no live model run in this pass,pending,pending
+F13,incorrect_content,Sample 1 (OPTIMAL),Invented operational recommendation,FAIL,INVENTED_CONTENT,,N/A - no live model run in this pass,pending,pending
+F14,borderline_content,Sample 1 (OPTIMAL),"Weak causal phrasing - flagged as a warning, not a failure",PASS,,WEAK_INVENTED_CONTENT_PHRASE,N/A - no live model run in this pass,pending,pending
+F15,incorrect_safety,Sample 1 (OPTIMAL),Unsafe safety claim added,FAIL,UNSAFE_SAFETY_CLAIM,,N/A - no live model run in this pass,pending,pending
+F16,incorrect_safety,Sample 1 (OPTIMAL),Unsupported compliance claim added,FAIL,UNSAFE_SAFETY_CLAIM,,N/A - no live model run in this pass,pending,pending
+F17,incorrect_disclaimer,Sample 1 (OPTIMAL),Prototype disclaimer dropped entirely,FAIL,DISCLAIMER_MISSING,,N/A - no live model run in this pass,pending,pending
+F18,incorrect_stage_note,Sample 1 (OPTIMAL),Plant-inflow stage note dropped throughout,FAIL,WATER_QUALITY_NOTE_MISSING,,N/A - no live model run in this pass,pending,pending
+F19,malformed,Sample 1 (OPTIMAL),Empty rewrite (e.g. a stripped API response),FAIL,EMPTY_OUTPUT,,N/A - no live model run in this pass,pending,pending
+F20,malformed,Sample 1 (OPTIMAL),Whitespace-only rewrite,FAIL,EMPTY_OUTPUT,,N/A - no live model run in this pass,pending,pending
+F21,multiple_failures,Sample 1 (OPTIMAL),"Status flip, dropped identifier, and unsafe claim together",FAIL,IDENTIFIER_MISSING;STATUS_INVENTED;STATUS_MISSING;UNSAFE_SAFETY_CLAIM,,N/A - no live model run in this pass,pending,pending
+F22,status_robustness,Sample 2 (INFEASIBLE),Status word dropped from a short status-only report,FAIL,STATUS_MISSING,,N/A - no live model run in this pass,pending,pending
