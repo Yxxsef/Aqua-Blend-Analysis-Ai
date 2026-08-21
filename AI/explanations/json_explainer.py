@@ -1,53 +1,103 @@
 """
 json_explainer.py
 
-AquaBlend | Analysis & AI | Sprint 1 | Task 9
-Build and test the fallback explanation generator.
+AquaBlend | Analysis & AI | Sprint 2 | Task 23
+Upgrade the deterministic fallback explanation generator.
 
-Reads a Results JSON matching the contract defined in the AquaBlend MILP
-Configuration document (Section 8) and produces a complete, operator-
-readable, plain-language explanation. Works entirely offline - no external
-LLM API call - per Task 9's own requirement.
+Reads the output of the Task 21 adapter (`AI/results/results_adapter.py`,
+now merged) and produces the complete deterministic report defined by the
+Task 22 reporting specification. Works entirely offline - no LLM call of
+any kind (that is Task 24's job, layered on top of this module's plain-text
+output).
 
-This file wires together three templates that were each designed and
-hand-validated separately, then adds the sections Task 9 needed that
-didn't exist yet:
+Governing documents (Task 22, `explanations/llm_reporting/docs/`):
 
-  Task 6  Template_SourceSelection.md      -> explain_sources()
-  Task 7  Template_BindingConstraints.md   -> explain_binding_constraints()
-  Task 8  Template_QualityMargins.md       -> explain_quality_and_margins()
-  Task 9  (new)                            -> explain_sensitivity()
-                                               explain_estimated_fields()
-                                               build_summary()
-                                               generate_explanation() [orchestrator]
+  LLM_Report_Scope.md          - what the deterministic template may and
+                                  may not do (never invents reasons,
+                                  calculations, recommendations or safety
+                                  claims; is the required fallback).
+  Report_Structure.md          - the fixed 12-section report order and the
+                                  allowed/forbidden wording and missing-
+                                  field behaviour for each section.
+  Results_JSON_Field_Map.md    - the exact JSON paths of the raw, external
+                                  Results JSON that `results_validator.py`
+                                  validates - see the Task 21 note below for
+                                  how this module's own input differs.
 
-explain_sensitivity() was added after Task 13's evaluation rubric
-(LLM_Evaluation_Rubric.md, Section 2, evidence table) listed
-`sensitivity_to_key_assumptions[]` as an area explanations are checked
-against - a JSON field none of Tasks 6/7/8/9 had covered until now.
+Note on Task 21 (`AI/results/`, now merged): `results_adapter.py` converts
+the raw external Results JSON into a stable internal shape by renaming a
+fixed set of TOP-LEVEL keys to camelCase (scenario_id -> scenarioId,
+demand_zones -> demandZones, transfer_paths -> transferPaths,
+water_quality -> waterQuality, data_flags -> dataFlags, solved_at ->
+solvedAt, binding_constraints_summary -> bindingConstraintsSummary,
+alternative_feasible_solutions -> alternativeFeasibleSolutions,
+sensitivity_to_key_assumptions -> sensitivityToKeyAssumptions); `status`,
+`objective`, `sources`, `plants`, `constraints`, `diagnostics` and
+`explanation` are passed through unchanged, and the adapter never renames
+anything nested inside those top-level values. This module's input `data`
+is assumed to already be that adapter's OUTPUT, produced upstream (by
+whatever calls this module) from `results_adapter.adapt_results()` - not
+the raw Results JSON `results_validator.py` validates. Field-name constants
+below use the adapted (camelCase top-level) names for that reason; nested
+field names still match Results_JSON_Field_Map.md exactly, since the
+adapter never touches them. This module does not call `adapt_results()`
+itself: that function hard-requires every top-level field (raising
+AdapterError otherwise), which is stricter than this module's own
+deliberately-tolerant "only `status`/`scenarioId` are required" contract
+(see "Required vs. optional input" below) - re-running that check here
+would turn every optional-field gap this module is meant to handle
+gracefully into a hard failure instead.
+
+Report sections (Report_Structure.md order) and the function building each:
+
+   1. Scenario & solver status         -> explain_scenario_and_status()
+   2. Result availability warning      -> explain_result_availability()
+   3. Demand-zone results              -> explain_demand_zones()
+   4. Selected sources & blend ratios  -> explain_selected_sources()
+   5. Unused sources                   -> explain_unused_sources()
+   6. Active plants & transfer results -> explain_active_plants_and_transfers()
+   7. Cost summary                     -> explain_cost_summary()
+   8. Plant-inflow water quality       -> explain_water_quality()
+   9. Binding constraints              -> explain_binding_constraints()
+  10. Data flags & estimated values    -> explain_estimated_fields()
+  11. Alternatives & sensitivity       -> explain_alternatives_and_sensitivity()
+  12. Prototype disclaimer             -> PROTOTYPE_DISCLAIMER (constant)
+
+Sections 3-11 only run for statuses in FULL_REPORT_STATUSES (currently only
+`OPTIMAL`, per Report_Structure.md section 2 and the field map's non-optimal
+handling rules - `TIME_LIMIT` feasible-solution handling is an open approval
+question in LLM_Report_Scope.md section 13, so it is treated as status-only
+for now, the same as INFEASIBLE/UNBOUNDED/ERROR). Sections 1, 2 and 12
+always run, including for a status-only report.
 
 Design note (field-name isolation)
 -----------------------------------
-The Sprint 1 Results JSON contract is still a draft (flagged explicitly in
-the Task 8 PR: "these field names aren't finalised"). Every JSON key this
-script depends on is named ONCE, in the constants near the top of this
-file, and read from there everywhere else. If a field gets renamed later,
-this is the only block that needs to change - the logic in each explain_*
-function does not.
+Every JSON key this script depends on is named ONCE, in the constants near
+the top of this file, and read from there everywhere else. If a field gets
+renamed later, this is the only block that needs to change - the logic in
+each explain_* function does not.
 
 Required vs. optional input
 ----------------------------
-Required (raises ExplainerInputError if missing): status, sources,
-water_quality.by_plant, binding_constraints_summary. Without these
-the script cannot produce a coherent explanation at all.
+Required (raises ExplainerInputError if missing): `status`, `scenarioId`.
+Without these the report cannot even state what it is describing, so
+generation stops per Report_Structure.md section 1's missing-field rule.
 
-Optional (missing values are handled gracefully, never crash the script):
-cost_per_ml on any source, data_flags.sources[].has_estimated_values,
-demand_zones, plants, per-constraint slack values.
+Everything else is optional. Missing or empty optional data never crashes
+the generator; each section states plainly when a result was not provided,
+per LLM_Report_Scope.md's "never invent a missing value" rule. A few gaps
+(missing `bindingConstraintsSummary` on an OPTIMAL run, missing
+`dataFlags`, missing `waterQuality.applies_to`) are not hard stops but do
+surface as an inline validation warning within the affected section, per
+Report_Structure.md's per-section missing-field rules.
 
-This required/optional split is a project decision made for Task 9 and
-should be confirmed with the wider team, the same way Task 6 flagged its
-own selected-source reason-derivation as "a design decision, not a guess."
+Removed in this upgrade: the old source-selection "reason clause" logic
+(cost ranking + capacity-binding heuristics that produced sentences like
+"because it is the cheapest available source..."). Task 6 had flagged this
+as "a design decision, not a guess" that needed team confirmation.
+LLM_Report_Scope.md section 4 has since settled that question: the
+deterministic template must not "create source-selection reasons." Selected
+and unused sources are now reported as plain copied facts only.
 """
 
 import json
@@ -58,22 +108,42 @@ import sys
 # Field-name constants (see "field-name isolation" note above)
 # ---------------------------------------------------------------------------
 
+# Top-level names match results_adapter.py's adapted output (camelCase),
+# not the raw external Results JSON Results_JSON_Field_Map.md documents -
+# see the Task 21 module note above. Names unchanged by the adapter
+# (status, objective, sources, plants) and every nested name are identical
+# to the raw external contract, since the adapter never renames those.
+F_SCENARIO_ID = "scenarioId"
+F_SOLVED_AT = "solvedAt"
 F_STATUS = "status"
 F_OBJECTIVE = "objective"
 F_CURRENCY = "currency"
+F_UNIT = "unit"
+F_COST_BREAKDOWN = "cost_breakdown"
 F_SOURCES = "sources"
 F_SELECTED = "selected"
 F_UNUSED = "unused"
-F_DEMAND_ZONES = "demand_zones"
+F_DEMAND_ZONES = "demandZones"
 F_PLANTS = "plants"
 F_ACTIVE = "active"
-F_WATER_QUALITY = "water_quality"
+F_TRANSFER_PATHS = "transferPaths"
+F_SOURCE_TO_PLANT = "source_to_plant"
+F_PLANT_TO_ZONE = "plant_to_zone"
+F_WATER_QUALITY = "waterQuality"
+F_APPLIES_TO = "applies_to"
 F_BY_PLANT = "by_plant"
-F_BINDING_SUMMARY = "binding_constraints_summary"
-F_SENSITIVITY = "sensitivity_to_key_assumptions"
-F_DATA_FLAGS = "data_flags"
+F_BINDING_SUMMARY = "bindingConstraintsSummary"
+F_ALTERNATIVES = "alternativeFeasibleSolutions"
+F_SENSITIVITY = "sensitivityToKeyAssumptions"
+F_DATA_FLAGS = "dataFlags"
 
-REQUIRED_TOP_LEVEL_FIELDS = [F_STATUS, F_SOURCES, F_WATER_QUALITY, F_BINDING_SUMMARY]
+# Report_Structure.md section 1: stop and return a validation-error report
+# (here, an ExplainerInputError) if either of these is missing.
+REQUIRED_TOP_LEVEL_FIELDS = [F_STATUS, F_SCENARIO_ID]
+
+# Report_Structure.md section 2 / Results_JSON_Field_Map.md "Non-optimal
+# runs": only OPTIMAL currently permits the full 12-section report.
+FULL_REPORT_STATUSES = {"OPTIMAL"}
 
 # Per Template_QualityMargins.md unit rules
 QUALITY_UNIT_RULES = {
@@ -83,10 +153,20 @@ QUALITY_UNIT_RULES = {
 }
 EXPECTED_QUALITY_PARAMETERS = list(QUALITY_UNIT_RULES.keys())
 
-ORDINAL_WORDS = {
-    1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth",
-    6: "sixth", 7: "seventh", 8: "eighth", 9: "ninth", 10: "tenth",
-}
+# Report_Structure.md, "Plant-inflow water-quality results" - mandatory
+# every time water_quality is reported.
+WATER_QUALITY_STAGE_NOTE = (
+    "These quality results describe the blend arriving at plant inflow. They "
+    "were checked against the modelled plant-inflow constraints and are not "
+    "final post-treatment drinking-water results."
+)
+
+# Report_Structure.md, "Prototype disclaimer" - always present, section 12.
+PROTOTYPE_DISCLAIMER = (
+    "AquaBlend is a public-data decision-support proof-of-concept. This "
+    "report does not replace qualified operators, engineers, regulators, or "
+    "health authorities."
+)
 
 
 class ExplainerInputError(ValueError):
@@ -94,12 +174,14 @@ class ExplainerInputError(ValueError):
 
 
 # ---------------------------------------------------------------------------
-# Validation & feasibility gate
+# Validation
 # ---------------------------------------------------------------------------
 
 def validate_input(data: dict) -> None:
     """Raise ExplainerInputError with a clear message if a required field
-    is missing. Called once, before any explain_* function runs."""
+    is missing. Called once, before any explain_* function runs. Per
+    Report_Structure.md section 1, `status` and `scenarioId` are the only
+    fields whose absence stops report generation outright."""
     if not isinstance(data, dict):
         raise ExplainerInputError("Input must be a JSON object (Python dict).")
 
@@ -107,40 +189,19 @@ def validate_input(data: dict) -> None:
     if missing:
         raise ExplainerInputError(
             f"Missing required field(s): {', '.join(missing)}. "
-            "Cannot generate an explanation without these."
-        )
-
-    if F_BY_PLANT not in data.get(F_WATER_QUALITY, {}):
-        raise ExplainerInputError(
-            f"Missing required field: {F_WATER_QUALITY}.{F_BY_PLANT}."
+            "Cannot generate a report without these."
         )
 
 
-def check_feasibility(data: dict):
-    """Global feasibility gate (extends Task 6's per-section gate to the
-    whole explanation, per Task 9 design discussion). Returns a message
-    string if the scenario is not OPTIMAL, else None."""
-    status = data.get(F_STATUS)
-    if status != "OPTIMAL":
-        return f"No blend could be recommended for this scenario ({status})."
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Task 6 - Source-selection explanation (Template_SourceSelection.md)
-# ---------------------------------------------------------------------------
-
-def _ordinal(n: int) -> str:
-    return ORDINAL_WORDS.get(n, f"{n}th")
-
-
-def _cost_ranking(all_sources: list) -> list:
-    """Rank every source with a numeric cost_per_ml, ascending. Sources
-    with no cost_per_ml are excluded from ranking (Section 7 of the
-    template)."""
-    costed = [s for s in all_sources if s.get("cost_per_ml") is not None]
-    costed_sorted = sorted(costed, key=lambda s: s["cost_per_ml"])
-    return [s["source_id"] for s in costed_sorted]
+def _format_money(value, currency) -> str:
+    """Format a numeric amount with a thousands separator and its currency,
+    when a currency is given. Never guesses a currency (Results_JSON_Field_Map.md
+    lists objective.currency as the only currency source in the contract),
+    and never forces a decimal precision the JSON didn't actually report -
+    `{:,.2f}` would round 235.456 to 235.46 and pad a plain 400 into 400.00,
+    both of which invent digits that aren't in the exact structured value."""
+    suffix = f" {currency}" if currency else ""
+    return f"${value:,}{suffix}"
 
 
 def _source_data_flags(data: dict) -> dict:
@@ -155,76 +216,192 @@ def _source_data_flags(data: dict) -> dict:
     return {e.get("source_id"): e for e in entries if e.get("source_id")}
 
 
-def explain_sources(data: dict) -> str:
-    sources = data.get(F_SOURCES, {}) or {}
-    selected = sources.get(F_SELECTED, []) or []
-    unused = sources.get(F_UNUSED, []) or []
-    binding = data.get(F_BINDING_SUMMARY, []) or []
-    source_flags = _source_data_flags(data)
-    # cost_per_ml has no currency field of its own anywhere in the contract -
-    # objective.currency is the only currency the JSON actually states, so it's
-    # applied here too rather than assuming AUD. Per rubric C7 ("cost uses AUD"),
-    # every dollar figure in the explanation must carry a currency, not just the
-    # summary total.
-    currency = (data.get(F_OBJECTIVE, {}) or {}).get(F_CURRENCY)
+def explain_scenario_and_status(data: dict) -> str:
+    """Report_Structure.md section 1. scenario_id and status are always
+    present here (validate_input already enforced that); solved_at is
+    included only when present."""
+    scenario_id = data.get(F_SCENARIO_ID)
+    status = data.get(F_STATUS)
+    lines = [f"Scenario: {scenario_id}.", f"Solver status: {status}."]
+    solved_at = data.get(F_SOLVED_AT)
+    if solved_at:
+        lines.append(f"Solved at: {solved_at}.")
+    return " ".join(lines)
 
-    # Section 7: zero selected sources (e.g. zero demand)
-    if not selected and not unused:
-        return "No sources were required for this scenario."
 
-    ranking = _cost_ranking(selected + unused)
+def explain_result_availability(data: dict) -> str:
+    """Report_Structure.md section 2. Only OPTIMAL is currently confirmed
+    usable for a full recommendation (see FULL_REPORT_STATUSES note)."""
+    status = data.get(F_STATUS)
+    if not status:
+        return "The result state is unknown because no solver status was reported."
+    if status == "OPTIMAL":
+        return (
+            "The solver produced a confirmed optimal solution under the "
+            "current model and input assumptions."
+        )
+    return (
+        f"Solver status is {status}. This result is not confirmed as usable "
+        "for a final recommendation."
+    )
+
+
+def explain_demand_zones(data: dict) -> str:
+    """Report_Structure.md section 3."""
+    zones = data.get(F_DEMAND_ZONES) or []
+    if not zones:
+        return "No demand-zone result was provided."
+
     lines = []
+    for zone in zones:
+        zone_id = zone.get("zone_id")
+        name = zone.get("zone_name") or zone_id
+        demand = zone.get("demand_ml_per_day")
+        supplied = zone.get("volume_supplied_ml_per_day")
+        demand_clause = f"required demand {demand} ML/day" if demand is not None else "required demand not reported"
+        supplied_clause = f"supplied volume {supplied} ML/day" if supplied is not None else "supplied volume not reported"
+        lines.append(f"{name}: {demand_clause}, {supplied_clause}.")
+    return "\n\n".join(lines)
 
+
+def explain_selected_sources(data: dict) -> str:
+    """Report_Structure.md section 4. Copies facts only - no reason clause
+    (LLM_Report_Scope.md section 4 forbids the template from "creating
+    source-selection reasons")."""
+    selected = (data.get(F_SOURCES) or {}).get(F_SELECTED) or []
     if not selected:
-        lines.append("No sources were required for this scenario.")
-    else:
-        ordered = sorted(selected, key=lambda s: s.get("percent_of_blend", 0), reverse=True)
-        for s in ordered:
-            source_id = s.get("source_id")
-            name = s.get("source_name", source_id)
-            pct = s.get("percent_of_blend")
-            vol = round(s.get("volume_drawn_ml_per_day", 0))
-            cost = s.get("cost_per_ml")
-            capacity_binding = f"source_capacity_{source_id}" in binding
+        return "No selected-source result was provided."
 
-            if cost is None:
-                # Section 7: missing cost_per_ml on a selected source
-                reason_clause = ("it was included in the optimal blend to help meet "
-                                  "demand at minimum total cost")
-                sentence = f"{name} supplied {pct}% of the blend ({vol} ML), because {reason_clause}."
-            else:
-                rank = ranking.index(source_id) + 1 if source_id in ranking else None
-                if rank == 1 and capacity_binding:
-                    reason_clause = ("it is the cheapest available source and was used "
-                                      "at its full available capacity")
-                elif capacity_binding:
-                    reason_clause = "it was used at its full available capacity for this scenario"
-                elif rank == 1:
-                    reason_clause = ("it is the cheapest available source for this scenario, "
-                                      "with capacity remaining")
-                elif rank is not None:
-                    reason_clause = (f"it supplemented the blend, at the {_ordinal(rank)} lowest "
-                                      "cost, to meet remaining demand after lower-cost sources "
-                                      "reached capacity")
-                else:
-                    reason_clause = ("it was included in the optimal blend to help meet demand "
-                                      "at minimum total cost")
+    currency = (data.get(F_OBJECTIVE) or {}).get(F_CURRENCY)
+    source_flags = _source_data_flags(data)
+    # Ordering by blend share is a presentation choice only, not a claim
+    # about why a source was chosen.
+    ordered = sorted(selected, key=lambda s: s.get("percent_of_blend", 0), reverse=True)
 
-                has_estimated = bool(source_flags.get(source_id, {}).get("has_estimated_values"))
-                estimated_tag = " (estimated)" if has_estimated else ""
-                currency_str = f" {currency}" if currency else ""
-                sentence = (f"{name} supplied {pct}% of the blend ({vol} ML) at "
-                            f"${cost:.2f}{currency_str}/ML{estimated_tag}, because {reason_clause}.")
-            lines.append(sentence)
+    lines = []
+    for s in ordered:
+        source_id = s.get("source_id")
+        name = s.get("source_name") or source_id
+        pct = s.get("percent_of_blend")
+        vol = s.get("volume_drawn_ml_per_day")
+        cost = s.get("cost_per_ml")
+        draw_cost = s.get("draw_cost")
 
+        pct_clause = f"{pct}% of the blend" if pct is not None else "an unreported share of the blend"
+        vol_clause = f"{vol} ML/day" if vol is not None else "an unreported volume"
+        parts = [f"{name} supplied {vol_clause}, {pct_clause}."]
+
+        if cost is not None:
+            has_estimated = bool(source_flags.get(source_id, {}).get("has_estimated_values"))
+            estimated_tag = " (estimated)" if has_estimated else ""
+            parts.append(f"Cost per ML: {_format_money(cost, currency)}{estimated_tag}.")
+        if draw_cost is not None:
+            parts.append(f"Draw cost: {_format_money(draw_cost, currency)}.")
+
+        lines.append(" ".join(parts))
+
+    return "\n\n".join(lines)
+
+
+def explain_unused_sources(data: dict) -> str:
+    """Report_Structure.md section 5. `sources.unused[].reason` ownership is
+    unconfirmed (LLM_Report_Scope.md section 10), so it is never rendered -
+    only that the source was not selected."""
+    unused = (data.get(F_SOURCES) or {}).get(F_UNUSED) or []
+    if not unused:
+        return "No unused-source result was provided."
+
+    lines = []
     for s in unused:
-        name = s.get("source_name", s.get("source_id"))
-        reason = s.get("reason")
-        if not reason:
-            # Section 7: missing reason on an unused source
-            lines.append(f"{name} was not selected (no reason provided in the solver output).")
-        else:
-            lines.append(f"{name} was not selected because {reason}.")
+        name = s.get("source_name") or s.get("source_id")
+        lines.append(f"{name} was not selected.")
+    return "\n\n".join(lines)
+
+
+def explain_active_plants_and_transfers(data: dict) -> str:
+    """Report_Structure.md section 6."""
+    plants = (data.get(F_PLANTS) or {}).get(F_ACTIVE) or []
+    currency = (data.get(F_OBJECTIVE) or {}).get(F_CURRENCY)
+
+    if not plants:
+        plant_lines = ["No active-plant result was provided."]
+    else:
+        plant_lines = []
+        for p in plants:
+            name = p.get("plant_name") or p.get("plant_id")
+            vol = p.get("volume_processed_ml_per_day")
+            vol_clause = f"{vol} ML/day" if vol is not None else "an unreported volume"
+            parts = [f"{name} processed {vol_clause}."]
+            cost_per_ml = p.get("treatment_cost_per_ml")
+            treatment_cost = p.get("treatment_cost")
+            if cost_per_ml is not None:
+                parts.append(f"Treatment cost per ML: {_format_money(cost_per_ml, currency)}.")
+            if treatment_cost is not None:
+                parts.append(f"Total treatment cost: {_format_money(treatment_cost, currency)}.")
+            plant_lines.append(" ".join(parts))
+
+    # Transfer detail is a subpart of this section - omitted entirely (not
+    # even a fallback line) when transfer_paths is missing, per
+    # Report_Structure.md's missing-field rule for this section.
+    transfer_paths = data.get(F_TRANSFER_PATHS)
+    transfer_lines = []
+    if transfer_paths:
+        selected = {s.get("source_id"): s for s in (data.get(F_SOURCES) or {}).get(F_SELECTED) or []}
+        unused = {s.get("source_id"): s for s in (data.get(F_SOURCES) or {}).get(F_UNUSED) or []}
+        plant_index = {p.get("plant_id"): p for p in plants}
+        zone_index = {z.get("zone_id"): z for z in data.get(F_DEMAND_ZONES) or []}
+
+        for path in transfer_paths.get(F_SOURCE_TO_PLANT) or []:
+            s = selected.get(path.get("source_id")) or unused.get(path.get("source_id"))
+            from_name = (s.get("source_name") if s else None) or path.get("source_id")
+            p = plant_index.get(path.get("plant_id"))
+            to_name = (p.get("plant_name") if p else None) or path.get("plant_id")
+            flow = path.get("flow_ml_per_day")
+            active = path.get("active")
+            transfer_lines.append(f"{from_name} to {to_name}: {flow} ML/day ({'active' if active else 'inactive'}).")
+
+        for path in transfer_paths.get(F_PLANT_TO_ZONE) or []:
+            p = plant_index.get(path.get("plant_id"))
+            from_name = (p.get("plant_name") if p else None) or path.get("plant_id")
+            z = zone_index.get(path.get("zone_id"))
+            to_name = (z.get("zone_name") if z else None) or path.get("zone_id")
+            flow = path.get("flow_ml_per_day")
+            active = path.get("active")
+            transfer_lines.append(f"{from_name} to {to_name}: {flow} ML/day ({'active' if active else 'inactive'}).")
+
+    lines = list(plant_lines)
+    if transfer_lines:
+        lines.append("Transfer results:\n\n" + "\n\n".join(transfer_lines))
+    return "\n\n".join(lines)
+
+
+def explain_cost_summary(data: dict) -> str:
+    """Report_Structure.md section 7. Only called for statuses in
+    FULL_REPORT_STATUSES; never recalculates a total, only copies the
+    objective block."""
+    objective = data.get(F_OBJECTIVE)
+    if not objective or objective.get("total_cost") is None:
+        return "Cost summary is unavailable."
+
+    currency = objective.get(F_CURRENCY)
+    unit = objective.get(F_UNIT)
+    total_clause = _format_money(objective["total_cost"], currency)
+    lines = [f"Total cost: {total_clause}" + (f" ({unit})." if unit else ".")]
+
+    breakdown = objective.get(F_COST_BREAKDOWN) or {}
+    breakdown_labels = [
+        ("source_activation_cost", "Source activation cost"),
+        ("plant_activation_cost", "Plant activation cost"),
+        ("source_draw_cost", "Source draw cost"),
+        ("plant_treatment_cost", "Plant treatment cost"),
+    ]
+    breakdown_parts = [
+        f"{label}: {_format_money(breakdown[key], currency)}."
+        for key, label in breakdown_labels
+        if breakdown.get(key) is not None
+    ]
+    if breakdown_parts:
+        lines.append("Cost breakdown: " + " ".join(breakdown_parts))
 
     return "\n\n".join(lines)
 
@@ -254,12 +431,6 @@ def explain_sources(data: dict) -> str:
 CATEGORY_ORDER = [
     "demand", "source_capacity", "plant_capacity", "link_capacity", "water_quality",
 ]
-
-
-def _round_ml(value):
-    """Whole ML per the template's rounding rule. None stays None -
-    Missing-field handling decides what to do with an absent figure."""
-    return round(value) if value is not None else None
 
 
 def _classify_constraint(name: str) -> str:
@@ -310,7 +481,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         zone = demand_zones.get(zone_id)
         if not zone:
             return unknown_wording
-        vol = _round_ml(zone.get("demand_ml_per_day"))
+        vol = zone.get("demand_ml_per_day")
         if vol is None:
             return (
                 f"The solution was limited by the water demand for {zone_id}: the full "
@@ -329,7 +500,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         if not s:
             return unknown_wording
         source_name = s.get("source_name") or source_id
-        vol = _round_ml(s.get("volume_drawn_ml_per_day"))
+        vol = s.get("volume_drawn_ml_per_day")
         binding_label = f"the available capacity of {source_name}"
         if vol is None:
             return (
@@ -351,7 +522,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         if not p:
             return unknown_wording
         plant_name = p.get("plant_name") or plant_id
-        vol = _round_ml(p.get("volume_processed_ml_per_day"))
+        vol = p.get("volume_processed_ml_per_day")
         binding_label = f"the processing capacity of {plant_name}"
         if vol is None:
             return (
@@ -376,7 +547,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         if not entry:
             return unknown_wording
         layer, path = entry
-        vol = _round_ml(path.get("flow_ml_per_day"))
+        vol = path.get("flow_ml_per_day")
         if layer == "source_to_plant":
             source_id = path.get("source_id")
             plant_id = path.get("plant_id")
@@ -416,22 +587,34 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         if cmin is None or cmax is None or unit is None:
             return (
                 f"The solution was limited by {binding_label}: {parameter} sat right "
-                "at the edge of its safe range, so the blend could not be pushed any "
-                "further."
+                "at the edge of its modelled constraint range, so the blend could not "
+                "be pushed any further."
             )
         return (
             f"The solution was limited by {binding_label}: {parameter} sat right at "
-            f"the edge of its safe range ({cmin}\u2013{cmax} {unit}), so the "
-            "blend could not be pushed any further."
+            f"the edge of its modelled constraint range ({cmin}\u2013{cmax} {unit}), "
+            "so the blend could not be pushed any further."
         )
 
     return unknown_wording  # true Unknown (name matches no pattern at all)
 
 
 def explain_binding_constraints(data: dict) -> str:
-    binding = data.get(F_BINDING_SUMMARY, []) or []
+    """Report_Structure.md section 9. Only called for statuses in
+    FULL_REPORT_STATUSES, so a missing binding_constraints_summary here
+    always means missing-from-an-OPTIMAL-result, per the field's own
+    missing-field rule."""
+    missing_field = F_BINDING_SUMMARY not in data
+    binding = data.get(F_BINDING_SUMMARY) or []
+
     if not binding:
-        return "No constraint was binding; the solution stayed within every limit."
+        body = "No binding inequality or ranged constraint was reported for this scenario."
+        if missing_field:
+            return (
+                "Validation warning: bindingConstraintsSummary is missing from an "
+                "OPTIMAL result.\n\n" + body
+            )
+        return body
 
     sources = data.get(F_SOURCES, {}) or {}
     selected = {s["source_id"]: s for s in sources.get(F_SELECTED, []) or []}
@@ -441,14 +624,14 @@ def explain_binding_constraints(data: dict) -> str:
         p["plant_id"]: p
         for p in data.get(F_PLANTS, {}).get(F_ACTIVE, []) or []
     }
-    transfer_paths = data.get("transfer_paths", {}) or {}
+    transfer_paths = data.get(F_TRANSFER_PATHS, {}) or {}
     links = {}
-    for path in transfer_paths.get("source_to_plant", []) or []:
+    for path in transfer_paths.get(F_SOURCE_TO_PLANT, []) or []:
         if path.get("path_id"):
-            links[path["path_id"]] = ("source_to_plant", path)
-    for path in transfer_paths.get("plant_to_zone", []) or []:
+            links[path["path_id"]] = (F_SOURCE_TO_PLANT, path)
+    for path in transfer_paths.get(F_PLANT_TO_ZONE, []) or []:
         if path.get("path_id"):
-            links[path["path_id"]] = ("plant_to_zone", path)
+            links[path["path_id"]] = (F_PLANT_TO_ZONE, path)
     quality_by_plant = data.get(F_WATER_QUALITY, {}).get(F_BY_PLANT, {}) or {}
     source_flags = _source_data_flags(data)
 
@@ -478,14 +661,27 @@ def explain_binding_constraints(data: dict) -> str:
 # Task 8 - Water-quality & safety-margin explanation (Template_QualityMargins.md)
 # ---------------------------------------------------------------------------
 
-def explain_quality_and_margins(data: dict) -> str:
-    by_plant = data.get(F_WATER_QUALITY, {}).get(F_BY_PLANT, {}) or {}
+def explain_water_quality(data: dict) -> str:
+    """Report_Structure.md section 8. Every render path that reports actual
+    parameter values ends with WATER_QUALITY_STAGE_NOTE - the mandatory
+    plant-inflow-not-final-drinking-water disclosure."""
+    wq = data.get(F_WATER_QUALITY) or {}
+    by_plant = wq.get(F_BY_PLANT) or {}
 
     if not by_plant:
-        return "No plant-inflow blend quality was reported for this scenario."
+        return "No water-quality result was provided."
 
-    lines = []
-    for plant_id, after in by_plant.items():
+    applies_to = wq.get(F_APPLIES_TO)
+    if not applies_to:
+        return (
+            "Validation warning: waterQuality.applies_to is missing, so these "
+            "quality results cannot be safely interpreted and are not reported."
+        )
+
+    lines = [f"These quality results apply to: {applies_to}."]
+    # Sorted, not insertion-order: report order must never depend on
+    # whatever order an upstream producer happened to serialise plants in.
+    for plant_id, after in sorted(by_plant.items()):
         after = after or {}
 
         # Missing parameters - never assume a pass
@@ -524,9 +720,8 @@ def explain_quality_and_margins(data: dict) -> str:
                     f"Not all plant-inflow blend quality parameters passed at {plant_id}. "
                     f"{param} breached its allowed range: {q.get('value')} {q.get('unit')} "
                     f"against a permitted {q.get('constraint_min')}-{q.get('constraint_max')} "
-                    f"{q.get('unit')} (safety margin {q.get('safety_margin_percent')}%). This "
-                    "is treated as a violation and must be resolved before the blend is "
-                    "acceptable."
+                    f"{q.get('unit')} (safety margin {q.get('safety_margin_percent')}%). This is "
+                    "recorded as a FAIL against the modelled plant-inflow constraint range."
                 )
         elif passing:
             tightest = min(passing, key=lambda pq: pq[1].get("safety_margin_percent", float("inf")))
@@ -541,6 +736,7 @@ def explain_quality_and_margins(data: dict) -> str:
                 w_name, w_q = widest
                 lines.append(f"The widest margin at {plant_id} was on {w_name} at {w_q.get('safety_margin_percent')}%.")
 
+    lines.append(WATER_QUALITY_STAGE_NOTE)
     return "\n\n".join(lines)
 
 
@@ -571,20 +767,25 @@ def explain_sensitivity(data: dict) -> str:
     return "\n\n".join(lines)
 
 
-def explain_estimated_fields(data: dict) -> str:
-    """Standalone aggregate list of every source with estimated values,
-    plus any free-text notes. Rebuilt against the confirmed output
-    contract (Section 3.11): data_flags is now data_flags.sources[]
-    (per-source has_estimated_values + provenance) and data_flags.notes[],
-    not a flat estimated_fields[] string list."""
-    flags = data.get(F_DATA_FLAGS, {}) or {}
-    source_entries = flags.get(F_SOURCES, []) or []
-    notes = flags.get("notes", []) or []
+def explain_estimated_fields(data: dict):
+    """Report_Structure.md section 10. Returns None when the section must be
+    omitted entirely (data_flags present but carries nothing to disclose);
+    returns a validation-warning string when data_flags is missing entirely,
+    since estimate/provenance disclosures then cannot be checked at all."""
+    if F_DATA_FLAGS not in data or data.get(F_DATA_FLAGS) is None:
+        return (
+            "Validation warning: dataFlags is missing, so estimated-value "
+            "and provenance disclosures could not be checked."
+        )
+
+    flags = data.get(F_DATA_FLAGS) or {}
+    source_entries = flags.get(F_SOURCES) or []
+    notes = flags.get("notes") or []
 
     estimated_sources = [e for e in source_entries if e.get("has_estimated_values")]
 
     if not estimated_sources and not notes:
-        return "No fields in this result were flagged as estimated."
+        return None
 
     lines = []
     if estimated_sources:
@@ -609,32 +810,46 @@ def explain_estimated_fields(data: dict) -> str:
     return "\n\n".join(lines)
 
 
-def build_summary(data: dict) -> str:
-    status = data.get(F_STATUS)
-    objective = data.get(F_OBJECTIVE, {}) or {}
-    total_cost = objective.get("total_cost")
-    currency = objective.get(F_CURRENCY, "")
-    sources = data.get(F_SOURCES, {}) or {}
-    n_selected = len(sources.get(F_SELECTED, []) or [])
-    n_unused = len(sources.get(F_UNUSED, []) or [])
-    by_plant = data.get(F_WATER_QUALITY, {}).get(F_BY_PLANT, {}) or {}
+def explain_alternatives_and_sensitivity(data: dict):
+    """Report_Structure.md section 11. Returns None when both arrays are
+    missing or empty, since this subsection must be omitted entirely (unlike
+    most other sections, which show a "not provided" fallback line)."""
+    alternatives = data.get(F_ALTERNATIVES) or []
+    sensitivity_items = [
+        item for item in (data.get(F_SENSITIVITY) or [])
+        if item.get("assumption") and item.get("impact")
+    ]
 
-    overall_quality = "PASS"
-    for plant_quality in by_plant.values():
-        for q in (plant_quality or {}).values():
-            margin = q.get("safety_margin_percent")
-            if q.get("status") == "FAIL" or (margin is not None and margin < 0):
-                overall_quality = "FAIL"
-                break
-        if overall_quality == "FAIL":
-            break
+    if not alternatives and not sensitivity_items:
+        return None
 
-    cost_clause = f"${total_cost:,.2f} {currency}".strip() if total_cost is not None else "not reported"
-    return (
-        f"This scenario is {status}. Total cost: {cost_clause}. "
-        f"{n_selected} source(s) selected, {n_unused} unused. "
-        f"Plant-inflow blend quality: {overall_quality}."
-    )
+    lines = []
+    if alternatives:
+        alt_lines = []
+        for alt in alternatives:
+            description = alt.get("description")
+            if not description:
+                continue
+            parts = [f"{description}."]
+            total_cost = alt.get("total_cost")
+            diff = alt.get("cost_difference_from_optimal")
+            notes = alt.get("notes")
+            if total_cost is not None:
+                parts.append(f"Total cost: {total_cost}.")
+            if diff is not None:
+                parts.append(f"Cost difference from optimal: {diff}.")
+            if notes:
+                parts.append(f"{notes}.")
+            alt_lines.append(" ".join(parts))
+        if alt_lines:
+            lines.append("Alternative feasible solutions:\n\n" + "\n\n".join(alt_lines))
+
+    if sensitivity_items:
+        lines.append(explain_sensitivity(data))
+
+    if not lines:
+        return None
+    return "\n\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -642,29 +857,41 @@ def build_summary(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def generate_explanation(data: dict) -> str:
-    """Build the complete operator-readable explanation. Accepts a Python
-    dict already parsed from JSON. See generate_explanation_from_file for
-    reading directly from a file."""
+    """Build the complete deterministic report, per Report_Structure.md's
+    fixed 12-section order. Accepts a Python dict already parsed from JSON.
+    See generate_explanation_from_file for reading directly from a file."""
     validate_input(data)
-
-    infeasible_message = check_feasibility(data)
-    if infeasible_message:
-        return infeasible_message
+    status = data.get(F_STATUS)
 
     sections = [
-        ("Selected & Unused Sources", explain_sources(data)),
-        ("Binding Constraints", explain_binding_constraints(data)),
-        ("Water Quality & Safety Margins", explain_quality_and_margins(data)),
-        ("Sensitivity to Key Assumptions", explain_sensitivity(data)),
-        ("Estimated Fields / Data Limitations", explain_estimated_fields(data)),
-        ("Summary", build_summary(data)),
+        ("Scenario & Solver Status", explain_scenario_and_status(data)),
+        ("Result Availability", explain_result_availability(data)),
     ]
+
+    if status in FULL_REPORT_STATUSES:
+        sections.append(("Demand-Zone Results", explain_demand_zones(data)))
+        sections.append(("Selected Sources & Blend Ratios", explain_selected_sources(data)))
+        sections.append(("Unused Sources", explain_unused_sources(data)))
+        sections.append(("Active Plants & Transfer Results", explain_active_plants_and_transfers(data)))
+        sections.append(("Cost Summary", explain_cost_summary(data)))
+        sections.append(("Plant-Inflow Water Quality", explain_water_quality(data)))
+        sections.append(("Binding Constraints", explain_binding_constraints(data)))
+
+        estimated_body = explain_estimated_fields(data)
+        if estimated_body is not None:
+            sections.append(("Data Flags & Estimated Values", estimated_body))
+
+        alternatives_body = explain_alternatives_and_sensitivity(data)
+        if alternatives_body is not None:
+            sections.append(("Alternatives & Sensitivity", alternatives_body))
+
+    sections.append(("Prototype Disclaimer", PROTOTYPE_DISCLAIMER))
 
     return "\n\n".join(f"## {title}\n\n{body}" for title, body in sections if body)
 
 
 def generate_explanation_from_file(path: str) -> str:
-    """Script accepts a JSON file per Task 9's checklist."""
+    """Script accepts a JSON file per Task 9's original checklist."""
     with open(path, "r") as f:
         data = json.load(f)
     return generate_explanation(data)
@@ -679,3 +906,4 @@ if __name__ == "__main__":
     except ExplainerInputError as e:
         print(f"Input error: {e}")
         sys.exit(1)
+
