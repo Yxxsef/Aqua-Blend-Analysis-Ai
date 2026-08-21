@@ -196,6 +196,44 @@ def test_transductive_technique_still_exposes_its_own_embedding(X):
     assert TSNE(n_components=2).fit(X).embedding_.shape == (X.shape[0], 2)
 
 
+# --- Refitting -------------------------------------------------------------
+
+
+def test_refitting_recomputes_the_derived_cluster_count(X):
+    """A derived attribute must not survive into the fit after it.
+
+    `_derive_missing` fills in only what the backend did not report, so
+    without the reset in `BaseComponent.fit` the first fit's value is still
+    present on the second, is therefore left alone, and gets reported
+    against a partition it does not describe.
+    """
+    model = KMeans(n_clusters=3).fit(X)
+    assert model.n_clusters_ == 3
+
+    model.set_params(n_clusters=2).fit(X)
+    assert model.n_clusters_ == 2
+    assert model.n_clusters_ == len(np.unique(model.labels_))
+
+
+def test_refitting_recomputes_the_derived_noise_count(X):
+    model = DBSCAN(radius=0.5).fit(X)
+    first = model.n_noise_
+    assert first > 0
+
+    model.set_params(radius=1.0).fit(X)
+    assert model.n_noise_ == int(np.sum(model.labels_ == -1))
+    assert model.n_noise_ != first
+
+
+def test_refitting_recomputes_the_derived_component_count(X):
+    model = PCA(n_components=3).fit(X)
+    assert model.n_components_ == 3
+
+    model.set_params(n_components=2).fit(X)
+    assert model.n_components_ == 2
+    assert model.n_components_ == model.embedding_.shape[1]
+
+
 # --- Contract --------------------------------------------------------------
 
 

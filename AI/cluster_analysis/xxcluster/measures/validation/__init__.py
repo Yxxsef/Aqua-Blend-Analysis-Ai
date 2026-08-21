@@ -23,3 +23,7 @@ confident about.
 """
 
 from __future__ import annotations
+
+# Imported for its registration side effect; see the note in
+# `cluster/partitional/sse_based/__init__.py`.
+from . import internal  # noqa: F401

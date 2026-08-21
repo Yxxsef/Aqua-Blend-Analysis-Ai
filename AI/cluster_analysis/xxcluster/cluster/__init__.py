@@ -20,3 +20,7 @@ reason recorded in its docstring, rather than in a new top-level family.
 """
 
 from __future__ import annotations
+
+# Families with registered methods, imported so that their `@register`
+# lines run; see the note in `partitional/sse_based/__init__.py`.
+from . import partitional  # noqa: F401

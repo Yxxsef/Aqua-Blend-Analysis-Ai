@@ -93,6 +93,7 @@ class _Noisy(NoiseAwareMixin, BaseClusterer):
     def _fit(self, X, y=None, **fit_params):
         self.labels_ = np.array([-1] + [0] * (len(X) - 1))
         self.n_clusters_ = 1
+        self.n_noise_ = 1
 
 
 class _Broken(BaseClusterer):

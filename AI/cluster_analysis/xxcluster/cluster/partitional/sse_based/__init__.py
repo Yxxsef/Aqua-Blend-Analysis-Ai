@@ -14,3 +14,11 @@ rather than an implementation detail.
 """
 
 from __future__ import annotations
+
+# Imported for its registration side effect. `@register` runs when the
+# module is imported, so a name is resolvable only once that has happened.
+# Doing it here is what lets `REGISTRY.get("kmeans")` work from a bare
+# `import xxcluster`, and what lets a sweep over this subfamily see every
+# method in it rather than only those the caller happened to import.
+# One line per method module; nothing else changes when one is added.
+from . import kmeans  # noqa: F401

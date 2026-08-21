@@ -21,3 +21,7 @@ needed to reserve them.
 """
 
 from __future__ import annotations
+
+# Subfamilies with registered methods, imported so that their `@register`
+# lines run; see the note in `sse_based/__init__.py`.
+from . import sse_based  # noqa: F401

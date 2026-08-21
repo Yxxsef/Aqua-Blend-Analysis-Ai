@@ -80,6 +80,15 @@ from .core import (
     register,
 )
 
+# Imported last, and for their registration side effect rather than for a
+# name: `@register` runs at module import, so the registry is empty until
+# the modules declaring components have been imported. Importing them here
+# is what makes `REGISTRY.get("kmeans")` work from a bare `import
+# xxcluster`, as ARCHITECTURE.md describes, and what makes a sweep over a
+# family cover every method in it rather than only those already imported.
+# After `.core`, since both subpackages build on the contract it defines.
+from . import cluster, measures  # noqa: F401,E402
+
 __version__ = "0.1.0"
 
 __all__ = [

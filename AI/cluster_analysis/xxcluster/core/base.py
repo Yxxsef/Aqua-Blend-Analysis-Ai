@@ -119,6 +119,7 @@ class BaseComponent(BaseEstimator, ABC):
         self._validate_params()
         self._check_capabilities()
         X = self._validate_input(X, reset=True)
+        self._reset_fitted()
         self._fit(X, y, **fit_params)
         self._check_fitted()
         return self
@@ -222,6 +223,24 @@ class BaseComponent(BaseEstimator, ABC):
             dtype="numeric",
             **finite_policy(self._capabilities.handles_missing),
         )
+
+    def _reset_fitted(self) -> None:
+        """Drop fitted state from a previous fit, before this one runs.
+
+        scikit-learn's contract is that fitting twice is equivalent to
+        fitting once on the second dataset. Without this, an attribute that
+        is derived only when absent survives the next fit and is reported
+        against data it was not computed from: refitting an adapted
+        K-Means with a smaller `n_clusters` left `n_clusters_` at the
+        previous value while `labels_` already showed the new partition.
+
+        Instance state only, so a class-level default a subclass declares
+        is left alone. `n_features_in_` is not declared in
+        `_required_fitted`, so the validation state `_validate_input`
+        establishes just above this call survives it.
+        """
+        for name in self._required_fitted_attributes():
+            self.__dict__.pop(name, None)
 
     def _check_fitted(self) -> None:
         """Verify `_fit` set everything this class declared.

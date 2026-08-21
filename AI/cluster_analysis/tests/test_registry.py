@@ -8,8 +8,14 @@ things is refused rather than silently rebound.
 
 from __future__ import annotations
 
+import os
+import pathlib
+import subprocess
+import sys
+
 import pytest
 
+import xxcluster
 from xxcluster.core.exceptions import RegistryError
 from xxcluster.core.registry import ComponentRegistry
 from xxcluster.core.tags import Capabilities
@@ -256,3 +262,41 @@ def test_register_takes_the_kind_from_the_base():
             pass
 
     assert registry.names(kind=ComponentKind.CLUSTERER) == ["some_method"]
+
+
+# --- Population from a bare import -----------------------------------------
+
+
+def test_importing_the_package_registers_every_shipped_component():
+    """`import xxcluster` must be enough to resolve a registered name.
+
+    Run in a fresh interpreter on purpose. Within this suite other modules
+    have already imported the method modules, so the registry is populated
+    however the package is written and the test would pass either way.
+
+    The guarantee matters beyond convenience: a sweep asks the registry for
+    every method of a family, so a registry populated only by whatever the
+    caller happened to import silently covers less than the comparison of
+    Sect. 8 claims to.
+    """
+    program = (
+        "import xxcluster;"
+        "from xxcluster.core.registry import REGISTRY;"
+        "print(REGISTRY.get('kmeans').__name__, REGISTRY.get('silhouette').__name__)"
+    )
+    # The subprocess inherits neither `conftest.py`'s path setup nor this
+    # process's `sys.path`, and must not depend on the directory pytest was
+    # invoked from. Point it at the package's own parent instead.
+    root = pathlib.Path(xxcluster.__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        part for part in (str(root), env.get("PYTHONPATH")) if part
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", program],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.split() == ["KMeans", "Silhouette"]

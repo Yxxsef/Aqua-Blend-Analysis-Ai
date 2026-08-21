@@ -146,6 +146,13 @@ class NoiseAwareMixin:
     #: `core.types`, shared with the validation helpers.
     NOISE_LABEL: int = NOISE_LABEL
 
+    #: Declared, not merely annotated. The docstring above promises
+    #: `n_noise_`, so `_check_fitted` should hold a class to it, and
+    #: `_reset_fitted` should clear it between fits -- an undeclared
+    #: attribute is invisible to both, which left an adapted density method
+    #: reporting the previous fit's noise count against new labels.
+    _required_fitted = ("n_noise_",)
+
     n_noise_: int
 
     def noise_mask(self, labels: Labels | None = None) -> ArrayLike:
