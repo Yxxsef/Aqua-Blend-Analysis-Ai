@@ -1,0 +1,23 @@
+{
+  "contract_version": "0.1-draft",
+  "scenario_id": "scenario_2026_07_17_001",
+  "solver_status": "OPTIMAL",
+  "kpis": {
+    "total_cost": 184150.0,
+    "currency": "AUD",
+    "demand_required_ml_per_day": 500,
+    "demand_supplied_ml_per_day": 500,
+    "demand_met_percent": 100.0
+  },
+  "gate_result": "PASS",
+  "confidence_flag": "UNKNOWN",
+  "comparison": null,
+  "report_mode": "TEMPLATE_FALLBACK",
+  "display_explanation": "An optimal solution was found for scenario_2026_07_17_001. Total cost is AUD 184150.00 for one representative day, and 500 ML/day is supplied against 500 ML/day of required demand.",
+  "warnings": [
+    "One or more source inputs contain estimated values; interpret the result and confidence flag accordingly.",
+    "Source activation cost is currently structurally zero in the model input path and should not be interpreted as a confirmed real-world zero cost.",
+    "Water-quality values apply to the blend at plant inflow, not to post-treatment regulatory water quality.",
+    "Validated LLM explanation was unavailable; a deterministic template fallback is being displayed."
+  ]
+}

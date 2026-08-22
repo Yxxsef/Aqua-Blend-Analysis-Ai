@@ -1,0 +1,22 @@
+{
+  "contract_version": "0.1-draft",
+  "scenario_id": "scenario_2026_07_17_001",
+  "solver_status": "OPTIMAL",
+  "kpis": {
+    "total_cost": 184150.0,
+    "currency": "AUD",
+    "demand_required_ml_per_day": 500,
+    "demand_supplied_ml_per_day": 500,
+    "demand_met_percent": 100.0
+  },
+  "gate_result": "PASS",
+  "confidence_flag": "UNKNOWN",
+  "comparison": null,
+  "report_mode": "LLM_VALIDATED",
+  "display_explanation": "Silvan Reservoir is selected at 42 percent because it has low draw cost and ample remaining availability. Yarra Kew is blended at 58 percent, the maximum its estimated daily availability allows, because it is the cheapest available source for this scenario; this makes its capacity constraint binding. Groundwater Bore 1 is not used because its estimated cost is higher than both selected sources, and blending it in would raise total cost without a quality benefit large enough to justify inclusion. The blend arriving at Facility 1 sits within all three quality limits, with the widest margin on turbidity.",
+  "warnings": [
+    "One or more source inputs contain estimated values; interpret the result and confidence flag accordingly.",
+    "Source activation cost is currently structurally zero in the model input path and should not be interpreted as a confirmed real-world zero cost.",
+    "Water-quality values apply to the blend at plant inflow, not to post-treatment regulatory water quality."
+  ]
+}
