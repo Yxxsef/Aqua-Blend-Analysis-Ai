@@ -1,10 +1,11 @@
 # App & Delivery Integration Contract — Task 27
 
-**Version:** `0.1-draft`  
+**Package revision:** Second Draft 
+**Contract version:** `0.1-draft`  
 **Owner:** Amantha Kulathunga  
 **Purpose:** Define one predictable response shape that App & Delivery can render while Tasks 19, 21, 23, 25 and 26 are still being completed.
 
-> This document contains the first draft of the Task 27 App & Delivery integration contract. It is based on the current MILP input and output contracts. The outer response shape and Task 27 `report_mode` values are defined here, while payloads owned by unfinished upstream tasks are intentionally marked **Draft / pending upstream contract** until those interfaces are finalised.
+> This document accompanies the second draft of the Task 27 App & Delivery response adapter package. The response contract remains at `0.1-draft` because this revision addresses implementation, testing, and repository structure feedback without changing the defined top level response shape. It is based on the current MILP input and output contracts, while payloads owned by unfinished upstream tasks remain **Draft / pending upstream contract** until those interfaces are finalised.
 
 ---
 
@@ -217,13 +218,13 @@ response = build_app_response(
 
 ---
 
-## 8. Mock package
+## 8. Example adapter outputs
 
-The `examples/` responses provide App & Delivery with stable sample payloads while end-to-end integration is still incomplete.
+The responses under `results/app_response/examples/` are retained as example outputs of the response adapter after representative upstream values are supplied. They give App & Delivery stable payloads to work against while end-to-end integration is still incomplete.
 
 ### `examples/success_response.json`
 
-Represents an `OPTIMAL` solve with a validated LLM explanation (`LLM_VALIDATED`). The mock KPI values are based on the current reference input/output example, but their final naming and structure remain owned by Task 19.
+Represents an `OPTIMAL` solve with a validated LLM explanation (`LLM_VALIDATED`). The example KPI values are based on the current reference input/output example, but their final naming and structure remain owned by Task 19.
 
 ### `examples/fallback_response.json`
 
@@ -253,10 +254,10 @@ Provides additional coverage for `INVALID_INPUT`. It shows what App & Delivery r
 - invalid/non-optimal responses do not expose optimal-solution KPI/comparison data; and
 - LLM/fallback report modes are used only with an `OPTIMAL` result.
 
-`test_app_response_adapter.py` tests the success, fallback, non-optimal, and invalid-input branches, confirms that the mock JSON examples pass structural validation, and verifies that the raw MILP result is not mutated.
+`tests/test_app_response_adapter.py` uses pytest to exercise the adapter directly across the success, fallback, non-optimal, and invalid-input branches. It also verifies consistent sanitisation of `gate_result` and `confidence_flag`, confirms that the stored example adapter outputs under `results/app_response/examples/` pass structural validation, and verifies that the raw MILP result is not mutated.
 
-The tests can be run from the Task 27 folder with:
+The tests can be run from the repository root with:
 
 ```bash
-python -m unittest -v test_app_response_adapter.py
+python -m pytest -v tests/test_app_response_adapter.py
 ```

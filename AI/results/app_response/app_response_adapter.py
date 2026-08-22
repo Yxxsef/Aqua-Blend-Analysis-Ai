@@ -1,5 +1,6 @@
-"""Task 27 - App & Delivery response adapter for AquaBlend [DRAFT].
+"""Task 27 - App & Delivery response adapter for AquaBlend [SECOND DRAFT].
 
+This second draft incorporates review feedback from the initial implementation.
 The adapter converts upstream analysis outputs into one predictable,
 display oriented response without mutating the raw MILP result.
 
@@ -142,7 +143,7 @@ def build_app_response(
     fallback_explanation: str | None = None,
     upstream_warnings: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Return the draft App & Delivery response shape.
+    """Return the App & Delivery response shape defined by the current draft contract.
 
     Parameters supplied by unfinished upstream tasks are passed into this
     function rather than recalculated here. The adapter selects a report mode,
@@ -213,8 +214,8 @@ def build_app_response(
             "scenario_id": response_scenario_id,
             "solver_status": solver_status,
             "kpis": None,
-            "gate_result": gate_result,
-            "confidence_flag": confidence_flag,
+            "gate_result": _non_empty_text(gate_result),
+            "confidence_flag": _non_empty_text(confidence_flag),
             "comparison": None,
             "report_mode": "STATUS_ONLY",
             "display_explanation": (
