@@ -1,26 +1,27 @@
 """
 test_json_explainer.py
 
-AquaBlend | Analysis & AI | Sprint 1 | Task 9
+AquaBlend | Analysis & AI | Sprint 2 | Task 23
+
+Tests for the upgraded deterministic report generator, built to the
+Task 22 reporting specification:
+
+  LLM_Report_Scope.md, Report_Structure.md, Results_JSON_Field_Map.md
+  (explanations/llm_reporting/docs/)
 
 Two families of tests:
 
-1. REFERENCE_JSON tests - the exact worked example from the AquaBlend MILP
-   Configuration document, Section 8 ("The Final Output in JSON Format").
-   This is the same scenario Tasks 6, 7 and 8 each hand-validated in their
-   own PRs. Used here as the main test, per Task 9's checklist item
-   "Reference JSON is used as the main test" / "Generated text is compared
-   with the sample explanation" (checked against factual agreement, not
-   exact wording, per the checklist).
+1. REFERENCE_JSON tests - the shared worked example. `REFERENCE_JSON` is the
+   Task 21-adapted form of the Task 22 `model_output_example.json` fixture
+   (also matches the original Sprint 1 reference scenario from the AquaBlend
+   MILP Configuration document). Used as the main regression / happy-path
+   test for a full OPTIMAL report.
 
-2. Synthetic fixtures - every branch that the reference JSON does NOT
-   exercise (each Task 6/7/8 PR admits only one scenario was ever hand-
-   traced). These cover: infeasible status, zero selected sources, missing
-   cost_per_ML, missing reason on an unused source, empty binding
-   constraints, unknown constraint name, source-activation binding (both
-   selected and unused), treatment-capacity binding, water-quality-range
-   binding, a quality violation, a missing quality parameter, and missing
-   required top-level fields.
+2. Synthetic fixtures - edge cases the reference JSON does not exercise:
+   missing optional fields, estimated/provisional data disclosure,
+   water-quality stage handling (`applies_to` present/missing), every
+   supported status (OPTIMAL full report vs. non-optimal status-only
+   output), and determinism (identical input -> identical output).
 """
 
 import copy
@@ -36,24 +37,32 @@ if str(EXPLANATIONS_DIR) not in sys.path:
 from json_explainer import (
     ExplainerInputError,
     validate_input,
-    check_feasibility,
-    explain_sources,
+    explain_scenario_and_status,
+    explain_result_availability,
+    explain_demand_zones,
+    explain_selected_sources,
+    explain_unused_sources,
+    explain_active_plants_and_transfers,
+    explain_cost_summary,
+    explain_water_quality,
     explain_binding_constraints,
-    explain_quality_and_margins,
     explain_sensitivity,
     explain_estimated_fields,
-    build_summary,
+    explain_alternatives_and_sensitivity,
     generate_explanation,
+    FULL_REPORT_STATUSES,
+    PROTOTYPE_DISCLAIMER,
+    WATER_QUALITY_STAGE_NOTE,
 )
 
 
 # ---------------------------------------------------------------------------
-# Reference JSON - AquaBlend MILP Configuration, Section 8, verbatim
+# REFERENCE_JSON is the Task 21-adapted form of Task 22's model_output_example.json fixture
 # ---------------------------------------------------------------------------
 
 REFERENCE_JSON = {
-    "scenario_id": "scenario_2026_07_17_001",
-    "solved_at": "2026-07-17T10:32:00Z",
+    "scenarioId": "scenario_2026_07_17_001",
+    "solvedAt": "2026-07-17T10:32:00Z",
     "status": "OPTIMAL",
     "objective": {
         "total_cost": 184150.00,
@@ -66,7 +75,7 @@ REFERENCE_JSON = {
             "plant_treatment_cost": 32000.00,
         },
     },
-    "demand_zones": [
+    "demandZones": [
         {"zone_id": "zone_1", "zone_name": "Zone 1", "demand_ml_per_day": 500, "volume_supplied_ml_per_day": 500}
     ],
     "sources": {
@@ -102,7 +111,7 @@ REFERENCE_JSON = {
             }
         ],
     },
-    "transfer_paths": {
+    "transferPaths": {
         "source_to_plant": [
             {"path_id": "silvan_reservoir_to_facility_1", "source_id": "silvan_reservoir", "plant_id": "facility_1", "active": True, "flow_ml_per_day": 210},
             {"path_id": "yarra_kew_to_facility_1", "source_id": "yarra_kew", "plant_id": "facility_1", "active": True, "flow_ml_per_day": 290},
@@ -124,7 +133,7 @@ REFERENCE_JSON = {
         ],
         "inactive": [],
     },
-    "water_quality": {
+    "waterQuality": {
         "applies_to": "blend_at_plant_inflow",
         "by_plant": {
             "facility_1": {
@@ -147,8 +156,8 @@ REFERENCE_JSON = {
         {"name": "quality_range_alkalinity_facility_1", "type": "ranged", "status": "PASS", "slack": 18.04, "binding": False},
         {"name": "quality_range_turbidity_facility_1", "type": "ranged", "status": "PASS", "slack": 2.72, "binding": False},
     ],
-    "binding_constraints_summary": ["demand_satisfaction_zone_1", "source_capacity_yarra_kew"],
-    "alternative_feasible_solutions": [
+    "bindingConstraintsSummary": ["demand_satisfaction_zone_1", "source_capacity_yarra_kew"],
+    "alternativeFeasibleSolutions": [
         {
             "description": "Reduce Yarra Kew share to 45 percent and introduce Groundwater Bore 1 at 13 percent",
             "total_cost": 189400.00,
@@ -156,7 +165,7 @@ REFERENCE_JSON = {
             "notes": "Slightly higher cost, but reduces dependence on a single river source and adds redundancy if Yarra Kew availability drops",
         }
     ],
-    "sensitivity_to_key_assumptions": [
+    "sensitivityToKeyAssumptions": [
         {
             "assumption": "cost_per_ml for groundwater_bore_1 (flagged estimated in the source view)",
             "impact": "If actual groundwater cost is 20 percent lower than estimated, groundwater_bore_1 would likely enter the optimal blend instead of remaining unused",
@@ -185,7 +194,7 @@ REFERENCE_JSON = {
         "num_integer_variables": 0,
         "num_constraints": 20,
     },
-    "data_flags": {
+    "dataFlags": {
         "sources": [
             {
                 "source_id": "silvan_reservoir",
@@ -238,8 +247,9 @@ def ref():
     """Fresh deep copy so tests can mutate without affecting each other."""
     return copy.deepcopy(REFERENCE_JSON)
 
+
 # ---------------------------------------------------------------------------
-# 1. Reference JSON tests
+# 1. Reference JSON - full OPTIMAL report, regression coverage
 # ---------------------------------------------------------------------------
 
 class TestReferenceJSON:
@@ -247,32 +257,79 @@ class TestReferenceJSON:
     def test_validate_input_passes(self):
         validate_input(ref())  # should not raise
 
-    def test_feasibility_gate_clear(self):
-        assert check_feasibility(ref()) is None
+    def test_scenario_and_status_section(self):
+        text = explain_scenario_and_status(ref())
+        assert "scenario_2026_07_17_001" in text
+        assert "OPTIMAL" in text
+        assert "2026-07-17T10:32:00Z" in text
 
-    def test_sources_yarra_kew_cheapest_and_capacity_binding(self):
-        text = explain_sources(ref())
+    def test_result_availability_optimal(self):
+        text = explain_result_availability(ref())
+        assert "confirmed optimal solution" in text
+
+    def test_demand_zones_section(self):
+        text = explain_demand_zones(ref())
+        assert "Zone 1" in text
+        assert "required demand 500 ML/day" in text
+        assert "supplied volume 500 ML/day" in text
+
+    def test_selected_sources_reports_exact_values(self):
+        text = explain_selected_sources(ref())
         assert "Yarra River, Kew" in text
-        assert "cheapest available source and was used at its full available capacity" in text
-        assert "58.0% of the blend (290 ML)" in text
-        assert "$235.00 AUD/ML" in text
+        assert "290 ML/day" in text
+        assert "58.0% of the blend" in text
+        assert "$235 AUD" in text
         assert "(estimated)" in text  # yarra_kew has_estimated_values is True
-
-    def test_sources_silvan_second_cheapest_not_binding(self):
-        text = explain_sources(ref())
         assert "Silvan Reservoir" in text
-        assert "second lowest cost" in text
-        assert "42.0% of the blend (210 ML)" in text
-        assert "$400.00 AUD/ML" in text
+        assert "210 ML/day" in text
+        assert "42.0% of the blend" in text
+        assert "$400 AUD" in text
+        assert "$84,000.0 AUD" in text  # draw_cost
 
-    def test_sources_ordering_by_percent_descending(self):
-        text = explain_sources(ref())
-        assert text.index("Yarra River, Kew") < text.index("Silvan Reservoir")
+    def test_selected_sources_never_invents_a_reason(self):
+        """LLM_Report_Scope.md section 4 forbids the template from creating
+        source-selection reasons - this must never appear again."""
+        text = explain_selected_sources(ref())
+        for banned in ["because", "cheapest", "lowest cost", "capacity remaining", "supplemented"]:
+            assert banned not in text.lower()
 
-    def test_sources_unused_reason_verbatim(self):
-        text = explain_sources(ref())
-        assert "Groundwater Bore 1 was not selected because" in text
-        assert "no quality benefit large enough to justify inclusion" in text
+    def test_unused_sources_never_renders_reason_field(self):
+        """sources.unused[].reason ownership is unconfirmed
+        (LLM_Report_Scope.md section 10) - must never be copied into the
+        report, even when present in the input."""
+        text = explain_unused_sources(ref())
+        assert "Groundwater Bore 1 was not selected." in text
+        assert "quality benefit" not in text
+        assert "because" not in text.lower()
+
+    def test_active_plants_and_transfers_section(self):
+        text = explain_active_plants_and_transfers(ref())
+        assert "Treatment Facility 1" in text
+        assert "500 ML/day" in text
+        assert "$64 AUD" in text  # treatment_cost_per_ml
+        assert "$32,000.0 AUD" in text  # treatment_cost
+        assert "Silvan Reservoir to Treatment Facility 1: 210 ML/day (active)" in text
+        assert "Treatment Facility 1 to Zone 1: 500 ML/day (active)" in text
+
+    def test_cost_summary_section(self):
+        text = explain_cost_summary(ref())
+        assert "$184,150.0 AUD" in text
+        assert "cost for one representative day" in text
+        assert "$152,150.0 AUD" in text  # source_draw_cost
+        assert "$32,000.0 AUD" in text  # plant_treatment_cost
+
+    def test_water_quality_applies_to_and_stage_note(self):
+        text = explain_water_quality(ref())
+        assert "apply to: blend_at_plant_inflow" in text
+        assert "alkalinity was closest to its limit" in text
+        assert "22.6%" in text
+        assert "widest margin at facility_1 was on turbidity at 34.0%" in text
+        assert WATER_QUALITY_STAGE_NOTE in text
+
+    def test_water_quality_never_claims_final_or_safe(self):
+        text = explain_water_quality(ref())
+        for banned in ["final drinking", "safe to drink", "compliant", "treated water"]:
+            assert banned not in text.lower()
 
     def test_binding_constraints_demand_and_capacity(self):
         text = explain_binding_constraints(ref())
@@ -280,16 +337,6 @@ class TestReferenceJSON:
         assert "500 ML needed by zone_1" in text
         assert "available capacity of Yarra River, Kew" in text
         assert "290 ML" in text
-
-    def test_quality_all_pass_headline_is_alkalinity(self):
-        """Per the confirmed reference output, alkalinity has the tightest
-        margin (22.6%), not pH - the toy model's real numbers differ from
-        the earlier draft example this file was first built against."""
-        text = explain_quality_and_margins(ref())
-        assert "All tested plant-inflow blend quality parameters passed at facility_1" in text
-        assert "alkalinity was closest to its limit" in text
-        assert "22.6%" in text
-        assert "widest margin at facility_1 was on turbidity at 34.0%" in text
 
     def test_estimated_fields_lists_all_three_sources(self):
         text = explain_estimated_fields(ref())
@@ -300,25 +347,6 @@ class TestReferenceJSON:
         text = explain_estimated_fields(ref())
         assert "source_activation_cost is structurally 0.00" in text
 
-    def test_summary_reports_cost_and_pass(self):
-        text = build_summary(ref())
-        assert "OPTIMAL" in text
-        assert "184,150.00 AUD" in text
-        assert "2 source(s) selected, 1 unused" in text
-        assert "Plant-inflow blend quality: PASS" in text
-
-    def test_generate_explanation_has_all_sections(self):
-        text = generate_explanation(ref())
-        for heading in [
-            "Selected & Unused Sources",
-            "Binding Constraints",
-            "Water Quality & Safety Margins",
-            "Sensitivity to Key Assumptions",
-            "Estimated Fields / Data Limitations",
-            "Summary",
-        ]:
-            assert f"## {heading}" in text
-
     def test_sensitivity_reports_both_reference_assumptions(self):
         text = explain_sensitivity(ref())
         assert "cost_per_ml for groundwater_bore_1 (flagged estimated in the source view)" in text
@@ -326,15 +354,65 @@ class TestReferenceJSON:
         assert "max_available_ml_per_day for yarra_kew" in text
         assert "model may become infeasible" in text
 
+    def test_alternatives_and_sensitivity_section(self):
+        text = explain_alternatives_and_sensitivity(ref())
+        assert "Alternative feasible solutions" in text
+        assert "Reduce Yarra Kew share to 45 percent" in text
+        assert "189400.0" in text or "189400" in text
+        assert "sensitive to cost_per_ml for groundwater_bore_1" in text
+
+    def test_generate_explanation_has_all_full_report_sections(self):
+        text = generate_explanation(ref())
+        for heading in [
+            "Scenario & Solver Status",
+            "Result Availability",
+            "Demand-Zone Results",
+            "Selected Sources & Blend Ratios",
+            "Unused Sources",
+            "Active Plants & Transfer Results",
+            "Cost Summary",
+            "Plant-Inflow Water Quality",
+            "Binding Constraints",
+            "Data Flags & Estimated Values",
+            "Alternatives & Sensitivity",
+            "Prototype Disclaimer",
+        ]:
+            assert f"## {heading}" in text
+
+    def test_generate_explanation_follows_report_structure_order(self):
+        text = generate_explanation(ref())
+        headings = [
+            "Scenario & Solver Status", "Result Availability", "Demand-Zone Results",
+            "Selected Sources & Blend Ratios", "Unused Sources",
+            "Active Plants & Transfer Results", "Cost Summary",
+            "Plant-Inflow Water Quality", "Binding Constraints",
+            "Data Flags & Estimated Values", "Alternatives & Sensitivity",
+            "Prototype Disclaimer",
+        ]
+        positions = [text.index(f"## {h}") for h in headings]
+        assert positions == sorted(positions)
+
+    def test_generate_explanation_never_uses_explanation_field_as_input(self):
+        """The JSON's own `explanation` field must never be treated as a
+        factual source (LLM_Report_Scope.md section 3)."""
+        data = ref()
+        text_with_field = generate_explanation(data)
+        del data["explanation"]
+        text_without_field = generate_explanation(data)
+        assert text_with_field == text_without_field
+
+    def test_prototype_disclaimer_always_present(self):
+        text = generate_explanation(ref())
+        assert PROTOTYPE_DISCLAIMER in text
+
     def test_matches_reference_explanation_in_substance(self):
-        """Not exact wording (per checklist: 'checks factual agreement, not
-        exact wording') - just the same facts as the JSON's own free-text
-        explanation field."""
+        """Not exact wording - the same underlying facts as the JSON's own
+        free-text explanation field (which is never read as input)."""
         text = generate_explanation(ref())
         assert "Silvan Reservoir" in text and "42.0%" in text
         assert "Yarra River, Kew" in text and "58.0%" in text
         assert "Groundwater Bore 1" in text
-        assert "turbidity" in text  # widest margin, matches reference explanation
+        assert "turbidity" in text
 
 
 # ---------------------------------------------------------------------------
@@ -343,16 +421,10 @@ class TestReferenceJSON:
 
 class TestValidation:
 
-    @pytest.mark.parametrize("field", ["status", "sources", "water_quality", "binding_constraints_summary"])
+    @pytest.mark.parametrize("field", ["status", "scenarioId"])
     def test_missing_required_field_raises(self, field):
         data = ref()
         del data[field]
-        with pytest.raises(ExplainerInputError):
-            validate_input(data)
-
-    def test_missing_by_plant_raises(self):
-        data = ref()
-        del data["water_quality"]["by_plant"]
         with pytest.raises(ExplainerInputError):
             validate_input(data)
 
@@ -360,148 +432,315 @@ class TestValidation:
         with pytest.raises(ExplainerInputError):
             validate_input(["not", "a", "dict"])
 
-    def test_missing_optional_fields_do_not_crash(self):
+    def test_missing_optional_top_level_fields_do_not_crash(self):
         data = ref()
-        del data["objective"]
-        del data["data_flags"]
-        del data["demand_zones"]
-        del data["plants"]
-        # should not raise
+        for field in ["objective", "dataFlags", "demandZones", "plants",
+                      "transferPaths", "alternativeFeasibleSolutions",
+                      "sensitivityToKeyAssumptions", "constraints"]:
+            del data[field]
         text = generate_explanation(data)
-        assert "not reported" in text  # cost clause falls back gracefully
+        assert "Cost summary is unavailable" in text
+        assert "No demand-zone result was provided" in text
+        assert "No active-plant result was provided" in text
 
 
 # ---------------------------------------------------------------------------
-# 3. Feasibility gate
+# 3. Status handling: OPTIMAL full report vs. non-optimal status-only
 # ---------------------------------------------------------------------------
 
-class TestFeasibility:
+class TestStatusHandling:
 
-    def test_infeasible_status_short_circuits(self):
+    @pytest.mark.parametrize("status", ["INFEASIBLE", "UNBOUNDED", "TIME_LIMIT", "ERROR"])
+    def test_non_optimal_status_is_status_only(self, status):
         data = ref()
-        data["status"] = "INFEASIBLE"
-        result = generate_explanation(data)
-        assert result == "No blend could be recommended for this scenario (INFEASIBLE)."
-        assert "## Summary" not in result  # gate applies to whole explanation, not just sources
+        data["status"] = status
+        text = generate_explanation(data)
+        assert "## Scenario & Solver Status" in text
+        assert "## Result Availability" in text
+        assert "## Prototype Disclaimer" in text
+        assert status in text
+        assert "not confirmed as usable for a final recommendation" in text
+        # None of the full-report-only sections should appear.
+        for heading in [
+            "Demand-Zone Results", "Selected Sources & Blend Ratios",
+            "Unused Sources", "Active Plants & Transfer Results",
+            "Cost Summary", "Plant-Inflow Water Quality", "Binding Constraints",
+        ]:
+            assert f"## {heading}" not in text
 
-
-# ---------------------------------------------------------------------------
-# 4. Source-selection edge cases (Task 6)
-# ---------------------------------------------------------------------------
-
-class TestSourcesEdgeCases:
-
-    def test_zero_selected_and_zero_unused(self):
+    def test_unknown_status_string_is_also_status_only(self):
         data = ref()
-        data["sources"] = {"selected": [], "unused": []}
-        text = explain_sources(data)
-        assert text == "No sources were required for this scenario."
+        data["status"] = "SOMETHING_NEW"
+        text = generate_explanation(data)
+        assert "## Cost Summary" not in text
+        assert "SOMETHING_NEW" in text
 
-    def test_missing_cost_per_ml_on_selected_uses_generic_fallback(self):
+    def test_optimal_is_the_only_full_report_status(self):
+        assert FULL_REPORT_STATUSES == {"OPTIMAL"}
+
+    def test_result_availability_missing_status(self):
+        text = explain_result_availability({})
+        assert "result state is unknown" in text
+
+
+# ---------------------------------------------------------------------------
+# 4. Demand-zone edge cases
+# ---------------------------------------------------------------------------
+
+class TestDemandZones:
+
+    def test_empty_array(self):
+        data = ref()
+        data["demandZones"] = []
+        assert explain_demand_zones(data) == "No demand-zone result was provided."
+
+    def test_missing_field_entirely(self):
+        data = ref()
+        del data["demandZones"]
+        assert explain_demand_zones(data) == "No demand-zone result was provided."
+
+    def test_missing_zone_name_falls_back_to_zone_id(self):
+        data = ref()
+        del data["demandZones"][0]["zone_name"]
+        text = explain_demand_zones(data)
+        assert "zone_1" in text
+
+    def test_missing_demand_value_states_not_reported(self):
+        data = ref()
+        del data["demandZones"][0]["demand_ml_per_day"]
+        text = explain_demand_zones(data)
+        assert "required demand not reported" in text
+
+
+# ---------------------------------------------------------------------------
+# 5. Selected-source edge cases
+# ---------------------------------------------------------------------------
+
+class TestSelectedSourcesEdgeCases:
+
+    def test_empty_selected(self):
+        data = ref()
+        data["sources"]["selected"] = []
+        assert explain_selected_sources(data) == "No selected-source result was provided."
+
+    def test_missing_cost_per_ml_omits_cost_clause_not_a_guess(self):
         data = ref()
         del data["sources"]["selected"][0]["cost_per_ml"]  # silvan_reservoir
-        text = explain_sources(data)
-        assert "included in the optimal blend to help meet demand at minimum total cost" in text
+        text = explain_selected_sources(data)
+        assert "Silvan Reservoir supplied 210 ML/day, 42.0% of the blend." in text
+        assert "Cost per ML" not in text.split("Yarra")[0]
 
-    def test_missing_reason_on_unused_source(self):
+    def test_missing_source_name_falls_back_to_source_id(self):
         data = ref()
-        del data["sources"]["unused"][0]["reason"]
-        text = explain_sources(data)
-        assert "no reason provided in the solver output" in text
+        del data["sources"]["selected"][1]["source_name"]  # yarra_kew
+        text = explain_selected_sources(data)
+        assert "yarra_kew" in text
 
-    def test_single_selected_source_no_ordering_needed(self):
-        data = ref()
-        data["sources"]["selected"] = [data["sources"]["selected"][0]]
-        data["sources"]["unused"] = []
-        text = explain_sources(data)
-        assert "Silvan Reservoir" in text
-
-    def test_cost_currency_matches_objective_currency_not_hardcoded(self):
-        """Rubric C7 (LLM_Evaluation_Rubric.md) requires 'cost uses AUD'. The
-        currency shown must come from objective.currency, not be hardcoded,
-        so a non-AUD scenario is still labelled correctly."""
+    def test_currency_matches_objective_currency_not_hardcoded(self):
         data = ref()
         data["objective"]["currency"] = "NZD"
-        text = explain_sources(data)
+        text = explain_selected_sources(data)
         assert "NZD" in text
         assert "AUD" not in text
 
-    def test_cost_shown_without_currency_when_objective_missing(self):
-        """Optional field: no crash, just a plain dollar figure with no
-        currency suffix rather than a wrong or invented one."""
+    def test_no_currency_when_objective_missing(self):
         data = ref()
         del data["objective"]
-        text = explain_sources(data)
-        assert "$235.00/ML" in text  # no trailing currency code
+        text = explain_selected_sources(data)
+        assert "$235" in text
         assert "AUD" not in text
 
-    def test_summary_and_source_cost_lines_use_same_currency(self):
-        """The per-source lines and the summary total must not disagree on
-        currency within the same explanation."""
-        text = generate_explanation(ref())
-        assert "$235.00 AUD/ML" in text
-        assert "$184,150.00 AUD" in text
-
     def test_estimated_tag_uses_clean_per_source_flag(self):
-        """Per the confirmed output contract, estimated-value disclosure is
-        a direct data_flags.sources[].has_estimated_values boolean, not the
-        old free-text substring matching against a flat estimated_fields[]
-        list. A source with has_estimated_values explicitly False should
-        never show '(estimated)'."""
         data = ref()
-        for entry in data["data_flags"]["sources"]:
+        for entry in data["dataFlags"]["sources"]:
             if entry["source_id"] == "silvan_reservoir":
                 entry["has_estimated_values"] = False
-        text = explain_sources(data)
+        text = explain_selected_sources(data)
         silvan_line = [l for l in text.split("\n\n") if "Silvan Reservoir" in l][0]
         assert "(estimated)" not in silvan_line
 
 
 # ---------------------------------------------------------------------------
-# 5. Binding-constraints edge cases (Task 7)
+# 6. Unused-source edge cases
+# ---------------------------------------------------------------------------
+
+class TestUnusedSourcesEdgeCases:
+
+    def test_empty_unused(self):
+        data = ref()
+        data["sources"]["unused"] = []
+        assert explain_unused_sources(data) == "No unused-source result was provided."
+
+    def test_missing_source_name_falls_back_to_source_id(self):
+        data = ref()
+        del data["sources"]["unused"][0]["source_name"]
+        text = explain_unused_sources(data)
+        assert "groundwater_bore_1 was not selected." in text
+
+    def test_reason_absent_from_input_does_not_crash(self):
+        data = ref()
+        del data["sources"]["unused"][0]["reason"]
+        text = explain_unused_sources(data)
+        assert "Groundwater Bore 1 was not selected." in text
+
+
+# ---------------------------------------------------------------------------
+# 7. Active plants & transfer-results edge cases
+# ---------------------------------------------------------------------------
+
+class TestActivePlantsAndTransfersEdgeCases:
+
+    def test_no_active_plants(self):
+        data = ref()
+        data["plants"]["active"] = []
+        text = explain_active_plants_and_transfers(data)
+        assert "No active-plant result was provided." in text
+
+    def test_missing_transfer_paths_omits_transfer_subpart(self):
+        data = ref()
+        del data["transferPaths"]
+        text = explain_active_plants_and_transfers(data)
+        assert "Treatment Facility 1" in text
+        assert "Transfer results" not in text
+
+    def test_missing_plant_name_falls_back_to_plant_id(self):
+        data = ref()
+        del data["plants"]["active"][0]["plant_name"]
+        text = explain_active_plants_and_transfers(data)
+        assert "facility_1" in text
+
+
+# ---------------------------------------------------------------------------
+# 8. Cost-summary edge cases
+# ---------------------------------------------------------------------------
+
+class TestCostSummaryEdgeCases:
+
+    def test_missing_objective(self):
+        data = ref()
+        del data["objective"]
+        assert explain_cost_summary(data) == "Cost summary is unavailable."
+
+    def test_missing_total_cost(self):
+        data = ref()
+        del data["objective"]["total_cost"]
+        assert explain_cost_summary(data) == "Cost summary is unavailable."
+
+    def test_missing_cost_breakdown_omits_breakdown_line(self):
+        data = ref()
+        del data["objective"]["cost_breakdown"]
+        text = explain_cost_summary(data)
+        assert "$184,150.0 AUD" in text
+        assert "Cost breakdown" not in text
+
+
+# ---------------------------------------------------------------------------
+# 9. Water-quality: stage handling, applies_to, violations, missing data
+# ---------------------------------------------------------------------------
+
+class TestWaterQualityEdgeCases:
+
+    def test_missing_applies_to_is_a_validation_warning(self):
+        data = ref()
+        del data["waterQuality"]["applies_to"]
+        text = explain_water_quality(data)
+        assert "Validation warning" in text
+        assert "applies_to is missing" in text
+        # Must not fall through to a normal quality interpretation.
+        assert "PASS" not in text and "FAIL" not in text
+
+    def test_empty_by_plant_returns_not_provided(self):
+        data = ref()
+        data["waterQuality"]["by_plant"] = {}
+        assert explain_water_quality(data) == "No water-quality result was provided."
+
+    def test_missing_water_quality_entirely(self):
+        data = ref()
+        del data["waterQuality"]
+        assert explain_water_quality(data) == "No water-quality result was provided."
+
+    def test_violation_reported_without_acceptability_claim(self):
+        data = ref()
+        data["waterQuality"]["by_plant"]["facility_1"]["turbidity"]["status"] = "FAIL"
+        data["waterQuality"]["by_plant"]["facility_1"]["turbidity"]["safety_margin_percent"] = -4.5
+        data["waterQuality"]["by_plant"]["facility_1"]["turbidity"]["value"] = 8.4
+        text = explain_water_quality(data)
+        assert "Not all plant-inflow blend quality parameters passed at facility_1" in text
+        assert "turbidity breached its allowed range" in text
+        assert "-4.5%" in text
+        assert "acceptable" not in text.lower()
+
+    def test_missing_parameter_flagged_not_assumed_pass(self):
+        data = ref()
+        del data["waterQuality"]["by_plant"]["facility_1"]["alkalinity"]
+        text = explain_water_quality(data)
+        assert "alkalinity at facility_1 was not reported in the results and could not be assessed" in text
+
+    def test_multiple_plants_each_reported_separately(self):
+        data = ref()
+        data["waterQuality"]["by_plant"]["facility_2"] = {
+            "pH": {"value": 7.0, "unit": "pH", "constraint_min": 6.5, "constraint_max": 8.5,
+                   "status": "PASS", "safety_margin_percent": 33.3},
+            "alkalinity": {"value": 40.0, "unit": "mg/L CaCO3", "constraint_min": 20, "constraint_max": 100,
+                           "status": "PASS", "safety_margin_percent": 25.0},
+            "turbidity": {"value": 3.0, "unit": "NTU", "constraint_min": 0, "constraint_max": 8.0,
+                          "status": "PASS", "safety_margin_percent": 62.5},
+        }
+        text = explain_water_quality(data)
+        assert "facility_1" in text
+        assert "facility_2" in text
+
+    def test_stage_note_present_even_on_violation(self):
+        data = ref()
+        data["waterQuality"]["by_plant"]["facility_1"]["turbidity"]["status"] = "FAIL"
+        text = explain_water_quality(data)
+        assert WATER_QUALITY_STAGE_NOTE in text
+
+
+# ---------------------------------------------------------------------------
+# 10. Binding-constraints edge cases
 # ---------------------------------------------------------------------------
 
 class TestBindingConstraintsEdgeCases:
 
     def test_empty_binding_list(self):
         data = ref()
-        data["binding_constraints_summary"] = []
+        data["bindingConstraintsSummary"] = []
         text = explain_binding_constraints(data)
-        assert text == "No constraint was binding; the solution stayed within every limit."
+        assert text == "No binding inequality or ranged constraint was reported for this scenario."
+
+    def test_missing_binding_field_adds_validation_warning(self):
+        data = ref()
+        del data["bindingConstraintsSummary"]
+        text = explain_binding_constraints(data)
+        assert "Validation warning" in text
+        assert "bindingConstraintsSummary is missing" in text
 
     def test_unknown_constraint_name(self):
         data = ref()
-        data["binding_constraints_summary"] = ["some_unrecognised_constraint"]
+        data["bindingConstraintsSummary"] = ["some_unrecognised_constraint"]
         text = explain_binding_constraints(data)
         assert "no plain-language mapping available" in text
 
     def test_plant_capacity_binding(self):
         data = ref()
-        data["binding_constraints_summary"] = ["plant_capacity_facility_1"]
+        data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
         assert "500 ML" in text
-        # No batch counting: the confirmed formulation has zero integer
-        # variables (diagnostics.num_integer_variables == 0), so there is
-        # nothing to count in batches anymore.
         assert "batch" not in text.lower()
 
     def test_water_quality_range_binding(self):
         data = ref()
-        data["binding_constraints_summary"] = ["quality_range_turbidity_facility_1"]
+        data["bindingConstraintsSummary"] = ["quality_range_turbidity_facility_1"]
         text = explain_binding_constraints(data)
         assert "turbidity limit" in text
         assert "facility_1" in text
         assert "0" in text and "8.0" in text
 
     def test_link_capacity_source_to_plant_binding(self):
-        """link_capacity_<from>_to_<to> is a real inequality constraint per
-        the confirmed output contract (Section 3.8) and can legitimately
-        appear in binding_constraints_summary - this was missing entirely
-        before this fix and would have fallen into the generic unknown
-        wording."""
         data = ref()
-        data["binding_constraints_summary"] = ["link_capacity_silvan_reservoir_to_facility_1"]
+        data["bindingConstraintsSummary"] = ["link_capacity_silvan_reservoir_to_facility_1"]
         text = explain_binding_constraints(data)
         assert "Silvan Reservoir" in text
         assert "Treatment Facility 1" in text
@@ -510,7 +749,7 @@ class TestBindingConstraintsEdgeCases:
 
     def test_link_capacity_plant_to_zone_binding(self):
         data = ref()
-        data["binding_constraints_summary"] = ["link_capacity_facility_1_to_zone_1"]
+        data["bindingConstraintsSummary"] = ["link_capacity_facility_1_to_zone_1"]
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
         assert "Zone 1" in text
@@ -518,23 +757,13 @@ class TestBindingConstraintsEdgeCases:
 
     def test_link_capacity_unknown_path_id_falls_back(self):
         data = ref()
-        data["binding_constraints_summary"] = ["link_capacity_nonexistent_to_nowhere"]
+        data["bindingConstraintsSummary"] = ["link_capacity_nonexistent_to_nowhere"]
         text = explain_binding_constraints(data)
         assert "no plain-language mapping available" in text
 
-
-# ---------------------------------------------------------------------------
-# 5b. Binding-constraints: confirmed-contract naming, ordering, missing data
-# ---------------------------------------------------------------------------
-
-class TestBindingConstraintsUpdatedTemplate:
-
     def test_category_ordering_ignores_json_order(self):
-        """Water-quality listed FIRST in binding_constraints_summary must
-        still render AFTER demand and source-capacity, per the fixed
-        category order: demand, source_capacity, plant_capacity, water_quality."""
         data = ref()
-        data["binding_constraints_summary"] = [
+        data["bindingConstraintsSummary"] = [
             "quality_range_turbidity_facility_1", "demand_satisfaction_zone_1", "source_capacity_yarra_kew"
         ]
         text = explain_binding_constraints(data)
@@ -542,14 +771,12 @@ class TestBindingConstraintsUpdatedTemplate:
         assert text.index("available capacity of Yarra River, Kew") < text.index("turbidity limit")
 
     def test_estimated_disclosure_reads_per_source_flag(self):
-        """(290 ML, estimated) - yarra_kew's data_flags.sources[] entry has
-        has_estimated_values: True, per the confirmed output contract."""
         text = explain_binding_constraints(ref())
         assert "(290 ML, estimated)" in text
 
     def test_missing_demand_ml_per_day_drops_clause_not_whole_sentence(self):
         data = ref()
-        del data["demand_zones"][0]["demand_ml_per_day"]
+        del data["demandZones"][0]["demand_ml_per_day"]
         text = explain_binding_constraints(data)
         assert "the full volume needed by zone_1 had to be delivered" in text
         assert "None" not in text
@@ -564,178 +791,197 @@ class TestBindingConstraintsUpdatedTemplate:
     def test_missing_plant_fields_drops_clause(self):
         data = ref()
         del data["plants"]["active"][0]["volume_processed_ml_per_day"]
-        data["binding_constraints_summary"] = ["plant_capacity_facility_1"]
+        data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "was already treating as much as it can handle, leaving no spare capacity" in text
         assert "None" not in text
 
     def test_missing_quality_range_fields_drops_clause(self):
         data = ref()
-        del data["water_quality"]["by_plant"]["facility_1"]["turbidity"]["constraint_min"]
-        data["binding_constraints_summary"] = ["quality_range_turbidity_facility_1"]
+        del data["waterQuality"]["by_plant"]["facility_1"]["turbidity"]["constraint_min"]
+        data["bindingConstraintsSummary"] = ["quality_range_turbidity_facility_1"]
         text = explain_binding_constraints(data)
-        assert "sat right at the edge of its safe range, so the blend" in text
+        assert "sat right at the edge of its modelled constraint range, so the blend" in text
         assert "None" not in text
 
     def test_missing_source_name_falls_back_to_source_id(self):
         data = ref()
         del data["sources"]["selected"][1]["source_name"]  # yarra_kew
         text = explain_binding_constraints(data)
-        assert "yarra_kew" in text  # falls back to the id, not "None"
+        assert "yarra_kew" in text
 
     def test_missing_plant_name_falls_back_to_plant_id(self):
         data = ref()
         del data["plants"]["active"][0]["plant_name"]
-        data["binding_constraints_summary"] = ["plant_capacity_facility_1"]
+        data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "facility_1" in text
-
-    def test_no_estimated_tag_when_figure_dropped(self):
-        """If the clause carrying the figure is dropped under Missing-field,
-        no estimated tag should appear either - there's no figure left to
-        qualify. Demand itself never discloses estimated at all now, since
-        the confirmed contract has no provenance mechanism for demand."""
-        data = ref()
-        del data["demand_zones"][0]["demand_ml_per_day"]
-        data["binding_constraints_summary"] = ["demand_satisfaction_zone_1"]  # isolate
-        text = explain_binding_constraints(data)
-        assert "estimated" not in text.lower()
 
     def test_quality_never_discloses_estimated(self):
-        """Per the confirmed output contract's own 'known gaps' (Section 6),
-        quality limits carry no provenance mechanism at all, so this
-        category should never show '(estimated)', unlike source_capacity."""
         data = ref()
-        data["binding_constraints_summary"] = ["quality_range_turbidity_facility_1"]
+        data["bindingConstraintsSummary"] = ["quality_range_turbidity_facility_1"]
         text = explain_binding_constraints(data)
         assert "estimated" not in text.lower()
-
-
-class TestQualityEdgeCases:
-
-    def test_violation_reported(self):
-        data = ref()
-        data["water_quality"]["by_plant"]["facility_1"]["turbidity"]["status"] = "FAIL"
-        data["water_quality"]["by_plant"]["facility_1"]["turbidity"]["safety_margin_percent"] = -4.5
-        data["water_quality"]["by_plant"]["facility_1"]["turbidity"]["value"] = 8.4
-        text = explain_quality_and_margins(data)
-        assert "Not all plant-inflow blend quality parameters passed at facility_1" in text
-        assert "turbidity breached its allowed range" in text
-        assert "-4.5%" in text
-
-    def test_missing_parameter_flagged_not_assumed_pass(self):
-        data = ref()
-        del data["water_quality"]["by_plant"]["facility_1"]["alkalinity"]
-        text = explain_quality_and_margins(data)
-        assert "alkalinity at facility_1 was not reported in the results and could not be assessed" in text
-
-    def test_multiple_plants_each_reported_separately(self):
-        """The confirmed contract reports quality per plant
-        (water_quality.by_plant), so a scenario with more than one active
-        plant must report each plant's blend on its own, not merge them."""
-        data = ref()
-        data["water_quality"]["by_plant"]["facility_2"] = {
-            "pH": {"value": 7.0, "unit": "pH", "constraint_min": 6.5, "constraint_max": 8.5,
-                   "status": "PASS", "safety_margin_percent": 33.3},
-            "alkalinity": {"value": 40.0, "unit": "mg/L CaCO3", "constraint_min": 20, "constraint_max": 100,
-                           "status": "PASS", "safety_margin_percent": 25.0},
-            "turbidity": {"value": 3.0, "unit": "NTU", "constraint_min": 0, "constraint_max": 8.0,
-                          "status": "PASS", "safety_margin_percent": 62.5},
-        }
-        text = explain_quality_and_margins(data)
-        assert "facility_1" in text
-        assert "facility_2" in text
-
-    def test_no_plants_reported_returns_explicit_message(self):
-        data = ref()
-        data["water_quality"]["by_plant"] = {}
-        text = explain_quality_and_margins(data)
-        assert text == "No plant-inflow blend quality was reported for this scenario."
 
 
 # ---------------------------------------------------------------------------
-# 7. Sensitivity-to-assumptions section (Task 9, added after Task 13 review)
+# 11. Sensitivity section
 # ---------------------------------------------------------------------------
 
 class TestSensitivitySection:
 
     def test_missing_field_entirely(self):
         data = ref()
-        del data["sensitivity_to_key_assumptions"]
+        del data["sensitivityToKeyAssumptions"]
         text = explain_sensitivity(data)
         assert text == "No sensitivity information was reported for this scenario."
 
     def test_empty_list(self):
         data = ref()
-        data["sensitivity_to_key_assumptions"] = []
+        data["sensitivityToKeyAssumptions"] = []
         text = explain_sensitivity(data)
         assert text == "No sensitivity information was reported for this scenario."
 
     def test_malformed_item_missing_impact_is_skipped_not_guessed(self):
         data = ref()
-        data["sensitivity_to_key_assumptions"] = [
-            {"assumption": "some assumption with no impact field"}
-        ]
+        data["sensitivityToKeyAssumptions"] = [{"assumption": "some assumption with no impact field"}]
         text = explain_sensitivity(data)
         assert text == "No sensitivity information was reported for this scenario."
 
     def test_malformed_item_missing_assumption_is_skipped_not_guessed(self):
         data = ref()
-        data["sensitivity_to_key_assumptions"] = [
-            {"impact": "some impact with no assumption field"}
-        ]
+        data["sensitivityToKeyAssumptions"] = [{"impact": "some impact with no assumption field"}]
         text = explain_sensitivity(data)
         assert text == "No sensitivity information was reported for this scenario."
 
-    def test_one_valid_and_one_malformed_item(self):
-        data = ref()
-        data["sensitivity_to_key_assumptions"] = [
-            {"assumption": "valid assumption", "impact": "valid impact"},
-            {"assumption": "incomplete"},
-        ]
-        text = explain_sensitivity(data)
-        assert "valid assumption" in text
-        assert "valid impact" in text
-        assert text.count("sensitive to") == 1
-
 
 # ---------------------------------------------------------------------------
-# 8. Estimated-fields section (Task 9, rebuilt against data_flags.sources[]
-#    + data_flags.notes[] per the confirmed output contract, Section 3.11)
+# 12. Estimated-fields / data-flags section
 # ---------------------------------------------------------------------------
 
 class TestEstimatedFieldsSection:
 
-    def test_no_estimated_sources_and_no_notes(self):
+    def test_missing_data_flags_entirely_is_a_validation_warning(self):
         data = ref()
-        data["data_flags"]["sources"] = []
-        data["data_flags"]["notes"] = []
+        del data["dataFlags"]
         text = explain_estimated_fields(data)
-        assert text == "No fields in this result were flagged as estimated."
+        assert "Validation warning" in text
+        assert "dataFlags is missing" in text
 
-    def test_missing_data_flags_entirely(self):
+    def test_present_but_empty_is_omitted_entirely(self):
         data = ref()
-        del data["data_flags"]
-        text = explain_estimated_fields(data)
-        assert text == "No fields in this result were flagged as estimated."
+        data["dataFlags"]["sources"] = []
+        data["dataFlags"]["notes"] = []
+        assert explain_estimated_fields(data) is None
+
+    def test_present_but_empty_section_absent_from_full_report(self):
+        data = ref()
+        data["dataFlags"]["sources"] = []
+        data["dataFlags"]["notes"] = []
+        text = generate_explanation(data)
+        assert "## Data Flags & Estimated Values" not in text
+
+    def test_missing_data_flags_section_present_in_full_report(self):
+        data = ref()
+        del data["dataFlags"]
+        text = generate_explanation(data)
+        assert "## Data Flags & Estimated Values" in text
+        assert "Validation warning" in text
 
     def test_source_with_has_estimated_values_false_is_excluded(self):
         data = ref()
-        data["data_flags"]["sources"] = [
+        data["dataFlags"]["sources"] = [
             {"source_id": "silvan_reservoir", "has_estimated_values": False,
              "availability_origin": "database", "provenance": {}}
         ]
-        data["data_flags"]["notes"] = []
-        text = explain_estimated_fields(data)
-        assert "silvan_reservoir" not in text
-        assert text == "No fields in this result were flagged as estimated."
+        data["dataFlags"]["notes"] = []
+        assert explain_estimated_fields(data) is None
 
     def test_notes_shown_even_with_no_estimated_sources(self):
         data = ref()
-        data["data_flags"]["sources"] = []
+        data["dataFlags"]["sources"] = []
         text = explain_estimated_fields(data)
         assert "source_activation_cost is structurally 0.00" in text
 
 
+# ---------------------------------------------------------------------------
+# 13. Alternatives & sensitivity section (omit-when-both-empty behaviour)
+# ---------------------------------------------------------------------------
+
+class TestAlternativesAndSensitivitySection:
+
+    def test_both_empty_is_omitted_entirely(self):
+        data = ref()
+        data["alternativeFeasibleSolutions"] = []
+        data["sensitivityToKeyAssumptions"] = []
+        assert explain_alternatives_and_sensitivity(data) is None
+
+    def test_both_missing_is_omitted_entirely(self):
+        data = ref()
+        del data["alternativeFeasibleSolutions"]
+        del data["sensitivityToKeyAssumptions"]
+        assert explain_alternatives_and_sensitivity(data) is None
+
+    def test_omitted_section_absent_from_full_report(self):
+        data = ref()
+        data["alternativeFeasibleSolutions"] = []
+        data["sensitivityToKeyAssumptions"] = []
+        text = generate_explanation(data)
+        assert "## Alternatives & Sensitivity" not in text
+
+    def test_only_alternatives_present(self):
+        data = ref()
+        data["sensitivityToKeyAssumptions"] = []
+        text = explain_alternatives_and_sensitivity(data)
+        assert "Alternative feasible solutions" in text
+        assert "sensitive to" not in text
+
+    def test_only_sensitivity_present(self):
+        data = ref()
+        data["alternativeFeasibleSolutions"] = []
+        text = explain_alternatives_and_sensitivity(data)
+        assert "Alternative feasible solutions" not in text
+        assert "sensitive to" in text
+
+
+# ---------------------------------------------------------------------------
+# 14. Determinism: identical input must always produce identical text
+# ---------------------------------------------------------------------------
+
+class TestDeterminism:
+
+    def test_repeated_calls_produce_identical_output(self):
+        data = ref()
+        outputs = {generate_explanation(copy.deepcopy(data)) for _ in range(5)}
+        assert len(outputs) == 1
+
+    def test_key_order_in_by_plant_does_not_change_output(self):
+        """by_plant is a dict; explain_water_quality must sort its keys, so
+        report order can never depend on whatever order an upstream
+        producer happened to serialise plants in. Uses two plants so
+        forward vs. reversed key order is a genuinely different input."""
+        data = ref()
+        data["waterQuality"]["by_plant"]["facility_0"] = copy.deepcopy(
+            data["waterQuality"]["by_plant"]["facility_1"]
+        )
+
+        forward = generate_explanation(copy.deepcopy(data))
+
+        reordered = copy.deepcopy(data)
+        reordered["waterQuality"]["by_plant"] = dict(
+            reversed(list(reordered["waterQuality"]["by_plant"].items()))
+        )
+        backward = generate_explanation(reordered)
+
+        assert forward == backward
+
+    def test_non_optimal_status_output_is_also_deterministic(self):
+        data = ref()
+        data["status"] = "INFEASIBLE"
+        outputs = {generate_explanation(copy.deepcopy(data)) for _ in range(5)}
+        assert len(outputs) == 1
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
