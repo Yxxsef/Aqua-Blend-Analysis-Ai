@@ -1,12 +1,12 @@
 # Task 25 Evaluation Findings
 
 **AquaBlend | Analysis & AI | Sprint 2 | Task 25**
-**Covers:** `llm_evaluation.csv` (22 fixtures)
+**Covers:** `llm_evaluation.csv` (23 fixtures)
 
 ## 1. What this evaluation actually covers, and what it doesn't
 
 This is the first controlled evaluation of `llm_validator.py`'s critical checks, run against the
-22 fixtures in `llm_evaluation.csv`. Every `critical_result`, `failed_rules`, and `warning_rules`
+23 fixtures in `llm_evaluation.csv`. Every `critical_result`, `failed_rules`, and `warning_rules`
 value in that CSV is real - produced by actually calling `validate_llm_output()` on each fixture
 pair, not written by hand. `test_llm_validator.py` (38 tests, all passing) checks the same logic at
 finer grain.
@@ -31,20 +31,21 @@ field cases the task card asks for, and it behaves correctly on all of them - se
 
 ## 2. Critical-check results
 
-22/22 fixtures behave as designed:
+23/23 fixtures behave as designed:
 
 - **4 correct fixtures (F01-F04) all PASS**, with zero critical failures and zero warnings. F02 (the
   trivial identical-text case) surfaced a real validator bug during development - see
   Test_Pack_README.md section 3 and Validation_Rules.md section 3 - now fixed and covered by a
   regression test. F03 (a short report legitimately missing optional sections) passed on its first
   run and confirms the validator does not demand content that was never in the source.
-- **17 incorrect/malformed fixtures (F05-F13, F15-F22) all correctly FAIL**, each with the expected
+- **18 incorrect/malformed fixtures (F05-F13, F15-F23) all correctly FAIL**, each with the expected
   rule(s) firing and no others - a changed number fails only on number rules, a status flip fails
   only on status rules, and so on. `F21` (three fault categories introduced together: a status flip,
   a dropped identifier, and an unsafe claim) correctly reports all four resulting rule violations -
   the status flip alone fires both `STATUS_MISSING` and `STATUS_INVENTED` by design (see
   Validation_Rules.md section 3) - confirming the validator aggregates every issue in one pass rather
-  than stopping at the first failure it finds.
+  than stopping at the first failure it finds. `F23` (a percent sign dropped while the digits stay
+  the same) was added after a PR review finding - see section 5.
 - **1 borderline fixture (F14) correctly PASSes with a warning**, not a failure - a weak causal
   phrase ("this shows...") is surfaced for human attention without blocking the result, matching the
   intended severity split between critical failures and warnings.
@@ -68,7 +69,17 @@ once real model calls are happening.
 - The malformed-input path (empty/whitespace rewrite) produces one clear, specific failure rather
   than a wall of misleading secondary failures.
 
-## 4. Recommendation
+## 4. PR review finding: dropped percent sign (F23)
+
+A PR reviewer (Yousef) found that changing `58.0%` to `58.0` passed validation - the percent sign
+was being stripped before values were compared, so a proportion silently becoming a bare number went
+undetected. This was a real gap, not a false alarm: `_normalise_number` now tracks each number as a
+`(value, is_percent)` pair, and `58.0%`/`58.0` are correctly treated as different facts. F23 is the
+new fixture covering this case; `test_dropped_percent_sign_fails` and `test_added_percent_sign_also_fails`
+are the code-level regression tests. See Validation_Rules.md section 3 for the full reasoning,
+including why the `$` prefix is not tracked the same way.
+
+## 5. Recommendation
 
 **Continue** the pipeline as built, with the following before this can be called a complete Task 25
 evaluation rather than its first pass:
@@ -79,7 +90,7 @@ evaluation rather than its first pass:
    running local model endpoint.
 2. **Get two team members to style-score** a representative sample of real model output (once
    available) on the 1-5 scale, and fill in `reviewer_1_style_score` / `reviewer_2_style_score` for
-   those rows.
+   those rows. Yousef has already volunteered as one of the two reviewers during PR review.
 3. **Record the real fallback rate** once enough genuine model calls have been made to compute one
    meaningfully.
 4. **Add the deferred non-optimal LLM-rewrite fixture family** (see Test_Pack_README.md section 5)

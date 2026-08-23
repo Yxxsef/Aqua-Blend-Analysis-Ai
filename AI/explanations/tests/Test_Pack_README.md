@@ -74,6 +74,14 @@ claim) doesn't have its own dedicated regression test the same way, since it was
 problem rather than a validator bug - `test_treated_water_always_fails` instead confirms the rule
 that caused it behaves correctly on purpose.
 
+A fifth bug was found separately, in PR review rather than while building this fixture pack:
+`_normalise_number` stripped the `%` sign before comparing values, so `58.0%` and `58.0` were the
+same fact as far as the validator was concerned - a rewrite that dropped the percent sign while
+keeping the same digits passed validation, even though that is a real, meaningful fact change. Fixed
+by tracking each number as a `(value, is_percent)` pair instead of a bare value; see
+Validation_Rules.md section 3. `test_dropped_percent_sign_fails` and `test_added_percent_sign_also_fails`
+are the regression tests, covering both directions.
+
 ## 4. Fixture families and what each proves
 
 | Family | Test class(es) | What it proves |

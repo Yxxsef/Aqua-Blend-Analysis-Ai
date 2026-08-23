@@ -255,13 +255,23 @@ def _strip_headings(report: str) -> str:
     return _HEADING_LINE_PATTERN.sub("", report)
 
 
-def _normalise_number(token: str) -> float:
-    """'$68,150.0' -> 68150.0, '-4.5%' -> -4.5, '500' -> 500.0. Trailing
-    '.0' vs no decimal point are treated as the same fact (235 and 235.00
-    are the same number), per the deliberate design choice documented in
-    Validation_Rules.md section 3."""
+def _normalise_number(token: str) -> tuple[float, bool]:
+    """'$68,150.0' -> (68150.0, False), '-4.5%' -> (-4.5, True), '500' ->
+    (500.0, False). Trailing '.0' vs no decimal point are treated as the
+    same fact (235 and 235.00 are the same number), per the deliberate
+    design choice documented in Validation_Rules.md section 3.
+
+    The percent sign is part of the value's identity, not stripped away:
+    '58.0%' and '58.0' are DIFFERENT facts, even though they share the
+    same digits. Losing the '%' changes what the number means (a
+    proportion becoming a bare, ambiguous figure), so an earlier version
+    of this function that stripped '%' before comparing made that change
+    invisible - '58.0%' silently becoming '58.0' passed validation. Found
+    in review, not in the original test pack; see
+    test_dropped_percent_sign_fails in test_llm_validator.py."""
+    is_percent = token.endswith("%")
     cleaned = token.replace("$", "").replace(",", "").replace("%", "")
-    return float(cleaned)
+    return (float(cleaned), is_percent)
 
 
 def _is_embedded_in_identifier(text: str, start: int, end: int) -> bool:
@@ -287,7 +297,7 @@ def _is_embedded_in_identifier(text: str, start: int, end: int) -> bool:
     return any(ch.isalpha() or ch == "_" for ch in surrounding)
 
 
-def _extract_numbers(text: str) -> set[float]:
+def _extract_numbers(text: str) -> set[tuple[float, bool]]:
     values = set()
     for m in _NUMBER_PATTERN.finditer(text):
         if not _is_embedded_in_identifier(text, m.start(), m.end()):
@@ -327,6 +337,11 @@ def _contains_any(haystack_lower: str, phrases: list[str]) -> str | None:
 # Individual checks
 # ---------------------------------------------------------------------------
 
+def _format_number(value_and_flag: tuple[float, bool]) -> str:
+    value, is_percent = value_and_flag
+    return f"{value}%" if is_percent else str(value)
+
+
 def _check_numbers(det_body: str, llm_output: str) -> list[CriticalFailure]:
     """Presence-based, not repetition-count-based: a value must appear at
     least once in the rewrite if it appeared at least once in the source,
@@ -336,7 +351,10 @@ def _check_numbers(det_body: str, llm_output: str) -> list[CriticalFailure]:
     its selection line and its transfer-results line), and a faithful,
     naturally-compressed rewrite ("Flows into the facility were 210 ML/day
     from Silvan Reservoir...") can legitimately state a fact fewer times
-    than the source without dropping it. See Validation_Rules.md section 3."""
+    than the source without dropping it. See Validation_Rules.md section 3.
+
+    Percent and plain values are distinct facts even at the same digits -
+    see _normalise_number."""
     det_values = _extract_numbers(det_body)
     llm_values = _extract_numbers(llm_output)
 
@@ -345,15 +363,15 @@ def _check_numbers(det_body: str, llm_output: str) -> list[CriticalFailure]:
     for value in sorted(det_values - llm_values):
         failures.append(CriticalFailure(
             "NUMBER_MISSING_OR_CHANGED",
-            f"The value {value!r} appears in the deterministic report but "
-            "not in the rewrite.",
+            f"The value {_format_number(value)!r} appears in the "
+            "deterministic report but not in the rewrite.",
         ))
 
     for value in sorted(llm_values - det_values):
         failures.append(CriticalFailure(
             "NUMBER_INVENTED",
-            f"The value {value!r} appears in the rewrite but was not "
-            "present in the deterministic report.",
+            f"The value {_format_number(value)!r} appears in the rewrite "
+            "but was not present in the deterministic report.",
         ))
 
     return failures

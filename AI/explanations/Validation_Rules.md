@@ -58,6 +58,21 @@ digits with optional thousands separators, an optional decimal part, an optional
 and `68150.0` normalise to the same value; `235` and `235.00` are treated as the same fact (same
 underlying value, different precision - the rule is about the fact, not the exact string).
 
+**The percent sign is part of a number's identity, not stripped away.** `58.0%` and `58.0` are
+tracked as different facts, even though they share the same digits - each number is recorded as a
+`(value, is_percent)` pair, not a bare value. An earlier version of this function stripped `%`
+before comparing, which meant a rewrite that dropped the percent sign while keeping the same digits
+(`58.0%` becoming `58.0`) passed validation - a real fact change (a proportion becoming an
+ambiguous bare number) went completely undetected. Found in code review, not by the original test
+pack; `test_dropped_percent_sign_fails` and `test_added_percent_sign_also_fails` in
+`test_llm_validator.py` now guard both directions.
+
+The `$` prefix is not tracked the same way, deliberately: a dropped `$` sign on its own is a weaker
+signal than a dropped `%`, since the currency itself is still independently checked by the unit-code
+rule (`AUD`, `NZD`, and so on) whenever a currency code appears nearby in the source. Percent has no
+equivalent second check anywhere else in this module, which is exactly why losing it silently was a
+real gap rather than a redundant one.
+
 A candidate number is discarded if it is actually embedded inside a longer identifier token - e.g.
 the `01` inside `scenario_2026_07_17_001`, or the `1` inside `facility_1`. A single-character
 lookaround on the regex catches the simple case (a digit directly touching a letter or underscore)

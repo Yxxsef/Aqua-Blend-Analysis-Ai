@@ -257,6 +257,30 @@ class TestNumberFailures:
         result = validate_llm_output(REFERENCE_REPORT, CORRECT_REWRITE)
         assert result.critical_result == "PASS"
 
+    def test_dropped_percent_sign_fails(self):
+        """Regression test for a review finding: '58.0%' and '58.0' used to
+        normalise to the identical value, so dropping the percent sign
+        while keeping the same digits passed validation - a real fact
+        change (a proportion becoming an ambiguous bare number) went
+        undetected. Percent and plain values are now tracked as distinct
+        facts; see _normalise_number's docstring."""
+        rewrite = CORRECT_REWRITE.replace("58.0% of the blend", "58.0 of the blend")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        rules = {f.rule for f in result.critical_failures}
+        assert "NUMBER_MISSING_OR_CHANGED" in rules
+        assert "NUMBER_INVENTED" in rules
+
+    def test_added_percent_sign_also_fails(self):
+        """The same check in the other direction: a plain number in the
+        source must not silently gain a percent sign in the rewrite."""
+        rewrite = CORRECT_REWRITE.replace("$235 AUD per ML", "$235% AUD per ML")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        rules = {f.rule for f in result.critical_failures}
+        assert "NUMBER_MISSING_OR_CHANGED" in rules
+        assert "NUMBER_INVENTED" in rules
+
 
 class TestUnitCodeFailures:
 

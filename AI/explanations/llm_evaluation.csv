@@ -21,3 +21,4 @@ F19,malformed,Sample 1 (OPTIMAL),Empty rewrite (e.g. a stripped API response),FA
 F20,malformed,Sample 1 (OPTIMAL),Whitespace-only rewrite,FAIL,EMPTY_OUTPUT,,N/A - no live model run in this pass,pending,pending
 F21,multiple_failures,Sample 1 (OPTIMAL),"Status flip, dropped identifier, and unsafe claim together",FAIL,IDENTIFIER_MISSING;STATUS_INVENTED;STATUS_MISSING;UNSAFE_SAFETY_CLAIM,,N/A - no live model run in this pass,pending,pending
 F22,status_robustness,Sample 2 (INFEASIBLE),Status word dropped from a short status-only report,FAIL,STATUS_MISSING,,N/A - no live model run in this pass,pending,pending
+F23,incorrect_number,Sample 1 (OPTIMAL),"Percent sign dropped, same digits kept (review finding)",FAIL,NUMBER_INVENTED;NUMBER_MISSING_OR_CHANGED,,N/A - no live model run in this pass,pending,pending
