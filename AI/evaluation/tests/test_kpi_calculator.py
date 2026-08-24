@@ -26,7 +26,7 @@ from kpi_calculator import (
 )
 
 
-REFERENCE_PATH = os.path.join(os.path.dirname(__file__), "reference_output.json")
+REFERENCE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reference_output.json")
 
 
 @pytest.fixture

@@ -10,7 +10,9 @@ MILP Results JSON contract (`model_output_contract.json` / `model_output_specifi
   or `UNKNOWN` (feasibility only), per KPI_Set.md §2 rule 4.
 - `kpi_gate.py` — applies the pass/fail rules on top of the calculator's output and returns
   exactly one of `PASS`, `FAIL`, `UNABLE_TO_EVALUATE`.
-- `test_kpi_calculator.py`, `test_kpi_gate.py` — see Testing below.
+- `tests/test_kpi_calculator.py`, `tests/test_kpi_gate.py`, `tests/conftest.py` — moved into
+  a `tests/` subfolder per Trminh06-work's review comment. `conftest.py` adds the parent
+  folder to `sys.path` so the tests can still import `kpi_calculator`/`kpi_gate` directly.
 - `reference_output.json` — the real `model_output_contract.json` reference scenario, used
   as the test fixture that the "Sprint 1 sample calculations" checklist item requires.
 - `sample_kpi_and_gate_results.json` — actual output of running this code against the
@@ -69,7 +71,7 @@ Per KPI_Set.md §2 ("General evaluation rules"):
 
 Run with:
 ```
-pytest test_kpi_calculator.py test_kpi_gate.py -v
+pytest tests/ -v
 ```
 
 42 tests, all passing. Coverage includes:
@@ -110,11 +112,11 @@ this path is now covered at both layers.
 
 ## Other review feedback
 
-- **Trminh06-work** suggested moving the test files into a `tests/` subfolder. Flagging that
-  `AI/explanations/test_json_explainer.py` (Task 9) lives alongside its source file rather than
-  in a nested folder, so moving these would be inconsistent with that existing precedent unless
-  the team wants to standardise on `tests/` going forward, happy to move it either way once
-  that's settled.
+- **Trminh06-work** suggested moving the test files into a `tests/` subfolder. Done — tests now
+  live in `tests/`, with a `conftest.py` added so they can still import `kpi_calculator`/
+  `kpi_gate` from the parent folder. This is inconsistent with Task 9's convention
+  (`test_json_explainer.py` sits next to its source file), so flagging that the team may want
+  to pick one convention and apply it consistently across tasks going forward.
 - **Trminh06-work** also noted no official `model_output_contract.json` exists from the MILP
   team yet. Confirmed, already flagged below under Known open items, `reference_output.json`
   is what the AI stream has today, not yet an official MILP-team-published file, will revisit
