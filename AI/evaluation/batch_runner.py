@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -165,3 +166,88 @@ def run_batch(
         "failures": failures,
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
+
+def _run_folder(output_root: Path) -> Path:
+    """Create a timestamped folder for this run, with raw and processed inside."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = Path(output_root) / stamp
+    (run_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (run_dir / "processed").mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
+    """Write a batch result to disk and return the run folder.
+
+    Raw solver output is written untouched to raw/. Anything calculated from
+    it goes to processed/. A manifest records what ran so the run can be
+    repeated.
+    """
+    run_dir = _run_folder(output_root)
+
+    scenarios: list[dict[str, Any]] = []
+
+    for result in batch["results"]:
+        scenario_id = result["scenario_id"] or Path(result["scenario_path"]).stem
+
+        raw_path = run_dir / "raw" / f"{scenario_id}.json"
+        with raw_path.open("w", encoding="utf-8") as handle:
+            json.dump(result["raw_optimiser_result"], handle, indent=2)
+
+        processed = {
+            key: value
+            for key, value in result.items()
+            if key != "raw_optimiser_result"
+        }
+        processed_path = run_dir / "processed" / f"{scenario_id}.json"
+        with processed_path.open("w", encoding="utf-8") as handle:
+            json.dump(processed, handle, indent=2, default=str)
+
+        scenarios.append(
+            {
+                "scenario_id": scenario_id,
+                "scenario_path": result["scenario_path"],
+                "status": "ok",
+                "runtime_seconds": result["runtime_seconds"],
+                "raw_output": str(raw_path.relative_to(run_dir)),
+                "processed_output": str(processed_path.relative_to(run_dir)),
+            }
+        )
+
+    for failure in batch["failures"]:
+        scenarios.append(
+            {
+                "scenario_id": None,
+                "scenario_path": failure["scenario_path"],
+                "status": "failed",
+                "error_type": failure["error_type"],
+                "error": failure["error"],
+            }
+        )
+
+    manifest = {
+        "run_id": run_dir.name,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "mode": batch["mode"],
+        "mock_fixture": (
+            str(DEFAULT_FIXTURE.relative_to(AI_ROOT.parent))
+            if batch["mode"] == MOCK
+            else None
+        ),
+        "mock_warning": (
+            "Mock mode returns the same stored optimiser result for every "
+            "scenario. Optimiser values are not scenario-specific."
+            if batch["mode"] == MOCK
+            else None
+        ),
+        "scenario_count": batch["scenario_count"],
+        "succeeded": batch["succeeded"],
+        "failed": batch["failed"],
+        "runtime_seconds": batch["runtime_seconds"],
+        "scenarios": scenarios,
+    }
+
+    with (run_dir / "run_manifest.json").open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+    return run_dir
