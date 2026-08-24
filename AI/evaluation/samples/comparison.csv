@@ -1,0 +1,17 @@
+scenario_id,quality_stage,run,gate,feasibility_value,feasibility_reason,total_cost_value,total_cost_reason,demand_satisfaction_value,demand_satisfaction_reason,minimum_safety_margin_value,minimum_safety_margin_reason
+scenario_2026_07_17_high_demand,blend_at_plant_inflow,optimiser,PASS,OPTIMAL,,184150.0,,100.0,,22.6,
+scenario_2026_07_17_high_demand,blend_at_plant_inflow,equal_blend,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+scenario_2026_07_17_high_demand,blend_at_plant_inflow,cheapest_first,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+scenario_2026_07_17_high_demand,blend_at_plant_inflow,fixed_priority,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+scenario_2026_07_17_plant_outage,blend_at_plant_inflow,optimiser,PASS,OPTIMAL,,184150.0,,100.0,,22.6,
+scenario_2026_07_17_plant_outage,blend_at_plant_inflow,equal_blend,FAIL,INFEASIBLE,,,not reported,0.0,,,baselines do not compute water quality
+scenario_2026_07_17_plant_outage,blend_at_plant_inflow,cheapest_first,FAIL,INFEASIBLE,,,not reported,0.0,,,baselines do not compute water quality
+scenario_2026_07_17_plant_outage,blend_at_plant_inflow,fixed_priority,FAIL,INFEASIBLE,,,not reported,0.0,,,baselines do not compute water quality
+toy_model_dry_year,blend_at_plant_inflow,optimiser,PASS,OPTIMAL,,184150.0,,100.0,,22.6,
+toy_model_dry_year,blend_at_plant_inflow,equal_blend,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+toy_model_dry_year,blend_at_plant_inflow,cheapest_first,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+toy_model_dry_year,blend_at_plant_inflow,fixed_priority,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+toy_model_normal_year,blend_at_plant_inflow,optimiser,PASS,OPTIMAL,,184150.0,,100.0,,22.6,
+toy_model_normal_year,blend_at_plant_inflow,equal_blend,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+toy_model_normal_year,blend_at_plant_inflow,cheapest_first,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality
+toy_model_normal_year,blend_at_plant_inflow,fixed_priority,UNABLE_TO_EVALUATE,FEASIBLE,,,not reported,100.0,,,baselines do not compute water quality

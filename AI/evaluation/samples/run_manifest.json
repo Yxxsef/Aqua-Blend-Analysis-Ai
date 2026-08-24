@@ -1,0 +1,45 @@
+{
+  "run_id": "20260824T083042Z",
+  "generated_at_utc": "2026-08-24T08:30:42.164304+00:00",
+  "mode": "mock",
+  "mock_fixture": "AI/explanations/llm_reporting/fixtures/model_output_example.json",
+  "mock_warning": "Mock mode returns the same stored optimiser result for every scenario. Optimiser values are not scenario-specific.",
+  "scenario_count": 4,
+  "succeeded": 4,
+  "failed": 0,
+  "runtime_seconds": 0.003,
+  "scenarios": [
+    {
+      "scenario_id": "scenario_2026_07_17_high_demand",
+      "scenario_path": "AI/scenarios/high-demand-outage/scenario_high_demand.json",
+      "status": "ok",
+      "runtime_seconds": 0.001,
+      "raw_output": "raw/scenario_2026_07_17_high_demand.json",
+      "processed_output": "processed/scenario_2026_07_17_high_demand.json"
+    },
+    {
+      "scenario_id": "scenario_2026_07_17_plant_outage",
+      "scenario_path": "AI/scenarios/high-demand-outage/scenario_plant_outage.json",
+      "status": "ok",
+      "runtime_seconds": 0.001,
+      "raw_output": "raw/scenario_2026_07_17_plant_outage.json",
+      "processed_output": "processed/scenario_2026_07_17_plant_outage.json"
+    },
+    {
+      "scenario_id": "toy_model_dry_year",
+      "scenario_path": "AI/scenarios/normal-year-dry-year/scenario_dry_year.json",
+      "status": "ok",
+      "runtime_seconds": 0.001,
+      "raw_output": "raw/toy_model_dry_year.json",
+      "processed_output": "processed/toy_model_dry_year.json"
+    },
+    {
+      "scenario_id": "toy_model_normal_year",
+      "scenario_path": "AI/scenarios/normal-year-dry-year/scenario_normal.json",
+      "status": "ok",
+      "runtime_seconds": 0.001,
+      "raw_output": "raw/toy_model_normal_year.json",
+      "processed_output": "processed/toy_model_normal_year.json"
+    }
+  ]
+}
