@@ -1,0 +1,112 @@
+% ==================================================================
+%  MEASURE TEMPLATE --- copy me, do not edit in place.
+%
+%  Covers both kinds of measurement in Section~\ref{sec:clustering_methods}:
+%    * a dissimilarity measure d(.,.) --- the input a method consumes;
+%    * a validity index --- the output a comparison is built from,
+%      whether internal, external or relative.
+%  Delete the prompts in Parts 3 and 4 that do not apply to your kind.
+%
+%    cp template/measure_template.tex \
+%       documentation/sections/clustering_methods/measures/NN-<name>.tex
+%
+%  Then: replace <NAME>, replace the label suffix `template' with the
+%  measure's short name, and add one \input line under Section 7.1 in
+%  cluster_main.tex.
+%
+%  This file is NOT included in the build.
+%
+%  Levels: a measure is a \subsubsection under Section 7.1, so the parts
+%  below are \paragraph.  Keep their order unchanged in every copy.
+%
+%  Code counterpart:
+%    xxcluster/measures/dissimilarity/<name>.py, or
+%    xxcluster/measures/validation/{internal,external,relative}.py.
+%  Part 3 must agree with the class attributes declared there ---
+%  `is_metric' and `is_symmetric' for a dissimilarity,
+%  `higher_is_better', `range_' and `handles_noise' for an index.
+%  See CONTRIBUTING.md, Part 2.
+% ==================================================================
+\subsubsection{<NAME>}
+\label{sec:measure:template}
+
+\paragraph{Overview}
+\label{sec:measure:template:overview}
+\placeholder{What the measure quantifies, in one paragraph, and which
+kind it is: a dissimilarity measure, or a validity index --- and if an
+index, whether internal, external or relative. State why it is included
+here: which methods need it, or which question about a partition it
+answers.}
+
+\paragraph{Definition}
+\label{sec:measure:template:definition}
+\placeholder{The formal definition, using the symbols declared in the
+notation table. Cite the original source. Where the measure is defined
+only for particular data types or particular cluster representations,
+state that here rather than in a later part.}
+
+\paragraph{Properties}
+\label{sec:measure:template:properties}
+\placeholder{For a dissimilarity measure: which of the three properties
+of Definition~\ref{def:math_metric} it satisfies --- identity and
+positivity, symmetry, the triangle inequality --- and which it violates.
+This is not a formality. A measure that violates the triangle inequality
+is admissible under Definition~\ref{def:cluster_method}, but cannot be
+used with a method whose correctness depends on it.
+
+For a validity index: the attainable range, the direction (whether high
+or low is better), whether it is corrected for chance, and whether it is
+defined when observations are labelled as noise.}
+
+\paragraph{Applicability}
+\label{sec:measure:template:applicability}
+\placeholder{Which data types the measure accepts --- numeric,
+categorical, mixed, incomplete --- and which families of
+Section~\ref{sec:background:families} it can serve.
+
+For an index, add: whether it applies to a soft partition directly or
+only to a defuzzified one, and how observations labelled as noise are
+treated. Excluding them scores only the points a method was confident
+about, which flatters that method; whichever choice is made, it must be
+stated wherever the index is reported.}
+
+\paragraph{Computation and complexity}
+\label{sec:measure:template:complexity}
+\placeholder{How the measure is computed, its time and space
+complexity, and what that means at \projectname{} data volumes. Note in
+particular whether it requires the full pairwise matrix, since that is
+quadratic in the number of observations and often the binding
+constraint.}
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:template:application}
+\placeholder{Implementation, and where the measure is used: which
+methods are fitted with it, or which results are reported under it.
+Any parameter it carries, with the value chosen and the reason.}
+
+\paragraph{Behaviour}
+\label{sec:measure:template:behaviour}
+\placeholder{What the measure rewards, demonstrated rather than
+asserted --- on our data, on a benchmark with known structure, or on a
+synthetic example.
+
+For an index this is essential, because every index encodes a notion of
+what a cluster is. An index built on distances to a centroid rewards
+compact, isotropic clusters and penalises elongated or irregular ones,
+so it does not rank methods of different families neutrally. Where that
+applies, say so here and carry it into
+Section~\ref{sec:methodology:threats}.}
+
+\paragraph{Limitations}
+\label{sec:measure:template:limitations}
+\placeholder{Where the measure is uninformative, misleading, or
+undefined --- degenerate partitions, unbalanced cluster sizes, high
+dimension, or the concentration of distances discussed in
+Section~\ref{sec:dimensionality}. Distinguish what was observed from
+what is known from the literature.}
+
+\paragraph{Summary}
+\label{sec:measure:template:summary}
+\placeholder{Two or three sentences: what this measure is good for,
+what it must not be used for, and whether it is part of the reported
+protocol of Section~\ref{sec:methodology:metrics} or supplementary.}

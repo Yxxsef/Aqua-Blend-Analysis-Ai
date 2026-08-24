@@ -1,0 +1,114 @@
+\documentclass[11pt,a4paper]{article}
+
+% ==================================================================
+%  On the Search for Cluster Analysis  ---  document spine.
+%
+%  This file contains structure only; prose lives in sections/.
+%  Build with:  latexmk -pdf main.tex
+%
+%  TO ADD A NEW CLUSTERING TECHNIQUE:
+%    1. cp sections/techniques/00-template.tex \
+%          sections/techniques/NN-<name>.tex
+%    2. Add one \input line to the techniques block below.
+%    3. Keep the subsection order from the template unchanged so the
+%       comparison section can compare techniques like for like.
+% ==================================================================
+
+% --- Document metadata (single source of truth) --------------------
+\newcommand{\projectname}{AquaBlend}
+\newcommand{\projectunit}{Deakin University --- Capstone Project}
+\newcommand{\doctitle}{In Search of Cluster Analysis}
+\newcommand{\doctitleshort}{Cluster Analysis}   % running head
+\newcommand{\docsubtitle}{A survey and evaluation of clustering techniques for \projectname{} data}
+\newcommand{\docauthors}{Bao Minh Tran}         % PDF metadata; mirror sections/cover.tex
+\newcommand{\docversion}{Draft v0.1}
+\newcommand{\docstatus}{Draft}
+\newcommand{\docdate}{\today}
+
+\input{preamble}
+
+% Draft mode: shows \placeholder{} guidance and \todo{} markers.
+% Switch to \draftfalse for a clean build.
+\drafttrue
+
+\begin{document}
+
+% ------------------------------------------------------------------
+%  Front matter
+% ------------------------------------------------------------------
+\input{sections/cover}
+
+\pagenumbering{roman}
+
+\input{sections/revision-history}
+
+\newpage
+\input{sections/abstract}
+
+\newpage
+\tableofcontents
+\newpage
+\listoffigures
+\listoftables
+
+\newpage
+\input{sections/notation}
+
+% ------------------------------------------------------------------
+%  Main matter
+% ------------------------------------------------------------------
+\newpage
+\pagenumbering{arabic}
+
+\input{sections/introduction}
+
+\newpage
+\input{sections/background}
+
+\newpage
+\input{sections/data}
+
+\newpage
+\input{sections/methodology}
+
+% --- Exploratory Data Analysis (EDA) -----------------------------------------
+\newpage
+\input{sections/eda/eda_main.tex}
+
+\newpage
+% --- Discussion on Dimensionality Issues -----------------------------------------
+\input{sections/dimensionality/dim_main.tex}
+
+\newpage
+% --- Clustering techniques -----------------------------------------
+% One file per technique. Add new techniques here, in the order they
+% should appear; renumber the filenames only if the order must change.
+\input{sections/clustering_methods/cluster_main.tex}
+% \input{sections/techniques/02-technique-two.tex}
+% \input{sections/techniques/03-technique-three.tex}
+
+
+\newpage
+\input{sections/comparison}
+
+\newpage
+\input{sections/conclusion}
+
+% ------------------------------------------------------------------
+%  Back matter
+% ------------------------------------------------------------------
+\newpage
+\appendix
+\input{sections/appendix/appendix-a}
+\input{sections/appendix/appendix-b}
+
+\newpage
+\input{sections/acknowledgements}
+
+\newpage
+\label{references}
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{plain}
+\bibliography{literature}
+
+\end{document}
