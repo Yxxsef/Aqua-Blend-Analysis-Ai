@@ -24,6 +24,7 @@ MEASURES = (
 
 NO_QUALITY_REASON = "baselines do not compute water quality"
 
+QUALITY_STAGE_KEY = "applies_to"
 
 def _measure(kpis: dict[str, Any], name: str, is_baseline: bool) -> dict[str, Any]:
     """Return one measure, with a reason when there is no value."""
@@ -54,6 +55,12 @@ def compare_scenario(result: dict[str, Any]) -> dict[str, Any]:
             "rows": [],
         }
 
+    quality_stage = (
+        result.get("raw_optimiser_result", {})
+        .get("water_quality", {})
+        .get(QUALITY_STAGE_KEY)
+    )
+
     rows = []
     for name, evaluation in evaluations.items():
         kpis = evaluation.get("kpis", {})
@@ -70,6 +77,7 @@ def compare_scenario(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "scenario_id": result.get("scenario_id"),
         "comparable": True,
+        "quality_stage": quality_stage,
         "rows": rows,
     }
 
@@ -99,15 +107,15 @@ def write_comparison(comparison: dict[str, Any], run_dir: str | Path) -> dict[st
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(
-            ["scenario_id", "run", "gate"]
+            ["scenario_id", "quality_stage", "run", "gate"]
             + [f"{m}_{part}" for m in MEASURES for part in ("value", "reason")]
         )
         for scenario in comparison["comparisons"]:
             if not scenario["comparable"]:
-                writer.writerow([scenario["scenario_id"], "", scenario["reason"]])
+                writer.writerow([scenario["scenario_id"], scenario.get("quality_stage"), "", scenario["reason"]])
                 continue
             for row in scenario["rows"]:
-                cells: list[Any] = [scenario["scenario_id"], row["run"], row["gate"]]
+                cells: list[Any] = [scenario["scenario_id"], scenario.get("quality_stage"), row["run"], row["gate"]]
                 for measure in MEASURES:
                     cells.append(row[measure]["value"])
                     cells.append(row[measure].get("reason", ""))
