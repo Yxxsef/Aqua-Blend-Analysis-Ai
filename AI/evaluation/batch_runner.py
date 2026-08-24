@@ -122,3 +122,46 @@ def run_scenario(
         "evaluations": evaluations,
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
+
+def run_batch(
+    path: str | Path,
+    mode: str = MOCK,
+    fixture_path: Path = DEFAULT_FIXTURE,
+) -> dict[str, Any]:
+    """Run one scenario file, or every scenario in a folder.
+
+    Files run in a fixed order so two runs of the same folder do the same
+    work. A scenario that fails is recorded and the batch carries on — one
+    bad file must not cost the other results.
+    """
+    target = Path(path)
+    if target.is_dir():
+        scenario_files = sorted(target.rglob("*.json"))
+    else:
+        scenario_files = [target]
+
+    started = time.perf_counter()
+    results: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+
+    for scenario_file in scenario_files:
+        try:
+            results.append(run_scenario(scenario_file, mode, fixture_path))
+        except Exception as error:
+            failures.append(
+                {
+                    "scenario_path": str(scenario_file),
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                }
+            )
+
+    return {
+        "mode": mode,
+        "scenario_count": len(scenario_files),
+        "succeeded": len(results),
+        "failed": len(failures),
+        "results": results,
+        "failures": failures,
+        "runtime_seconds": round(time.perf_counter() - started, 3),
+    }
