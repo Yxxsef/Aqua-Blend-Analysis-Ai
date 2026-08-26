@@ -1,0 +1,53 @@
+{
+  "kpi_results": {
+    "scenario_id": "scenario_2026_07_17_001",
+    "feasibility": {
+      "name": "feasibility",
+      "status": "OK",
+      "value": "OPTIMAL",
+      "unit": "status",
+      "detail": "Feasible and optimal"
+    },
+    "demand_satisfaction": {
+      "name": "demand_satisfaction",
+      "status": "OK",
+      "value": 100.0,
+      "unit": "%",
+      "detail": ""
+    },
+    "total_cost": {
+      "name": "total_cost",
+      "status": "OK",
+      "value": 184150.0,
+      "unit": "AUD",
+      "detail": ""
+    },
+    "minimum_safety_margin": {
+      "name": "minimum_safety_margin",
+      "status": "OK",
+      "value": 22.6,
+      "unit": "%",
+      "detail": ""
+    },
+    "quality_violations": {
+      "name": "quality_violations",
+      "status": "OK",
+      "value": 0,
+      "unit": "count",
+      "detail": ""
+    },
+    "chemical_kpi": {
+      "name": "chemical_kpi",
+      "status": "N/A",
+      "value": null,
+      "unit": null,
+      "detail": "No approved chemical cost/use field exists in the current model_output_contract.json."
+    }
+  },
+  "gate_result": {
+    "overall_status": "PASS",
+    "reasons": [
+      "Feasible, 100% demand satisfaction, zero quality violations."
+    ]
+  }
+}
