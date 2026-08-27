@@ -307,6 +307,58 @@ class TestNumberFailures:
             for f in result.critical_failures
         )
 
+    def test_swapped_source_percentages_fails(self):
+        """Regression test for a real reviewer finding (PR #46, Yousef):
+        swapping Yarra River, Kew's 58.0% with Silvan Reservoir's 42.0%
+        leaves the overall SET of numbers in the document completely
+        unchanged - both values are still present somewhere - so the
+        plain presence-based check in _check_numbers correctly sees
+        nothing wrong and returns PASS. _check_number_association exists
+        specifically to catch this: it checks that a volume and its
+        blend percentage stay written together as a pair, regardless of
+        wording. See Validation_Rules.md section 4."""
+        rewrite = CORRECT_REWRITE.replace("58.0%", "TEMP58").replace(
+            "42.0%", "58.0%"
+        ).replace("TEMP58", "42.0%")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "NUMBER_WRONG_ASSOCIATION" for f in result.critical_failures)
+
+    def test_swapped_source_volumes_fails(self):
+        """The same swap check on the ML/day volumes instead of the
+        percentages - 290 and 210 swapped between the two sources."""
+        rewrite = CORRECT_REWRITE.replace("290 ML/day", "TEMP290").replace(
+            "210 ML/day", "290 ML/day"
+        ).replace("TEMP290", "210 ML/day")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "NUMBER_WRONG_ASSOCIATION" for f in result.critical_failures)
+
+    def test_association_check_does_not_false_positive_on_correct_rewrite(self):
+        """The safety check on the association fix itself: two earlier,
+        broader designs (identifier-proximity based, see
+        _extract_number_pairs's docstring) both produced false positives
+        on CORRECT_REWRITE - a genuinely faithful rewrite - once actually
+        tested against it, not just against the swap case. This is the
+        regression test confirming the final, narrower pair-based design
+        does not repeat that mistake."""
+        result = validate_llm_output(REFERENCE_REPORT, CORRECT_REWRITE)
+        assert not any(
+            f.rule == "NUMBER_WRONG_ASSOCIATION" for f in result.critical_failures
+        )
+
+    def test_dropped_value_without_a_swap_is_not_an_association_failure(self):
+        """A value that's simply missing entirely (not moved to a
+        different pairing) is _check_numbers' job, not this check's -
+        confirms the two checks don't double-report the same simple
+        omission as a swap."""
+        rewrite = CORRECT_REWRITE.replace("58.0%", "some of the blend")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(
+            f.rule == "NUMBER_WRONG_ASSOCIATION" for f in result.critical_failures
+        )
+        assert any(f.rule == "NUMBER_MISSING_OR_CHANGED" for f in result.critical_failures)
+
 
 class TestUnitCodeFailures:
 
@@ -568,10 +620,42 @@ class TestSafetyClaimFailures:
         assert result.critical_result == "FAIL"
         assert any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
 
+    def test_contrastive_conjunction_ends_a_negations_scope(self):
+        """Regression test for a real reviewer finding (PR #46, Yousef):
+        'The blend is not safe to drink, but it is compliant.' 'not'
+        genuinely negates 'safe to drink' - correctly not flagged - but
+        'compliant' sits in a new clause introduced by 'but' and has no
+        grammatical relationship to that negation at all. It's a real,
+        separate, unsafe assertion. Before this fix, the word-count
+        window alone (7 words from 'not' to 'compliant', well inside the
+        12-word limit) incorrectly let the earlier negation suppress it.
+        See Validation_Rules.md section 6."""
+        rewrite = CORRECT_REWRITE + " The blend is not safe to drink, but it is compliant."
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(
+            f.rule == "UNSAFE_SAFETY_CLAIM" and "compliant" in f.detail
+            for f in result.critical_failures
+        )
+        # and confirm "safe to drink" itself is correctly NOT flagged,
+        # since "not" does genuinely negate that specific phrase
+        assert not any(
+            "safe to drink" in f.detail for f in result.critical_failures
+        )
 
-class TestDisclaimerAndWaterQualityNoteFailures:
+    def test_contrastive_conjunction_without_comma_also_ends_scope(self):
+        """The boundary pattern must not depend on the comma being
+        present - 'not safe to drink but it is compliant' (no comma)
+        must behave the same way."""
+        rewrite = CORRECT_REWRITE + " The blend is not safe to drink but it is compliant."
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(
+            f.rule == "UNSAFE_SAFETY_CLAIM" and "compliant" in f.detail
+            for f in result.critical_failures
+        )
 
-    def test_missing_disclaimer_fails(self):
+
         rewrite = CORRECT_REWRITE.rsplit("\n\n", 1)[0]  # drop the final paragraph
         assert "proof-of-concept" not in rewrite.lower()
         result = validate_llm_output(REFERENCE_REPORT, rewrite)
@@ -634,6 +718,40 @@ class TestMalformedFixtures:
     def test_non_string_llm_output_raises(self):
         with pytest.raises(ValidatorInputError):
             validate_llm_output(REFERENCE_REPORT, None)
+
+
+class TestOutputCompletenessFailures:
+
+    def test_truncated_output_mid_sentence_fails(self):
+        """Regression test for a real reviewer finding (PR #46, Yousef):
+        a response cut off mid-sentence, with no terminal punctuation,
+        must not be accepted as a complete rewrite - it could be silently
+        missing required content that would have come after the cut."""
+        rewrite = CORRECT_REWRITE.rstrip(".")  # remove the final period, simulate a cutoff
+        # also chop off the last few words to make it genuinely mid-sentence
+        rewrite = rewrite[: rewrite.rfind(" ", 0, len(rewrite) - 5)]
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
+
+    def test_output_ending_in_a_question_mark_is_not_flagged(self):
+        rewrite = CORRECT_REWRITE + " Is this the recommended blend?"
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
+
+    def test_output_ending_in_an_exclamation_mark_is_not_flagged(self):
+        rewrite = CORRECT_REWRITE + " Review complete!"
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
+
+    def test_trailing_whitespace_after_terminal_punctuation_is_not_flagged(self):
+        rewrite = CORRECT_REWRITE + "   \n\n  "
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
+
+    def test_a_complete_faithful_rewrite_is_not_flagged(self):
+        result = validate_llm_output(REFERENCE_REPORT, CORRECT_REWRITE)
+        assert not any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
 
 
 # ---------------------------------------------------------------------------
@@ -921,20 +1039,22 @@ class TestRealLiveModelOutput:
         assert "UNSAFE_SAFETY_CLAIM" not in rules
         assert "INVENTED_CONTENT" not in rules
 
-    def test_real_output_now_genuinely_passes(self):
-        """A team-lead decision (Task 62): cost_per_ml and
-        max_available_ml_per_day are attribute labels, not entity
-        references, and their underlying values are still independently
-        checked by the number-presence check regardless of how the label
-        itself is paraphrased. Exempting these two specific tokens is what
-        finally gets this real, genuine model output to critical_result:
-        PASS - the first real accepted rewrite, not a hand-built stand-in.
-        See LLM_Live_Run_Notes.md section 4 and Validation_Rules.md
-        section 3 for the full reasoning and why this is scoped narrowly
-        to these two tokens rather than the whole field-name category."""
+    def test_real_output_correctly_fails_on_truncation(self):
+        """Corrected by a real review finding (PR #46, Yousef): this
+        output was originally reported as a genuine PASS after the
+        cost_per_ml/max_available_ml_per_day exemption landed. That was
+        wrong. The output is genuinely truncated - it cuts off mid-
+        sentence at 'All data and estimates' with nothing after, almost
+        certainly from hitting the model's max_tokens limit - and the
+        validator had no check for output completeness at all until this
+        fix. With _check_output_completeness in place, this fixture
+        correctly fails with INCOMPLETE_OUTPUT. There is currently no
+        confirmed genuine PASS from a live model call on record - a
+        fresh run with a higher max_tokens is needed to get one. See
+        LLM_Live_Run_Notes.md for the corrected account."""
         result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_1)
-        assert result.critical_result == "PASS"
-        assert result.critical_failures == []
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "INCOMPLETE_OUTPUT" for f in result.critical_failures)
 
     def test_exemption_is_narrow_other_field_names_still_required(self):
         """The exemption must not widen into a blanket pass for every
