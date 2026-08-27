@@ -9,7 +9,7 @@
 
 ## 1. What this covers
 
-This covers four genuine calls through `model_runner.py` against a real, running model - not a
+This covers five genuine calls through `model_runner.py` against a real, running model - not a
 hand-built stand-in text, not a mock `request_fn`. Everything in `llm_evaluation.csv` and
 `llm_evaluation_full_rubric.csv` before Task 62 was explicitly documented as covering the
 validator's critical-check layer only, using fixtures built by hand to exercise each rule. This is
@@ -20,9 +20,39 @@ the first time actual model output has gone through the pipeline.
 - **Run 4**: the two remaining genuine Task 23 sample types - INFEASIBLE and TIME_LIMIT status-only
   reports - tested for the first time, to see whether a model given a near-empty input pads it out
   with invented content. See section 7.
+- **Run 5**: the same OPTIMAL scenario again, with `max_tokens` raised after Runs 1-3 turned out to
+  be truncated - the first genuinely complete, passing rewrite of the flagship scenario. See
+  section 8.
 
 Every real call also independently exercised the fallback path (a deliberately wrong port) - see
-section 8.
+section 9.
+
+### 1a. Corrections made after PR review (PR #46, Yousef) - read this before the rest of the doc
+
+Three real problems in `llm_validator.py` were found by a genuine PR review, not by more live-model
+testing, and they change the headline claims made earlier in this document materially enough that
+they need stating plainly up front rather than buried in each section:
+
+1. **The accepted-rewrite claim for Runs 1 and 3 was wrong at the time.** The captured output is
+   genuinely truncated - it cuts off mid-sentence at "All data and estimates" with nothing after,
+   almost certainly from hitting the model's `max_tokens` limit. The validator had no check for
+   output completeness at all until this review. `_check_output_completeness` now catches this
+   (`INCOMPLETE_OUTPUT`), and the real captured output correctly fails. **Resolved in Run 5** (section
+   8): `max_tokens` raised, the same scenario called again, and this time the response completed and
+   genuinely passed. See section 3, section 6, and section 8.
+2. **Runs 2 and 3's raw text is identical**, not independent fresh generations as originally
+   claimed. `model_config.json` sets `temperature: 0.0` (greedy decoding), and every call was fed
+   the exact same `deterministic_report.txt` - under those conditions it's expected, not a data
+   error, that the model produced the same output each time. The "Run 3 confirms the fix
+   generalises to fresh output" claim was incorrect and is corrected in section 6.
+3. **Two more real validator gaps were found and fixed**: a swapped pair of source figures (e.g.
+   Yarra River, Kew's 58.0% swapped with Silvan Reservoir's 42.0%) passed silently, since the plain
+   presence-based number check has no concept of which value belongs to which source -
+   `_check_number_association` now catches this. Separately, a negation could incorrectly suppress
+   an unrelated, genuinely unsafe claim later in the same sentence across a contrastive conjunction
+   (e.g. "not safe to drink, **but** it is compliant") - fixed by treating "but"/"however"/"although"
+   etc. as hard negation-scope boundaries. Both are documented in `Validation_Rules.md` sections 4
+   and 6, with regression tests using the reviewer's exact examples.
 
 ## 2. Setup
 
@@ -32,7 +62,7 @@ section 8.
   Ollama tag. Not committed - added to `.gitignore`, since it's a local/machine-specific file, not a
   secret in the traditional sense (the `api_key` value is just the placeholder string `"ollama"`).
 - `timeout_seconds` raised from the example's default `30.0` to `120.0` after the first attempt hit
-  the original timeout - see section 9.
+  the original timeout - see section 10.
 
 ## 3. Run 1 (Sample 1, OPTIMAL) — the run that found the bugs
 
@@ -114,16 +144,24 @@ it would weaken a check that already works correctly for those other fields.
 `test_exemption_is_narrow_other_field_names_still_required` in `test_llm_validator.py` is the
 regression test confirming `storage_capacity` is still enforced.
 
-**Result: `REAL_LIVE_MODEL_OUTPUT_SAMPLE_1` now returns `critical_result: PASS`** -
-`test_real_output_now_genuinely_passes` is the regression test. This is the first genuine accepted
-rewrite from the live model, satisfying the task checklist's "demonstrate at least one accepted valid
-rewrite" for real, not by re-running until one happened to pass.
+**Result at the time: the field-name exemption alone got `REAL_LIVE_MODEL_OUTPUT_SAMPLE_1` to
+`critical_result: PASS`.** This was reported as the first genuine accepted rewrite. **That was
+incorrect** - see section 1a and section 6. The output is genuinely truncated, and the validator had
+no check for that at all at the time. With `_check_output_completeness` now in place
+(`test_real_output_correctly_fails_on_truncation`), this same output correctly fails with
+`INCOMPLETE_OUTPUT`. The field-name exemption itself is still a correct, narrowly-scoped fix - it
+just wasn't sufficient on its own to call this specific output accepted.
 
-## 5. Run 2 (Sample 1, OPTIMAL) — confirming the fix generalises
+## 5. Run 2 (Sample 1, OPTIMAL) — same text as Run 1, different validator state
 
-A second, completely independent call, same scenario, same config, run partway through fixing the
-validator (percent-form and identifier-matching fixes applied; negation-detection and the field-name
-exemption not yet).
+A second call, same scenario, same config. **Originally described as an independent fresh
+generation - it is not.** `model_config.json` sets `temperature: 0.0` (greedy decoding), and every
+call is fed the exact same `deterministic_report.txt`; under those conditions the model producing
+the same output each time is expected, not a data-integrity problem. Confirmed directly: Run 2's
+raw text is byte-identical to Run 1's.
+
+This run was made partway through fixing the validator (percent-form and identifier-matching fixes
+applied; negation-detection, the field-name exemption, and the completeness check not yet).
 
 | Field | Value |
 |---|---|
@@ -138,23 +176,25 @@ was added (see `Validation_Rules.md` section 2 for that fix), so this run could 
 against the final validator once the remaining fixes landed - recorded in `llm_evaluation.csv` as
 `LIVE_RUN_2`, explicitly labelled as observed at the time rather than re-confirmed.
 
-## 6. Run 3 (Sample 1, OPTIMAL) — the first genuine PASS on fresh output
+## 6. Run 3 (Sample 1, OPTIMAL) — same text as Runs 1 and 2, corrected
 
-A third independent call, after all four fixes (the three validator bugs plus the field-name
-exemption decision in section 4).
+A third call, same scenario, same config, made after the exemption fix landed.
 
 | Field | Value |
 |---|---|
 | `runtime_ms` | 53,457 |
 | `fallback_used` | `False` |
-| `critical_result` | `PASS` |
-| Remaining items | One `NEW_IDENTIFIER` warning on "Bore 1" - not a failure |
+| `critical_result` at the time | `PASS` |
+| `critical_result` now, with the completeness check | `FAIL` - `INCOMPLETE_OUTPUT` |
 
-This is the more meaningful confirmation of the two PASS results: `REAL_LIVE_MODEL_OUTPUT_SAMPLE_1`
-(Run 1, section 3) is baked into the test suite as a fixture, so it will always pass once the code
-that makes it pass exists - that's expected, not surprising. Run 3 is a fresh generation the fixes
-were never written against, and it passed on its own. Saved in
-`AI/explanations/live_run_output_run3_pass/`, recorded as `LIVE_RUN_3` in `llm_evaluation.csv`.
+**Originally described as "a fresh generation the fixes were never written against" - not accurate.**
+Confirmed directly: Run 3's raw text is byte-identical to Run 1's (see section 1a for why - greedy
+decoding on an identical prompt). The only genuine difference between Run 1's and Run 3's recorded
+results was which validator version checked the same text, not the text itself. With the
+completeness check now in place, the same truncation Run 1 has applies here too, and this run
+correctly fails for the same reason. Saved in `AI/explanations/live_run_output_run3_pass/` -
+the folder name is now inaccurate and kept only because renaming it would break the git history
+being described here; the CSV description has been corrected instead.
 
 ## 7. Run 4 (Samples 2 and 3, INFEASIBLE and TIME_LIMIT) — the remaining sample types
 
@@ -177,7 +217,38 @@ inventing a cause for the infeasibility or the time limit, and both correctly pr
 status word. Saved in `AI/explanations/live_run_output_run4_non_optimal_samples/`, recorded as
 `LIVE_RUN_4_INFEASIBLE` and `LIVE_RUN_4_TIME_LIMIT` in `llm_evaluation.csv`.
 
-## 8. Fallback demonstration (model unavailable)
+**Re-checked against the completeness fix (section 1a): both genuinely still pass.** Unlike Runs
+1-3, these used a different input prompt each, so they're not affected by the same
+identical-output situation, and both end with proper terminal punctuation ("...regulators, or
+health authorities."). At the time this was the only pair of results that held up as complete,
+genuinely-passing live-model output - see section 8 for the fix that closed the remaining gap.
+
+## 8. Run 5 (Sample 1, OPTIMAL) — the genuine, complete accepted rewrite
+
+Runs 1-3 all hit the same wall: `model_config.json`'s original `max_tokens: 1200` wasn't enough for
+the model to finish rewriting the full 12-section OPTIMAL report before being cut off, and with
+`temperature: 0.0` on an identical input, every attempt hit the identical cutoff point. Section 1a
+and section 10 both flagged this as the one thing still missing - a genuine, complete accepted
+rewrite of the actual flagship scenario, not just the two short samples in Run 4.
+
+`max_tokens` was raised (from the original 1200) and the same OPTIMAL scenario was called again.
+
+| Field | Value |
+|---|---|
+| `runtime_ms` | 78,487 |
+| `fallback_used` | `False` |
+| `critical_result` | `PASS` |
+| Remaining items | One `NEW_IDENTIFIER` warning on "Bore 1" - not a failure, same as every earlier run |
+
+**This is the first genuinely complete, independently-confirmed accepted rewrite of the flagship
+scenario.** Two things make this a real, meaningful result rather than a repeat of the earlier
+mistake: the output was checked to end in proper terminal punctuation rather than trusted from the
+console summary, and `_check_output_completeness` (added directly because of the PR #46 review) is
+now part of every validation call - if this run had been truncated again, `INCOMPLETE_OUTPUT` would
+have shown up in the failures exactly as it did for Runs 1 and 3, and it did not. Saved in
+`AI/explanations/live_run_output_run5_optimal_pass/`.
+
+## 9. Fallback demonstration (model unavailable)
 
 Every one of Runs 1-3 independently exercised the fallback path (`run_live_llm.py` always makes a
 second call to a deliberately wrong port after the real one) - consistent results all three times:
@@ -192,7 +263,7 @@ second call to a deliberately wrong port after the real one) - consistent result
 Confirmed each time that the fallback text is character-for-character identical to the deterministic
 report - the fallback path returns the trusted source unchanged, not a degraded or partial version.
 
-## 9. A real bug found along the way, not yet fixed (belongs to Task 24, not this task)
+## 10. A real bug found along the way, not yet fixed (belongs to Task 24, not this task)
 
 The first attempt at Run 1 used the example config's default `timeout_seconds: 30.0` and hit that
 limit before the model finished generating (`runtime_ms: 30008`, essentially exactly the timeout).
@@ -208,22 +279,31 @@ exercise the actual exception class a real network call raises on this Python ve
 genuine run against a real endpoint could have found this. Worth raising with Yousef as a fix needed
 in `model_runner.py`, not something this task's files should patch directly.
 
-## 10. Recommendation
+## 11. Recommendation
 
-**Continue.** The model's raw output quality was good across all four runs - clear, complete,
-factually faithful in every case that mattered once the validator's own bugs were accounted for, and
-it did not pad the two near-empty status-only samples with invented content, which was the specific
-risk Run 4 was designed to check for.
+**Continue, but with an honest correction, not a clean close.** This section originally claimed
+every checklist item was satisfied, including a genuine accepted rewrite. A real PR review (#46,
+Yousef) found that claim was wrong, along with two further validator gaps. All three are fixed as of
+this revision - see section 1a for the full list - but the correction changes what can honestly be
+claimed here.
 
-Four real validator bugs found across Runs 1-3 are now fixed and covered by regression tests using
-the actual captured output, not a redescription of it: word-form percentages, reformatted/fuller
-identifier names, negation-blind phrase matching, and the field-name exemption decided in section 4.
+**Seven real validator bugs have now been found and fixed** across this task's live runs and the PR
+review that followed, all covered by regression tests using actual captured output or the reviewer's
+own exact examples, not redescriptions: word-form percentages, reformatted/fuller identifier names,
+negation-blind phrase matching, a negation incorrectly crossing a contrastive conjunction into an
+unrelated clause, swapped source figures passing silently, and missing output-completeness detection
+- plus the field-name exemption, a deliberate decision rather than a bug.
 
-**Every checklist item for this task is now satisfied, including "run existing deterministic
-explanation samples" (plural - all three genuine Task 23 sample types, not just the OPTIMAL one) and
-"demonstrate at least one accepted valid rewrite"** - both Run 1 (re-validated) and Run 3 (fresh
-output, never used to write the fixes) return `critical_result: PASS`, and Run 4 confirms the same
-holds on the two sample types nothing had tested against a real model before. Not achieved by
-re-running until one happened to pass - achieved by finding and fixing four real, specific problems,
-three of them validator bugs and one a deliberate, narrowly-scoped, documented team-lead decision
-about what this validator should and shouldn't require verbatim.
+**"Run existing deterministic explanation samples" (plural) is genuinely satisfied** - all three
+Task 23 sample types have real live-model calls on record (section 3, section 7).
+
+**"Demonstrate at least one accepted valid rewrite" is now genuinely satisfied.** Runs 1-3 are the
+same truncated text and all correctly fail, for a real reason, not a bug. Run 4's two samples pass
+genuinely but are short status-only reports. Run 5 (section 8) closes the actual gap: `max_tokens`
+raised, the same flagship OPTIMAL scenario called again, and this time the response completed and
+returned a genuine `critical_result: PASS`, confirmed specifically by the absence of
+`INCOMPLETE_OUTPUT` in the failures rather than assumed from the console summary.
+
+**Human review is still pending** and this document should not describe any result as fully reviewed
+until reviewer names, dates, scores, and notes are actually recorded in `llm_evaluation.csv` and
+`llm_evaluation_full_rubric.csv`.
