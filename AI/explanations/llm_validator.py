@@ -192,19 +192,39 @@ _NEGATION_WORDS = {"not", "no", "never", "none", "without", "cannot", "nor"}
 # scanning was rejected).
 _NEGATION_WINDOW_WORDS = 12
 
+# How many characters apart two numbers can be and still count as a
+# written-together pair (e.g. "290 ML/day, ... 58.0% of the blend") -
+# see _extract_number_pairs.
+_PAIR_WINDOW_CHARS = 40
+
 # A sentence/clause boundary the negation window must not cross - a
 # negation on one side of these should never suppress a phrase on the
 # other side, even if the word-count window would otherwise reach it.
 _CLAUSE_BOUNDARY_PATTERN = re.compile(r"[.!?;\n]")
+
+# A contrastive conjunction also ends a negation's scope, even mid-sentence
+# with no terminal punctuation - found from a real review comment (PR #46):
+# "The blend is not safe to drink, but it is compliant." "not" genuinely
+# negates "safe to drink", but "compliant" sits in a new clause introduced
+# by "but", and is not negated by anything - it's a real, separate, unsafe
+# assertion that must still fail. Without this boundary, the word-count
+# window alone (7 words from "not" to "compliant") would incorrectly let
+# "not" suppress a claim it has no grammatical relationship to.
+_CONTRASTIVE_BOUNDARY_PATTERN = re.compile(
+    r",?\s*\b(?:but|however|yet|although|though|while|except|nonetheless|nevertheless)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_negated(text_lower: str, phrase_start: int) -> bool:
     """True if a negation word governs the phrase starting at
     `phrase_start` in `text_lower` - i.e. one of _NEGATION_WORDS appears
     within _NEGATION_WINDOW_WORDS words before it, without crossing a
-    sentence or clause boundary in between."""
-    boundary_matches = list(_CLAUSE_BOUNDARY_PATTERN.finditer(text_lower, 0, phrase_start))
-    clause_start = boundary_matches[-1].end() if boundary_matches else 0
+    sentence, clause, or contrastive-conjunction boundary in between."""
+    clause_matches = list(_CLAUSE_BOUNDARY_PATTERN.finditer(text_lower, 0, phrase_start))
+    contrastive_matches = list(_CONTRASTIVE_BOUNDARY_PATTERN.finditer(text_lower, 0, phrase_start))
+    boundary_ends = [m.end() for m in clause_matches] + [m.end() for m in contrastive_matches]
+    clause_start = max(boundary_ends) if boundary_ends else 0
     preceding = text_lower[clause_start:phrase_start]
     words = re.findall(r"[a-z']+", preceding)
     window = words[-_NEGATION_WINDOW_WORDS:]
@@ -562,6 +582,78 @@ def _check_identifiers(
     return failures, warnings
 
 
+
+def _extract_number_pairs(text: str) -> set[tuple[tuple[float, bool], tuple[float, bool]]]:
+    """Returns the set of (plain_value, percent_value) pairs where the two
+    numbers appear within a short character window of each other in
+    `text` - the "290 ML/day, ... 58.0% of the blend" pattern a source's
+    volume and blend share are always written in together, in some order,
+    regardless of how the surrounding sentence is phrased.
+
+    This is the check that replaced two earlier, broader attempts at
+    catching a swapped value (see _check_number_association) - both tried
+    to associate every number with whichever identifier sat nearest to it
+    positionally, and both produced false positives on CORRECT_REWRITE
+    itself once tested against it directly: real prose freely interleaves
+    numbers belonging to different identifiers once a rewrite restructures
+    a paragraph, so identifier-proximity alone is not a reliable signal.
+    Pair co-occurrence is far narrower and safer: it makes no claim about
+    which identifier a number belongs to at all, only that two SPECIFIC
+    values that were written together in the source stay written together
+    in the rewrite, in either order. A swap that separates a value from
+    its paired value is exactly what breaks this co-occurrence, which is
+    the concrete case this check exists for (PR #46, Yousef)."""
+    text = _normalise_percent_words(text)
+    matches = [
+        m for m in _NUMBER_PATTERN.finditer(text)
+        if not _is_embedded_in_identifier(text, m.start(), m.end())
+    ]
+    pairs: set[tuple[tuple[float, bool], tuple[float, bool]]] = set()
+    for i, m1 in enumerate(matches):
+        v1 = _normalise_number(m1.group())
+        for m2 in matches[i + 1:i + 4]:
+            if m2.start() - m1.end() > _PAIR_WINDOW_CHARS:
+                break
+            v2 = _normalise_number(m2.group())
+            if v1[1] != v2[1]:  # exactly one of the pair must be a percent
+                pair = (v1, v2) if not v1[1] else (v2, v1)
+                pairs.add(pair)
+    return pairs
+
+
+def _check_number_association(det_body: str, llm_output: str) -> list[CriticalFailure]:
+    """Catches a real gap _check_numbers cannot see on its own: two values
+    that are each genuinely present somewhere in the rewrite, but no
+    longer paired with each other - found from a real review comment
+    (PR #46, Yousef): swapping Yarra River, Kew's 58.0% with Silvan
+    Reservoir's 42.0% leaves the overall set of numbers in the document
+    completely unchanged, so the plain presence-based check in
+    _check_numbers correctly sees nothing wrong. This check instead looks
+    at which values were written together as a pair (a volume with its
+    blend percentage) and confirms that same pairing survives in the
+    rewrite, regardless of wording or which identifier sits nearby - see
+    _extract_number_pairs for why this narrower design replaced two
+    broader, identifier-proximity-based attempts that both produced false
+    positives on genuinely correct text."""
+    det_pairs = _extract_number_pairs(det_body)
+    llm_pairs = _extract_number_pairs(llm_output)
+
+    failures: list[CriticalFailure] = []
+    for plain, percent in sorted(det_pairs - llm_pairs):
+        # Only a real association failure if both values are still
+        # present individually - if the source dropped one of them
+        # entirely, that's already NUMBER_MISSING_OR_CHANGED's job.
+        if plain in _extract_numbers(llm_output) and percent in _extract_numbers(llm_output):
+            failures.append(CriticalFailure(
+                "NUMBER_WRONG_ASSOCIATION",
+                f"{_format_number(plain)!r} and {_format_number(percent)!r} "
+                "are written together in the deterministic report, but no "
+                "longer appear paired in the rewrite - one of them may have "
+                "been swapped with a different source's figure.",
+            ))
+    return failures
+
+
 def _check_status_words(det_body: str, llm_output: str) -> list[CriticalFailure]:
     det_status = _extract_status_words(det_body)
     llm_status = _extract_status_words(llm_output)
@@ -679,6 +771,38 @@ def _check_empty_output(llm_output: str) -> list[CriticalFailure]:
     return []
 
 
+# A response that doesn't end with terminal punctuation almost always means
+# generation stopped mid-sentence - typically the model hit its max_tokens
+# limit before finishing. Found from a real review comment (PR #46,
+# Yousef): the accepted Run 1 output was truncated at "All data and
+# estimates," with nothing after, and was still being recorded as an
+# accepted PASS. A cut-off response can be silently missing anything that
+# would have come after the cut point, including required disclaimer
+# content - that risk applies regardless of what facts happen to already
+# be correct in the part that did get generated, which is exactly why this
+# is a critical failure and not a length-anomaly warning.
+_TERMINAL_PUNCTUATION_PATTERN = re.compile(r"[.!?]['\")]?\s*$")
+
+
+def _check_output_completeness(llm_output: str) -> list[CriticalFailure]:
+    stripped = llm_output.strip()
+    if not stripped:
+        return []  # _check_empty_output already covers this case
+    if _TERMINAL_PUNCTUATION_PATTERN.search(stripped):
+        return []
+    return [CriticalFailure(
+        "INCOMPLETE_OUTPUT",
+        "The rewrite does not end with terminal punctuation, which "
+        "suggests generation was cut off before finishing - most likely "
+        "by hitting the model's max_tokens limit. A truncated response "
+        "could be silently missing required content (such as the "
+        "prototype disclaimer) that would have appeared after the cut "
+        "point, and must not be accepted as a complete rewrite. Rerun "
+        "with a higher max_tokens rather than accepting a partial "
+        "response.",
+    )]
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -731,6 +855,7 @@ def validate_llm_output(deterministic_report: str, llm_output: str) -> Validatio
     warnings: list[Warning_] = []
 
     critical_failures += _check_numbers(det_body, llm_body)
+    critical_failures += _check_number_association(det_body, llm_body)
     critical_failures += _check_unit_codes(det_body, llm_body)
 
     id_failures, id_warnings = _check_identifiers(det_body, llm_body)
@@ -748,6 +873,7 @@ def validate_llm_output(deterministic_report: str, llm_output: str) -> Validatio
     critical_failures += _check_always_banned_safety_claims(llm_output_lower)
     critical_failures += _check_disclaimer(det_report_lower, llm_output_lower)
     critical_failures += _check_water_quality_note(det_report_lower, llm_output_lower)
+    critical_failures += _check_output_completeness(llm_output)
 
     warnings += _check_length_anomaly(deterministic_report, llm_output)
 
