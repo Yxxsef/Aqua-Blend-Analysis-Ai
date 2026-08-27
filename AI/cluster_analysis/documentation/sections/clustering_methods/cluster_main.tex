@@ -3,10 +3,16 @@
 
 Refer to \textbf{Sect. \ref{sec:background}} for details of cluster analysis, families of methods, and important properties.
 
-\subsection{Dissimilarity measures}
+Before going into each family of clustering technique, we shall review two primary concepts, i.e. dissimilarity/similarity measures and validity indices.
+In short, \textbf{dissimilarity/similarity measure} determines of extent of association between data instances, and hence, widely used as the objectives to optimise and assignment of data to clusters \cite{ref_1}.
+Meanwhile, \textbf{validity indices} are typically used to qualify the clustering outcomes, whether our chosen methods produce proper clusters in the given dataset \cite{ref_1}.
 
-\placeholder{Add a short paragraph distinguishing between dissimilarity measure vs. validity index}
-\input{sections/clustering_methods/measures/measure_1.tex}
+\subsection{Dissimilarity measures}
+% \input{sections/clustering_methods/validity/measure_1.tex}
+\newpage
+\subsection{Validity indices}
+% \input{sections/clustering_methods/validity/measure_1.tex}
+\input{sections/clustering_methods/validity/02-silhouette.tex}
 
 \newpage
 \subsection{Hierarchical clustering methods}
@@ -14,6 +20,7 @@ Refer to \textbf{Sect. \ref{sec:background}} for details of cluster analysis, fa
 
 \newpage
 \subsection{Partition–based clustering methods}
+\input{sections/clustering_methods/partitional/sse_based/01-kmeans.tex}
 
 \newpage
 \subsection{Hybrid clustering methods}

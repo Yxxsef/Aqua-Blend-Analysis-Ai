@@ -1,7 +1,8 @@
 """
 Dissimilarity and validation measures.
 
-The two kinds of measurement Sect. 7.1 groups together, kept apart here
+The two kinds of measurement, kept apart here as the document keeps them
+apart -- dissimilarities in Sect. 7.1, validity indices in Sect. 7.2 --
 because they answer different questions:
 
     dissimilarity/      d(., .): how far apart two observations are, the

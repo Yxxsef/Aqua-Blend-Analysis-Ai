@@ -257,7 +257,7 @@ cp template/method_template.tex \
    documentation/sections/clustering_methods/partitional/sse_based/01-kmeans.tex
 
 cp template/measure_template.tex \
-   documentation/sections/clustering_methods/measures/02-silhouette.tex
+   documentation/sections/clustering_methods/validity/02-silhouette.tex
 ```
 
 The `sse_based/` directory did not exist, so you create it, mirroring the code tree the way `partitional/density_based/` already does.
@@ -274,7 +274,7 @@ Listed so the §10 caveats are accurate, and because a real contribution ends wi
 
 | Outstanding | Needs |
 |---|---|
-| `references=()` on `KMeans` | the `literature.bib` keys Sect. 7.3 actually cites, left empty rather than guessed |
+| `references=()` on `KMeans` | the `literature.bib` keys Sect. 7.4 actually cites, left empty rather than guessed |
 | `sec:tech:kmeans` | the section does not exist yet; `doc_label` is a forward reference |
 | `metric="manhattan"` silently dropped | reject it in `_fit` |
 | `selection/n_clusters.py` | `_evaluate_candidate` + a concrete `BaseRelativeCriterion` |

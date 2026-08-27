@@ -44,7 +44,7 @@ Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. Th
 | `core/` | The contract: base classes, mixins, protocols, tags, registry | n/a |
 | `cluster/` | Clustering methods, by family | Sect. 7 |
 | `dim_red/` | Dimensionality reduction, intrinsic dimension | Sect. 6 |
-| `measures/` | Dissimilarity measures and validity indices | Sect. 7.1 |
+| `measures/` | Dissimilarity measures and validity indices | Sect. 7.1–7.2 |
 | `pipeline/` | Preprocessing steps and composition | Sect. 3.3 |
 | `selection/` | Choosing \|C\|, stability analysis | Sect. 4.3 |
 | `evaluation/` | The shared protocol, the comparison tables | Sect. 4, 8 |
