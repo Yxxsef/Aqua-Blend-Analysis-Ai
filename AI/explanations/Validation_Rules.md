@@ -73,6 +73,19 @@ rule (`AUD`, `NZD`, and so on) whenever a currency code appears nearby in the so
 equivalent second check anywhere else in this module, which is exactly why losing it silently was a
 real gap rather than a redundant one.
 
+**"20 percent" and "20%" normalise to the same value before extraction runs.** Found by running a
+genuine model call (Task 62) rather than a hand-built fixture: the source writes proportions in
+word form ("45 percent"), and the real model faithfully rewrote several of these as the symbol form
+("45%") - the exact same fact, reformatted. Before this fix, "45.0" (word form, unflagged) and
+"45.0%" (symbol form, flagged) were tracked as two unrelated values, so a completely faithful
+rewrite produced three pairs of `NUMBER_MISSING_OR_CHANGED` / `NUMBER_INVENTED` failures for numbers
+that never actually changed. `_normalise_percent_words()` converts `"N percent"` / `"N pct"` (case-
+insensitive) to `"N%"` on both texts before number extraction runs, so the two spellings can never
+diverge. `test_percent_word_form_matches_percent_symbol_form` and
+`test_pct_word_form_also_matches_percent_symbol` are the regression tests, and
+`TestRealLiveModelOutput` in `test_llm_validator.py` keeps the actual captured model output that
+found this as a permanent fixture.
+
 A candidate number is discarded if it is actually embedded inside a longer identifier token - e.g.
 the `01` inside `scenario_2026_07_17_001`, or the `1` inside `facility_1`. A single-character
 lookaround on the regex catches the simple case (a digit directly touching a letter or underscore)
@@ -122,6 +135,48 @@ identifier (present in the rewrite, absent from the source) is a warning only, n
 paraphrasing can introduce a plausible-looking name in ways that are hard to distinguish from a
 genuine invention with a text-only check, so this is surfaced for a human to check rather than
 auto-failed.
+
+**A rewrite may use a fuller or differently-formatted name for the same entity.** Found by running a
+genuine model call (Task 62): the source uses `zone_1` in one section and `Zone 1` in another,
+`facility_1` alongside `Treatment Facility 1`, and the shorthand `Yarra Kew` once inside the
+sensitivity notes while using the full `Yarra River, Kew` everywhere else. A real model rewrite used
+`Zone 1`, `Treatment Facility 1`, and `Yarra River, Kew` consistently throughout - correct, faithful,
+and, before this fix, wrongly flagged as three separate missing identifiers, since each was compared
+against the source's exact string only.
+
+The fix: an identifier from the source counts as present if a rewrite identifier's *word set* is a
+superset of it - `{zone, 1}` is a subset of `{zone, 1}` (an exact match), and also of `{treatment,
+facility, 1}` for `facility_1` against `Treatment Facility 1`, and of `{yarra, river, kew}` for
+`Yarra Kew` against `Yarra River, Kew`. One mechanism resolves all three real cases found, with no
+special-casing needed per pattern. Direction matters and is enforced deliberately: the source
+identifier's words must be a subset of the rewrite identifier's, never the reverse - a rewrite that
+dropped a word (writing bare `Silvan` for `Silvan Reservoir`, say) must still fail, since that is
+real information loss, not reformatting. `test_fuller_or_reformatted_name_for_the_same_entity_is_not_flagged`
+tests the fix; `test_dropped_word_in_a_shorter_name_still_fails` and
+`test_wrong_number_in_a_covered_identifier_still_fails` test that the safety direction still holds.
+
+**`cost_per_ml` and `max_available_ml_per_day` are deliberately exempt from this check** -
+`EXEMPT_FIELD_NAME_TOKENS`. The same real run that motivated the fix above also found the model
+paraphrasing `cost_per_ml for groundwater_bore_1` into "the actual cost of groundwater from Bore 1",
+and `max_available_ml_per_day` into "the maximum available flow" - genuinely clearer prose, with the
+raw field name itself not surviving in any recognisable form. A team-lead decision (Task 62): these
+two are attribute *labels*, not references to a specific real-world entity the way
+`silvan_reservoir`, `zone_1`, or `facility_1` are, and the numeric value each one is attached to is
+still independently checked by the number-presence check regardless of how the surrounding label is
+worded. Exempting the label's exact spelling here does not weaken fact coverage - it stops
+penalising a rewrite for doing exactly what `prompts.py` explicitly permits ("simplify wording...
+organise the same facts more clearly") to a category of token an operator was never going to need to
+see verbatim in the first place.
+
+This is scoped narrowly to these two specific tokens, not the whole field-name category. Every other
+snake_case field name in the same report - `storage_capacity`, `reference_flow`, `alkalinity`,
+`cost`, `max_available` in the Data Flags section - is *not* exempted, and correctly survived
+verbatim in both real runs anyway: that section is a literal bullet list, which naturally resists
+paraphrasing the way free-flowing sentence prose does not. Widening the exemption to the whole
+category was considered and rejected, since it would weaken a check that already works correctly for
+those other fields to fix a problem only actually observed for these two.
+`test_exemption_is_narrow_other_field_names_still_required` is the regression test confirming
+`storage_capacity` is still required.
 
 **Sentence-initial false positives.** The Title-Case pattern was found, by testing against the
 actual reference report, to false-positive on ordinary sentence-initial words directly followed by
@@ -178,14 +233,61 @@ place the source never used it, is.
 LLM_Report_Scope.md rule 4 and section 6 both call out "an unsafe result described as safe" as its
 own category, separate from ordinary invented content, and for good reason: this is the one failure
 mode with a real-world safety consequence if missed. `ALWAYS_BANNED_PHRASES` -
-`"final drinking"`, `"safe to drink"`, `"compliant"`, `"treated water"` - are banned in the rewrite
-regardless of whether they happen to already exist in the source. These four phrases are not chosen
-independently; they are lifted directly from `json_explainer.py`'s own permanent test guarantee
-(`test_water_quality_never_claims_final_or_safe` in `test_json_explainer.py`), which already proves
-the deterministic report never contains them. Their appearance in a rewrite is therefore always a
-rule 4 violation, never a legitimate carry-over from the source - there is nothing to carry over.
+`"final drinking"`, `"safe to drink"`, `"compliant"`, `"treated water"` - are banned wherever they
+are genuinely *asserted* in the rewrite, whether or not they happen to already exist in the source
+(unlike the differential checks elsewhere in this module, presence alone is enough to matter here -
+see section 6 for the one exception: a true, faithful *denial* of one of these phrases is not itself
+a violation). These four phrases are not chosen independently; they are lifted directly from
+`json_explainer.py`'s own permanent test guarantee (`test_water_quality_never_claims_final_or_safe`
+in `test_json_explainer.py`), which already proves the deterministic report never contains them as
+an assertion. Their appearance in a rewrite as a genuine claim is therefore always a rule 4
+violation, never a legitimate carry-over from the source - there is nothing to carry over.
 
-## 6. Disclaimer and water-quality stage note
+## 6. Negation handling
+
+A phrase check that fires on bare substring presence cannot tell "the results are safe to drink"
+from "the results are **not** safe to drink" - the second is a correct, safety-relevant denial, and
+treating it identically to the first is itself a kind of false positive with real consequences: a
+validator that cries wolf on accurate, careful safety language teaches people to distrust or ignore
+its output.
+
+This was found by a genuine model run (Task 62), not designed in advance. The model wrote "The
+results are not final drinking-water quality outcomes" and "No claims are made about water safety,
+regulatory compliance, or operational performance" - both accurate, faithful negations matching what
+the deterministic report itself says. Before this fix, both were flagged as if they were genuine
+violations, correctly by the letter of a context-blind substring check, but wrongly given what the
+sentences actually meant.
+
+**The fix:** `_has_unnegated_occurrence()` checks, for every occurrence of a phrase, whether a
+negation word (`not`, `no`, `never`, `none`, `without`, `cannot`, `nor`, or any word ending in
+`n't`) appears within 12 words before it, without crossing a sentence or clause boundary
+(`.`, `!`, `?`, `;`, or a newline) in between. A phrase is only treated as genuinely present if at
+least one occurrence is *not* negated. Both `_check_always_banned_safety_claims` and
+`_check_invented_content` use this instead of plain substring matching now.
+
+**Why 12 words, and why bounded rather than whole-sentence.** The real sentence that motivated this
+fix - "No claims are made about water safety, regulatory compliance, or operational performance" -
+puts 7 words between "No" and "regulatory compliance", so the window needs real margin above that.
+Scanning the whole sentence instead of a bounded window was tried first and rejected: a long enough
+sentence can contain an earlier negation that has nothing to do with a genuinely unsafe claim later
+in it (e.g. "This is not a small system, ... and the water is safe to drink" - the first negation
+should never suppress the second, unrelated claim). `test_distant_negation_in_a_long_sentence_does_not_carry_over`
+is the regression test confirming a distant, unrelated negation does not hide a real violation - the
+adversarial sentence it uses puts 21 words between the two, well outside the window.
+
+**Consistency finding, not a separate bug:** an earlier version of `test_treated_water_always_fails`
+asserted that a negated "treated water" ("are not final treated water") should always fail regardless
+of context - but that is the exact same context-blind assumption the fix above corrects for "final
+drinking", and treating the two phrases inconsistently would be arbitrary. "not final treated water"
+and "not final drinking-water" are equally true, equally safe denials of the same underlying fact.
+The test was updated (`test_negated_treated_water_claim_does_not_fail`), and a new test
+(`test_asserted_treated_water_claim_fails`) confirms a genuine, non-negated "treated water" claim is
+still caught.
+
+See section 8 for the honest limits of this fix - it is a bounded heuristic, not real negation
+parsing, and does not claim to catch every possible phrasing.
+
+## 7. Disclaimer and water-quality stage note
 
 Both are checked by marker phrase, not exact text, because the LLM is explicitly allowed to reword
 them:
@@ -198,13 +300,23 @@ them:
   somewhere.
 
 Both checks look for the marker phrase *anywhere* in the rewrite, not specifically attached to the
-right section. This is a known, deliberate simplification - see section 7.
+right section. This is a known, deliberate simplification - see section 8.
 
-## 7. Known limits
+## 8. Known limits
 
 This validator is a fast, explainable, deterministic first pass, not a substitute for a human
 reading the rewrite. The following gaps are deliberate, not oversights:
 
+- **Negation detection is a bounded heuristic, not real language understanding.** Section 6
+  explains the fix and its safety checks. The window is deliberately bounded (12 words, never
+  crossing a sentence/clause boundary) specifically so an unrelated negation earlier in a long
+  sentence can't hide a genuinely unsafe claim later in that same sentence -
+  `test_distant_negation_in_a_long_sentence_does_not_carry_over` is the regression test for exactly
+  this risk. But a bounded window is still a heuristic: a negation phrased unusually (e.g. "far from
+  compliant" or a negation more than 12 words back with no intervening punctuation) could still slip
+  past undetected in either direction. This trades a small amount of missed edge cases for staying
+  simple, explainable, and safe against the specific failure mode that would matter most (hiding a
+  real unsafe claim) - it is not a claim that negation is fully solved.
 - **Marker checks are not section-scoped.** The disclaimer and water-quality checks look for their
   marker phrase anywhere in the whole rewrite. A rewrite that mentions "plant inflow" once, in an
   unrelated paragraph, while genuinely dropping the note from the quality discussion itself, would
@@ -246,7 +358,7 @@ reading the rewrite. The following gaps are deliberate, not oversights:
   that JSON) already said. If Task 23's own generator has a bug, this validator will not catch it;
   that is `test_json_explainer.py`'s job, not this module's.
 
-## 8. Rule-to-code map
+## 9. Rule-to-code map
 
 | LLM_Report_Scope.md section 6 condition | Rule name(s) | Function |
 |---|---|---|
@@ -265,6 +377,7 @@ reading the rewrite. The following gaps are deliberate, not oversights:
 | *(not in section 6 - defensive addition)* | `LENGTH_ANOMALY` (warning) | `_check_length_anomaly` |
 | *(not in section 6 - defensive addition)* | `NEW_IDENTIFIER` (warning) | `_check_identifiers` |
 | *(not in section 6 - defensive addition)* | `WEAK_INVENTED_CONTENT_PHRASE` (warning) | `_check_invented_content` |
+| *(not in section 6 - supporting mechanism)* | negation-aware phrase matching (section 6 of this doc) | `_has_unnegated_occurrence`, `_is_negated` |
 
 "A wrong selected source" and "a wrong binding constraint" do not have a single dedicated rule -
 they are covered by the combination of the identifier check (the source or constraint's name), the

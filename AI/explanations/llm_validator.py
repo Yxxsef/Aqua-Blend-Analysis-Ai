@@ -173,6 +173,59 @@ _LEADING_WORD_STOPWORDS = {
     "Based", "According",
 }
 
+# Words that negate whatever follows them in the same sentence/clause.
+# Used by _has_unnegated_occurrence so a phrase like "safe to drink"
+# appearing inside "not safe to drink" - or, found in real testing (Task
+# 62), inside "No claims are made about ... regulatory compliance" - is
+# recognised as a denial, not an assertion. See Validation_Rules.md
+# section 7 for the full reasoning, including why this is a bounded
+# heuristic rather than real negation parsing.
+_NEGATION_WORDS = {"not", "no", "never", "none", "without", "cannot", "nor"}
+
+# How many words back (in the same sentence/clause) to look for a
+# negation word before treating a phrase as genuinely asserted. Found by
+# measuring the real sentence that motivated this fix: "No claims are
+# made about water safety, regulatory compliance, or operational
+# performance" puts 7 words between "No" and "regulatory compliance" -
+# 12 gives real margin above that without being unbounded (see
+# Validation_Rules.md section 7 for why unbounded/whole-sentence
+# scanning was rejected).
+_NEGATION_WINDOW_WORDS = 12
+
+# A sentence/clause boundary the negation window must not cross - a
+# negation on one side of these should never suppress a phrase on the
+# other side, even if the word-count window would otherwise reach it.
+_CLAUSE_BOUNDARY_PATTERN = re.compile(r"[.!?;\n]")
+
+
+def _is_negated(text_lower: str, phrase_start: int) -> bool:
+    """True if a negation word governs the phrase starting at
+    `phrase_start` in `text_lower` - i.e. one of _NEGATION_WORDS appears
+    within _NEGATION_WINDOW_WORDS words before it, without crossing a
+    sentence or clause boundary in between."""
+    boundary_matches = list(_CLAUSE_BOUNDARY_PATTERN.finditer(text_lower, 0, phrase_start))
+    clause_start = boundary_matches[-1].end() if boundary_matches else 0
+    preceding = text_lower[clause_start:phrase_start]
+    words = re.findall(r"[a-z']+", preceding)
+    window = words[-_NEGATION_WINDOW_WORDS:]
+    return any(w in _NEGATION_WORDS or w.endswith("n't") for w in window)
+
+
+def _has_unnegated_occurrence(text_lower: str, phrase: str) -> bool:
+    """True if `phrase` appears in `text_lower` at least once without a
+    negation governing it. A phrase that only ever appears negated (e.g.
+    every occurrence is inside "not X" or "no ... X") is treated as
+    absent for the purposes of the always-banned and invented-content
+    checks - it was denied, not claimed."""
+    start = 0
+    while True:
+        idx = text_lower.find(phrase, start)
+        if idx == -1:
+            return False
+        if not _is_negated(text_lower, idx):
+            return True
+        start = idx + len(phrase)
+
 # Numeric fact candidate: an optional leading '-' or '$', digits with
 # optional thousands separators, an optional decimal part, an optional
 # trailing '%'. A candidate is discarded by _extract_numbers below if it
@@ -181,6 +234,19 @@ _LEADING_WORD_STOPWORDS = {
 # _is_embedded_in_identifier for why a single-character lookaround on the
 # regex itself is not enough to catch every such case.
 _NUMBER_PATTERN = re.compile(r"-?\$?\d[\d,]*(?:\.\d+)?%?")
+
+# "45 percent" and "45%" are the same fact, just spelled differently - a
+# faithful rewrite is entirely free to make this substitution, and did in
+# real testing (see Validation_Rules.md section 3). Applied to both texts
+# before number extraction, so "percent"/"pct" always normalises to the
+# same '%' form regardless of which side wrote it which way.
+_PERCENT_WORD_PATTERN = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(?:percent|pct)\b", re.IGNORECASE
+)
+
+
+def _normalise_percent_words(text: str) -> str:
+    return _PERCENT_WORD_PATTERN.sub(r"\1%", text)
 
 # Currency and measurement codes used across the deterministic report.
 # "pH" is mixed case and handled as its own literal alternative; the rest
@@ -298,6 +364,7 @@ def _is_embedded_in_identifier(text: str, start: int, end: int) -> bool:
 
 
 def _extract_numbers(text: str) -> set[tuple[float, bool]]:
+    text = _normalise_percent_words(text)
     values = set()
     for m in _NUMBER_PATTERN.finditer(text):
         if not _is_embedded_in_identifier(text, m.start(), m.end()):
@@ -305,12 +372,46 @@ def _extract_numbers(text: str) -> set[tuple[float, bool]]:
     return values
 
 
+# Field-name (not entity-reference) snake_case tokens that a rewrite may
+# paraphrase into plain language instead of preserving verbatim - a
+# deliberate, documented team-lead decision (Task 62), not a rule this
+# validator relaxes silently or by default.
+#
+# Scoped narrowly to the two specific tokens actually observed causing
+# this in two independent live-model runs: `cost_per_ml` and
+# `max_available_ml_per_day`, both from the Sensitivity section's prose
+# ("cost_per_ml for groundwater_bore_1"). Every OTHER snake_case field
+# name in the same report - `storage_capacity`, `reference_flow`,
+# `alkalinity`, `cost`, `max_available` in the Data Flags section - is
+# NOT exempted, and correctly survived verbatim in both real runs anyway,
+# since that section is a literal bullet list, which naturally resists
+# paraphrasing the way free-flowing sentence prose does not. Widening this
+# exemption to the whole field-name category was considered and rejected:
+# it would weaken a check that is currently working correctly for those
+# other fields, to fix a problem that has only actually been observed for
+# these two.
+#
+# The reasoning: `cost_per_ml` and `max_available_ml_per_day` are
+# attribute LABELS, not references to a specific real-world entity (unlike
+# `silvan_reservoir`, `zone_1`, `facility_1`, which identify a particular
+# source, zone, or plant and must still survive under this or a covering
+# name - see _identifier_covered_by). The NUMERIC VALUE attached to each
+# sensitivity item is still independently checked by the number-presence
+# check regardless of what the surrounding field label is paraphrased
+# into, so exempting the label's exact spelling here does not weaken fact
+# coverage - it only stops penalising a rewrite for doing exactly what
+# prompts.py permits ("simplify wording... organise the same facts more
+# clearly") to a category of token an operator was never going to need to
+# see verbatim in the first place.
+EXEMPT_FIELD_NAME_TOKENS = {"cost_per_ml", "max_available_ml_per_day"}
+
+
 def _extract_identifiers(text: str) -> set[str]:
     title_case = {
         m for m in _TITLE_CASE_IDENTIFIER_PATTERN.findall(text)
         if m.split(" ")[0].split(",")[0] not in _LEADING_WORD_STOPWORDS
     }
-    snake_case = set(_SNAKE_CASE_IDENTIFIER_PATTERN.findall(text))
+    snake_case = set(_SNAKE_CASE_IDENTIFIER_PATTERN.findall(text)) - EXEMPT_FIELD_NAME_TOKENS
     return title_case | snake_case
 
 
@@ -391,23 +492,64 @@ def _check_unit_codes(det_body: str, llm_output: str) -> list[CriticalFailure]:
     ]
 
 
+def _identifier_word_set(identifier: str) -> frozenset[str]:
+    """'zone_1' -> {'zone', '1'}; 'Treatment Facility 1' -> {'treatment',
+    'facility', '1'}. Used to recognise that two differently-formatted
+    identifiers refer to the same entity."""
+    return frozenset(re.findall(r"[a-z0-9]+", identifier.lower()))
+
+
+def _identifier_covered_by(det_id: str, llm_id: str) -> bool:
+    """True if `llm_id` contains at least every word `det_id` has - so a
+    rewrite is free to use a fuller or differently-formatted name for the
+    same entity, but can never satisfy the check by dropping a word.
+
+    Found by testing against a real model rewrite, not designed in
+    advance: the source used 'zone_1', 'facility_1', and the shorthand
+    'Yarra Kew' in different places; a genuinely faithful rewrite used
+    'Zone 1', 'Treatment Facility 1', and 'Yarra River, Kew' throughout -
+    same entities, fuller or differently-cased names, correctly not a
+    fact change. Directionality matters: det_id's words must be a SUBSET
+    of llm_id's, never the reverse - a rewrite that dropped a word (e.g.
+    just 'Yarra' alone) must still fail, since that is real information
+    loss, not reformatting. See Validation_Rules.md section 3."""
+    det_words = _identifier_word_set(det_id)
+    if not det_words:
+        return False
+    return det_words <= _identifier_word_set(llm_id)
+
+
 def _check_identifiers(
     det_body: str, llm_output: str
 ) -> tuple[list[CriticalFailure], list[Warning_]]:
     det_ids = _extract_identifiers(det_body)
     llm_ids = _extract_identifiers(llm_output)
 
-    missing = det_ids - llm_ids
+    missing = []
+    covered_llm_ids = set()
+    for det_id in sorted(det_ids):
+        if det_id in llm_ids:
+            covered_llm_ids.add(det_id)
+            continue
+        match = next(
+            (llm_id for llm_id in llm_ids if _identifier_covered_by(det_id, llm_id)),
+            None,
+        )
+        if match is not None:
+            covered_llm_ids.add(match)
+        else:
+            missing.append(det_id)
+
     failures = [
         CriticalFailure(
             "IDENTIFIER_MISSING",
             f"'{name}' appears in the deterministic report but not in the "
             "rewrite.",
         )
-        for name in sorted(missing)
+        for name in missing
     ]
 
-    new = llm_ids - det_ids
+    new = sorted((llm_ids - det_ids) - covered_llm_ids)
     warnings = [
         Warning_(
             "NEW_IDENTIFIER",
@@ -415,7 +557,7 @@ def _check_identifiers(
             "deterministic report. May be a legitimate rewording, or may be "
             "an invented name - worth a human check.",
         )
-        for name in sorted(new)
+        for name in new
     ]
     return failures, warnings
 
@@ -448,7 +590,10 @@ def _check_invented_content(
 ) -> tuple[list[CriticalFailure], list[Warning_]]:
     failures = []
     for phrase in STRONG_INVENTED_CONTENT_PHRASES:
-        if phrase in llm_output_lower and phrase not in det_report_lower:
+        if (
+            phrase not in det_report_lower
+            and _has_unnegated_occurrence(llm_output_lower, phrase)
+        ):
             failures.append(CriticalFailure(
                 "INVENTED_CONTENT",
                 f"The phrase '{phrase}' appears in the rewrite but not in "
@@ -458,7 +603,10 @@ def _check_invented_content(
 
     warnings = []
     for phrase in WEAK_INVENTED_CONTENT_PHRASES:
-        if phrase in llm_output_lower and phrase not in det_report_lower:
+        if (
+            phrase not in det_report_lower
+            and _has_unnegated_occurrence(llm_output_lower, phrase)
+        ):
             warnings.append(Warning_(
                 "WEAK_INVENTED_CONTENT_PHRASE",
                 f"The phrase '{phrase}' appears in the rewrite but not in "
@@ -471,7 +619,7 @@ def _check_invented_content(
 def _check_always_banned_safety_claims(llm_output_lower: str) -> list[CriticalFailure]:
     failures = []
     for phrase in ALWAYS_BANNED_PHRASES:
-        if phrase in llm_output_lower:
+        if _has_unnegated_occurrence(llm_output_lower, phrase):
             failures.append(CriticalFailure(
                 "UNSAFE_SAFETY_CLAIM",
                 f"The phrase '{phrase}' appears in the rewrite. This wording "

@@ -281,6 +281,32 @@ class TestNumberFailures:
         assert "NUMBER_MISSING_OR_CHANGED" in rules
         assert "NUMBER_INVENTED" in rules
 
+    def test_percent_word_form_matches_percent_symbol_form(self):
+        """Regression test for a real live-model finding (Task 62): the
+        source writes '20 percent' (word form); a genuine model rewrite
+        wrote '20%' (symbol form) for the exact same fact. Before this
+        fix, '20.0' (word form, unflagged) and '20.0%' (symbol form,
+        flagged) were tracked as two different values, so the faithful
+        rewrite failed with both NUMBER_MISSING_OR_CHANGED and
+        NUMBER_INVENTED for a number that never actually changed. See
+        Validation_Rules.md section 3."""
+        rewrite = CORRECT_REWRITE.replace(
+            "20 percent lower real cost", "a 20% lower real cost"
+        )
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(
+            f.rule in ("NUMBER_MISSING_OR_CHANGED", "NUMBER_INVENTED")
+            for f in result.critical_failures
+        )
+
+    def test_pct_word_form_also_matches_percent_symbol(self):
+        rewrite = CORRECT_REWRITE.replace("20 percent lower", "20pct lower")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(
+            f.rule in ("NUMBER_MISSING_OR_CHANGED", "NUMBER_INVENTED")
+            for f in result.critical_failures
+        )
+
 
 class TestUnitCodeFailures:
 
@@ -297,13 +323,37 @@ class TestUnitCodeFailures:
 class TestIdentifierFailures:
 
     def test_missing_title_case_identifier_fails(self):
+        """Both forms of the entity must be removed to genuinely test
+        'this identifier is gone' - 'Groundwater Bore 1' also appears as
+        'groundwater_bore_1' elsewhere in the rewrite (Data Flags,
+        Sensitivity), and word-set matching correctly recognises that
+        surviving snake_case reference as the same entity. Found by
+        running this test after the word-set fix and seeing it correctly
+        flip to PASS - not a validator bug, a fixture that no longer
+        represented true removal. See Validation_Rules.md section 3."""
         rewrite = CORRECT_REWRITE.replace("Groundwater Bore 1", "the third source")
+        rewrite = rewrite.replace("groundwater_bore_1", "an unspecified source")
         result = validate_llm_output(REFERENCE_REPORT, rewrite)
         assert result.critical_result == "FAIL"
         failure = next(
             f for f in result.critical_failures if f.rule == "IDENTIFIER_MISSING"
         )
         assert "Groundwater Bore 1" in failure.detail
+
+    def test_partial_identifier_removal_is_not_flagged(self):
+        """The mirror case: if ONE form of an entity is removed but another
+        genuine reference to the same entity survives elsewhere, that is
+        correctly not a failure - the fact itself (the entity exists, has
+        estimated data, etc.) is still present in the rewrite, just under
+        a different name form. This is the behaviour the previous test's
+        original fixture accidentally exercised without meaning to."""
+        rewrite = CORRECT_REWRITE.replace("Groundwater Bore 1", "the third source")
+        assert "groundwater_bore_1" in rewrite  # the surviving snake_case form
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(
+            f.rule == "IDENTIFIER_MISSING" and "Groundwater Bore 1" in f.detail
+            for f in result.critical_failures
+        )
 
     def test_missing_snake_case_identifier_fails(self):
         rewrite = CORRECT_REWRITE.replace("storage_capacity, ", "")
@@ -332,6 +382,49 @@ class TestIdentifierFailures:
             f.rule == "IDENTIFIER_MISSING" and "Reduce" in f.detail
             for f in result.critical_failures
         )
+
+    def test_fuller_or_reformatted_name_for_the_same_entity_is_not_flagged(self):
+        """Regression test for real live-model findings (Task 62): a
+        genuine model rewrite used 'Zone 1' for the source's 'zone_1',
+        'Treatment Facility 1' for 'facility_1', and consistently
+        'Yarra River, Kew' where the source sometimes used the shorthand
+        'Yarra Kew' - three different entities, three different kinds of
+        reformatting, all correctly not a fact change. Word-set matching
+        (an llm identifier counts if it contains at least every word the
+        det identifier has) resolves all three with one mechanism. See
+        Validation_Rules.md section 3."""
+        rewrite = CORRECT_REWRITE.replace("Reduce Yarra Kew", "Reduce Yarra River, Kew")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "PASS"
+
+    def test_dropped_word_in_a_shorter_name_still_fails(self):
+        """The safety check on the word-set fix: a rewrite that drops a
+        word rather than adding one must still fail. 'Silvan' alone must
+        not be accepted as covering 'Silvan Reservoir' - that would hide
+        a genuine, real loss of specificity. Both the Title-Case and
+        snake_case forms are replaced, for the same reason as the zone
+        test above."""
+        rewrite = CORRECT_REWRITE.replace("Silvan Reservoir", "Silvan").replace(
+            "silvan_reservoir", "an unspecified source"
+        )
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(
+            f.rule == "IDENTIFIER_MISSING" and "Silvan Reservoir" in f.detail
+            for f in result.critical_failures
+        )
+
+    def test_wrong_number_in_a_covered_identifier_still_fails(self):
+        """Another safety check: word-set matching must not let a wrong
+        trailing number slip through just because the rest of the name
+        matches. 'Zone 1' becoming 'Zone 2' is a real error, not a
+        reformatting - both the snake_case and Title-Case forms are
+        replaced, since either one surviving anywhere in the rewrite
+        would otherwise still satisfy the word-set match on its own."""
+        rewrite = CORRECT_REWRITE.replace("zone_1", "zone_2").replace("Zone 1", "Zone 2")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "IDENTIFIER_MISSING" for f in result.critical_failures)
 
 
 class TestStatusFailures:
@@ -412,10 +505,64 @@ class TestSafetyClaimFailures:
         assert result.critical_result == "FAIL"
         assert any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
 
-    def test_treated_water_always_fails(self):
+    def test_asserted_treated_water_claim_fails(self):
+        """The genuine case this rule exists for: 'treated water' stated as
+        a real claim, not a denial."""
+        rewrite = CORRECT_REWRITE + " This is treated water, ready for use."
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
+
+    def test_negated_treated_water_claim_does_not_fail(self):
+        """Regression test for a consistency finding: 'are not final
+        treated water' is structurally identical to 'not final
+        drinking-water' - both are true, safe denials, not claims. An
+        earlier version of this test asserted a negated 'treated water'
+        should always fail regardless of context; that was the same
+        context-blind assumption the negation-detection fix (section 7)
+        exists to correct, and treating 'treated water' inconsistently
+        with 'final drinking' would be arbitrary. See
+        Validation_Rules.md section 7."""
         rewrite = CORRECT_REWRITE.replace(
             "are not final post-treatment drinking-water results",
             "are not final treated water",
+        )
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
+
+    def test_negated_final_drinking_claim_does_not_fail(self):
+        """The exact real finding from Task 62's first live run: the model
+        wrote 'The results are not final drinking-water quality outcomes'
+        - an accurate denial matching the source's own meaning, not an
+        overclaim. Before the negation-detection fix this failed with
+        UNSAFE_SAFETY_CLAIM regardless of the 'not'."""
+        rewrite = CORRECT_REWRITE + " The results are not final drinking-water quality outcomes."
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
+
+    def test_negation_word_in_a_different_sentence_does_not_carry_over(self):
+        """A negation must not suppress a genuinely unsafe claim just
+        because an unrelated 'not' appeared somewhere earlier in the
+        rewrite - only a negation in the SAME sentence/clause counts."""
+        rewrite = (
+            CORRECT_REWRITE
+            + " This is not a small system. The blend is safe to drink."
+        )
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(f.rule == "UNSAFE_SAFETY_CLAIM" for f in result.critical_failures)
+
+    def test_distant_negation_in_a_long_sentence_does_not_carry_over(self):
+        """The adversarial case the negation window is deliberately bounded
+        against: an unrelated negation early in a long sentence must not
+        suppress a genuine, clearly separate unsafe claim later in that
+        same sentence. This is why _NEGATION_WINDOW_WORDS is a bounded
+        window (12 words), not a whole-sentence scan - see
+        Validation_Rules.md section 7."""
+        rewrite = CORRECT_REWRITE + (
+            " This is not a small system, it serves a large regional area "
+            "with many connected zones and multiple treatment facilities, "
+            "and the water is safe to drink."
         )
         result = validate_llm_output(REFERENCE_REPORT, rewrite)
         assert result.critical_result == "FAIL"
@@ -578,9 +725,12 @@ class TestMultipleFailuresAggregate:
 
     def test_several_independent_failures_are_all_reported(self):
         """The validator must not stop at the first failure it finds - a
-        reviewer needs the complete list in one pass."""
+        reviewer needs the complete list in one pass. Both forms of the
+        identifier are removed, same reasoning as
+        test_missing_title_case_identifier_fails."""
         rewrite = CORRECT_REWRITE.replace("status OPTIMAL", "status INFEASIBLE")
         rewrite = rewrite.replace("Groundwater Bore 1", "the third source")
+        rewrite = rewrite.replace("groundwater_bore_1", "an unspecified source")
         rewrite += " The water is safe to drink."
         result = validate_llm_output(REFERENCE_REPORT, rewrite)
         assert result.critical_result == "FAIL"
@@ -617,6 +767,189 @@ class TestResultShape:
 # 8. General status-handling robustness (not an "official" non-optimal
 #    fixture - see the module docstring)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 9. Real live-model output (Task 62) - genuine evidence, not a synthetic
+#    fixture. Captured from an actual local Qwen3-4B-Instruct-2507 run
+#    against REFERENCE_REPORT, not written by hand. See LLM_Live_Run_Notes.md
+#    for the full run details (runtime, config, both bugs this output found).
+# ---------------------------------------------------------------------------
+
+REAL_LIVE_MODEL_OUTPUT_SAMPLE_1 = """## Scenario & Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: OPTIMAL  
+Solved at: 2026-07-17T10:32:00Z
+
+## Result Availability
+
+The solver has found the best possible solution under the current model and input assumptions.
+
+## Demand-Zone Results
+
+Zone 1:  
+- Required demand: 500 ML/day  
+- Supplied volume: 500 ML/day  
+
+## Selected Sources & Blend Ratios
+
+- Yarra River, Kew:  
+  - Supplied: 290 ML/day  
+  - Blend share: 58.0%  
+  - Estimated cost per ML: $235 AUD  
+  - Draw cost: $68,150.0 AUD  
+
+- Silvan Reservoir:  
+  - Supplied: 210 ML/day  
+  - Blend share: 42.0%  
+  - Estimated cost per ML: $400 AUD  
+  - Draw cost: $84,000.0 AUD  
+
+## Unused Sources
+
+- Groundwater Bore 1: Not selected  
+
+## Active Plants & Transfer Results
+
+- Treatment Facility 1:  
+  - Processed: 500 ML/day  
+  - Treatment cost per ML: $64 AUD  
+  - Total treatment cost: $32,000.0 AUD  
+
+Transfers:  
+- Silvan Reservoir → Treatment Facility 1: 210 ML/day (active)  
+- Yarra River, Kew → Treatment Facility 1: 290 ML/day (active)  
+- Groundwater Bore 1 → Treatment Facility 1: 0 ML/day (inactive)  
+
+Delivery:  
+- Treatment Facility 1 → Zone 1: 500 ML/day (active)  
+
+## Cost Summary
+
+Total cost: $184,150.0 AUD (for one representative day)  
+
+Breakdown:  
+- Source activation cost: $0.0 AUD  
+- Plant activation cost: $0.0 AUD  
+- Source draw cost: $152,150.0 AUD  
+- Plant treatment cost: $32,000.0 AUD  
+
+## Plant-Inflow Water Quality
+
+These results apply to: blend_at_plant_inflow  
+
+All quality parameters at Treatment Facility 1 passed the modelled limits.  
+
+- Alkalinity: Closest to its limit, with a safety margin of 22.6%  
+- Turbidity: Widest margin, at 34.0%  
+
+Note: These results describe the water blend as it arrives at the plant inflow. They are not the final treated drinking-water quality.  
+
+## Binding Constraints
+
+- The solution was limited by the demand of Zone 1: The full 500 ML/day required by Zone 1 must be delivered. No less can be supplied.  
+- The solution was limited by the capacity of Yarra River, Kew: It was drawn to its maximum allowed level (290 ML/day), so no additional water could be taken from other sources.  
+
+## Data Flags & Estimated Values
+
+The following sources have estimated values and should be treated as provisional:  
+- silvan_reservoir: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- yarra_kew: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- groundwater_bore_1: storage_capacity, reference_flow, max_available, cost, alkalinity  
+
+Additional notes:  
+- source_activation_cost is 0.00: The model includes a cost for activating sources, but no input data was provided, so this cost is zero.  
+- plant_activation_cost is 0.00: The model assumes one plant is active, and its fixed cost is set to zero in the input.  
+- Plant costs, plant capacity, link capacities, and quality limits are defined in the scenario file and have no provenance source, unlike source fields which come from a database.  
+- Quality limits are applied at plant inflow, not after treatment.  
+
+## Alternatives & Sensitivity
+
+Alternative feasible solution:  
+- Reduce Yarra River, Kew share to 45%  
+- Add Groundwater Bore 1 at 13%  
+- Total cost: $189,400.0 AUD  
+- Cost difference from optimal: +$5,250.0 AUD  
+- This option reduces reliance on a single river source and adds redundancy if Yarra River, Kew availability drops.  
+
+Sensitivity notes:  
+- This alternative depends on the actual cost of groundwater from Bore 1. If the real cost is 20% lower than estimated, Bore 1 would likely be included in the optimal blend.  
+- This solution depends on the maximum available flow from Yarra River, Kew. If real availability is lower than assumed, the model may not be able to meet the 500 ML/day demand.  
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.  
+All values and assumptions are based on input data and model constraints.  
+No claims are made about water safety, regulatory compliance, or operational performance.  
+The results are not final drinking-water quality outcomes.  
+The model does not account for real-world variability, infrastructure failure, or environmental changes.  
+This report is for demonstration purposes only.  
+Actual water quality, cost, and availability may differ significantly in practice.  
+No responsibility is accepted for decisions made based on this report.  
+All data and estimates
+"""
+
+
+class TestRealLiveModelOutput:
+    """Confirms the three real bugs this genuine model output found
+    (word-form percentages, reformatted/fuller entity names, and
+    negation-blind phrase matching) are fixed, and confirms the team-lead
+    decision to exempt cost_per_ml/max_available_ml_per_day from the
+    identifier check gets this real output to a genuine PASS - see
+    LLM_Live_Run_Notes.md for the full writeup."""
+
+    def test_real_output_no_longer_has_false_positive_number_or_identifier_failures(self):
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_1)
+        rules = {f.rule for f in result.critical_failures}
+        assert "NUMBER_MISSING_OR_CHANGED" not in rules
+        assert "NUMBER_INVENTED" not in rules
+        assert not any(
+            f.rule == "IDENTIFIER_MISSING" and f.detail.split("'")[1] in
+            {"Zone 1", "zone_1", "Treatment Facility 1", "facility_1", "Yarra Kew"}
+            for f in result.critical_failures
+        )
+
+    def test_real_output_no_longer_false_flags_the_negated_disclaimers(self):
+        """The model correctly wrote 'not final drinking-water' and 'No
+        claims are made about ... regulatory compliance', both accurate
+        negations. Before the negation-detection fix (section 7), the
+        always-banned-phrase and differential-content checks could not
+        distinguish asserting something from denying it, and flagged both
+        as if they were genuine problems. Fixed; see LLM_Live_Run_Notes.md."""
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_1)
+        rules = {f.rule for f in result.critical_failures}
+        assert "UNSAFE_SAFETY_CLAIM" not in rules
+        assert "INVENTED_CONTENT" not in rules
+
+    def test_real_output_now_genuinely_passes(self):
+        """A team-lead decision (Task 62): cost_per_ml and
+        max_available_ml_per_day are attribute labels, not entity
+        references, and their underlying values are still independently
+        checked by the number-presence check regardless of how the label
+        itself is paraphrased. Exempting these two specific tokens is what
+        finally gets this real, genuine model output to critical_result:
+        PASS - the first real accepted rewrite, not a hand-built stand-in.
+        See LLM_Live_Run_Notes.md section 4 and Validation_Rules.md
+        section 3 for the full reasoning and why this is scoped narrowly
+        to these two tokens rather than the whole field-name category."""
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_1)
+        assert result.critical_result == "PASS"
+        assert result.critical_failures == []
+
+    def test_exemption_is_narrow_other_field_names_still_required(self):
+        """The exemption must not widen into a blanket pass for every
+        snake_case field name - storage_capacity, reference_flow, and the
+        other Data Flags provenance fields are NOT exempted, and still
+        correctly fail if dropped. Confirms this alongside
+        test_missing_snake_case_identifier_fails."""
+        rewrite = CORRECT_REWRITE.replace("storage_capacity, ", "")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(
+            f.rule == "IDENTIFIER_MISSING" and "storage_capacity" in f.detail
+            for f in result.critical_failures
+        )
+
 
 class TestNonOptimalReportRobustness:
 
