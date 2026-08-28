@@ -128,7 +128,7 @@ Print your own rather than trusting this one: `python -c "from ... import X; pri
 
 `InductiveMixin` is **not** added by hand; `BasePrototypeClusterer` already carries it, because the family is inductive by construction.
 
-**`_param_map = {"metric": None}`** drops the parameter. `BasePrototypeClusterer` exposes `metric`, but scikit-learn's K-Means is Euclidean-only. Mapping to `None` keeps it from reaching the backend. *Still outstanding: `_fit` should reject a non-Euclidean value rather than ignoring it; a silently discarded `metric="manhattan"` is a wrong result that looks fine.*
+**`_param_map = {"metric": None}`** drops the parameter. `BasePrototypeClusterer` exposes `metric`, but scikit-learn's K-Means is Euclidean-only. Mapping to `None` keeps it from reaching the backend, and `_validate_params` refuses any other value: a silently discarded `metric="manhattan"` is a wrong result that looks fine.
 
 **`_attr_map = {"criterion_": "inertia_"}`**: one backend attribute feeding two contract names. `_collect_fitted` looks up each required attribute through the map, defaulting to the same name, so `criterion_` redirects to the backend's SSE while `inertia_` resolves to itself.
 

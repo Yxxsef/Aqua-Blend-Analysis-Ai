@@ -9,6 +9,9 @@ from .base import BasePrototypeClusterer
 @register("kmeans")
 class KMeans(AdaptedClusterer, BasePrototypeClusterer):
     _backend_import = "sklearn.cluster.KMeans"
+    # Dropped rather than translated: scikit-learn's K-Means is Euclidean-only.
+    # `_validate_params` below refuses any other value, so nothing is discarded
+    # silently.
     _param_map = {"metric": None}
     _attr_map = {"criterion_": "inertia_"}
     _capabilities = Capabilities(
@@ -30,6 +33,23 @@ class KMeans(AdaptedClusterer, BasePrototypeClusterer):
         space_complexity = "O((m + |C|) n)",
         doc_label = "sec:tech:kmeans",
     )
+
+    def _validate_params(self) -> None:
+        """Refuse a measure this method cannot fit under.
+
+        `metric` is inherited from the family but never reaches the backend.
+        Refusing it here rather than dropping it keeps a partition from being
+        reported under a measure that never ran, the same reason
+        `BasePrototypeClusterer._check_metric` refuses a precomputed matrix.
+        """
+        super()._validate_params()
+        if self.metric != "euclidean":
+            raise ValueError(
+                f"{type(self).__name__} minimises the squared Euclidean "
+                f"criterion, for which the mean is the minimiser, so it cannot "
+                f"fit under metric={self.metric!r}. Use a medoid or median "
+                f"method, whose prototype matches its measure."
+            )
 
     def predict(self, X):
         ensure_fitted(self, "backend_")
