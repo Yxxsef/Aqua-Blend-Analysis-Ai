@@ -20,12 +20,13 @@ It further assumes $|\mathcal C|$ known in advance, no noise label, and features
 \label{sec:tech:kmeans:formulation}
 For fixed $|\mathcal C|$, K–Means minimises the within–cluster sum of squared error
 \begin{align}
-    \min_{\mathcal C} ~ \sum_{i = 1}^{|\mathcal C|} ~ \sum_{\mathbf x \in \mathcal C_i} d(\mathbf x, \boldsymbol \mu_i)^2,
+    \min_{\mathcal C} ~ \sum_{i = 1}^{|\mathcal C|} ~ \sum_{\mathbf x \in \mathcal C_i} \left\| \mathbf x - \boldsymbol \mu_i \right\|_2^2,
     \qquad \text{where} \qquad
-    \boldsymbol \mu_i = \frac{1}{|\mathcal C_i|} \sum_{\mathbf x \in \mathcal C_i} \mathbf x,
+    \boldsymbol \mu_i = \tfrac{1}{|\mathcal C_i|} \sum_{\mathbf x \in \mathcal C_i} \mathbf x,
 \end{align}
 the criterion–function reading of \textbf{Def. \ref{def:cluster_method}}, with a centroid standing in for pairwise comparison \cite{ref_10}.
 The standard algorithm alternates assignment of each $\mathbf x$ to the nearest centroid with recomputation of every $\boldsymbol \mu_i$ as the mean of its members \cite{ref_5, ref_11}, as neither step increases the objective, it terminates at a local minimum only \cite{ref_2, ref_25}.
+That $\ell_2$ norm is forced rather than chosen, so another dissimilarity breaks the descent above and calls for a medoid or median prototype \cite{ref_10, ref_11}.
 
 \paragraph{Hyperparameters and tuning}
 \label{sec:tech:kmeans:hyperparameters}
