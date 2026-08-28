@@ -22,6 +22,7 @@ For $\mathbf x \in \mathcal C_i$, let $a(\mathbf x)$ and $b(\mathbf x)$ be the m
     s(\mathbf x) = \tfrac{b(\mathbf x) - a(\mathbf x)}{\max \left\{ a(\mathbf x), b(\mathbf x) \right\}}
 \end{align}
 with $s(\mathbf x) = 0$ for a singleton $\mathcal C_i$. The SC of a partition is the mean of $s(\mathbf x)$ over all $m$ observations \cite{ref_10, ref_11, ref_24}.
+From the formulation, SC is unable to score predictions whose label is -1.
 
 \paragraph{Properties}
 \label{sec:measure:silhouette:properties}
@@ -29,7 +30,8 @@ $s(\mathbf x) \in [-1, 1]$ and higher is better, near $1$ the observation lies f
 
 \paragraph{Applicability}
 \label{sec:measure:silhouette:applicability}
-It accepts any data type for which $d(\cdot, \cdot)$ is defined and serves every family of \textbf{Sect. \ref{sec:background:families}} returning a crisp partition, a soft partition must be defuzzified first. Observations labelled noise have no $a(\mathbf x)$: excluding them scores only the points a method was confident about. 
+It accepts any data type for which $d(\cdot, \cdot)$ is defined and serves every family of \textbf{Sect. \ref{sec:background:families}} returning a crisp partition, a soft partition must be defuzzified first.
+Observations labelled noise have no $a(\mathbf x)$, they must be excluded before computing SC, and thus, must be explicitly stated and uncomparable with other validity indices considering noise labels.
 % \placeholder{State the convention adopted wherever the index is reported.}
 
 \paragraph{Computation and complexity}
