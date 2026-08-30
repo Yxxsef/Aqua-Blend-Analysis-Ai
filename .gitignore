@@ -4,5 +4,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
-venv/runs/
+venv/
+
+# Generated run output
 runs/
