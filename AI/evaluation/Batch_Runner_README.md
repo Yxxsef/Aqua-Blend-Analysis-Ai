@@ -68,6 +68,11 @@ An infeasible baseline still appears in the comparison — infeasible is a resul
 not a missing row. On the plant-outage scenario all three baselines return
 `FAIL`, because they genuinely cannot meet demand.
 
+**A scenario with no optimiser result still gets a row.** There is nothing to
+compare the baselines against, so the row carries the reason in
+`scenario_reason` and leaves the measure columns empty. Every row in the file
+is the same width, so the CSV opens cleanly.
+
 The comparison records `quality_stage` alongside the margin. In the current
 fixture this is `blend_at_plant_inflow` — water before treatment, not final
 drinking water.
