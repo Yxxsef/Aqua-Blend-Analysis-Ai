@@ -161,3 +161,25 @@ def test_comparison_csv_has_a_row_for_every_run(tmp_path):
         rows = list(csv.DictReader(handle))
 
     assert len(rows) == batch["succeeded"] * 4
+
+def test_csv_row_width_matches_header_when_not_comparable(tmp_path):
+    """An incomparable scenario writes a full-width row, not a short one."""
+    comparison = {
+        "comparisons": [
+            {
+                "scenario_id": "s1",
+                "comparable": False,
+                "reason": "no optimiser result — baselines cannot be compared against it",
+                "rows": [],
+            }
+        ]
+    }
+
+    paths = write_comparison(comparison, tmp_path)
+
+    with paths["csv"].open(encoding="utf-8", newline="") as handle:
+        header, row = list(csv.reader(handle))
+
+    assert len(row) == len(header)
+    assert row[header.index("scenario_reason")] == comparison["comparisons"][0]["reason"]
+    assert row[header.index("gate")] == ""

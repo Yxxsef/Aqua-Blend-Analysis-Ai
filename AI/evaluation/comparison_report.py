@@ -22,6 +22,12 @@ MEASURES = (
     "minimum_safety_margin",
 )
 
+COLUMNS = (
+    ["scenario_id", "quality_stage", "run", "gate"]
+    + [f"{m}_{part}" for m in MEASURES for part in ("value", "reason")]
+    + ["scenario_reason"]
+)
+
 NO_QUALITY_REASON = "baselines do not compute water quality"
 
 QUALITY_STAGE_KEY = "applies_to"
@@ -106,19 +112,20 @@ def write_comparison(comparison: dict[str, Any], run_dir: str | Path) -> dict[st
     csv_path = run_dir / "comparison.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(
-            ["scenario_id", "quality_stage", "run", "gate"]
-            + [f"{m}_{part}" for m in MEASURES for part in ("value", "reason")]
-        )
+        writer.writerow(COLUMNS)
         for scenario in comparison["comparisons"]:
             if not scenario["comparable"]:
-                writer.writerow([scenario["scenario_id"], scenario.get("quality_stage"), "", scenario["reason"]])
+                cells: list[Any] = [scenario["scenario_id"], scenario.get("quality_stage")]
+                cells += [""] * (len(COLUMNS) - 3)
+                cells.append(scenario["reason"])
+                writer.writerow(cells)
                 continue
             for row in scenario["rows"]:
-                cells: list[Any] = [scenario["scenario_id"], scenario.get("quality_stage"), row["run"], row["gate"]]
+                cells = [scenario["scenario_id"], scenario.get("quality_stage"), row["run"], row["gate"]]
                 for measure in MEASURES:
                     cells.append(row[measure]["value"])
                     cells.append(row[measure].get("reason", ""))
+                cells.append("")
                 writer.writerow(cells)
 
     return {"json": json_path, "csv": csv_path}
