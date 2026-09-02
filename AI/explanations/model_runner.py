@@ -44,6 +44,7 @@ class ModelConfig:
     max_tokens: int = 1200
     timeout_seconds: float = 30.0
     seed: int | None = 0
+    frequency_penalty: float | None = None
 
     def validate(self) -> None:
         if not self.model_id.strip():
@@ -58,6 +59,8 @@ class ModelConfig:
             raise ValueError("max_tokens must be positive")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if self.frequency_penalty is not None and not -2.0 <= self.frequency_penalty <= 2.0:
+            raise ValueError("frequency_penalty must be between -2.0 and 2.0")
 
 
 @dataclass(frozen=True)
@@ -193,6 +196,25 @@ def rewrite_report(
     }
     if config.seed is not None:
         payload["seed"] = config.seed
+    if config.frequency_penalty is not None:
+        # Found from a real live run (Task 62): temperature: 0.0 (greedy
+        # decoding) has no mechanism to escape a repetitive pattern once one
+        # starts, and a real run fell into a ~85-line repetition loop right
+        # at the end of the response (the Prototype Disclaimer, the point
+        # with the least genuinely new content left to generate) before
+        # still running out of tokens. frequency_penalty directly targets
+        # this by discouraging the model from repeating tokens it has
+        # already used. Confirmed supported by Ollama's OpenAI-compatible
+        # endpoint as a direct passthrough parameter - but not guaranteed to
+        # take effect for every model: some newer models on Ollama's
+        # Go-native sampler path are known to silently ignore
+        # frequency_penalty/presence_penalty/repeat_penalty entirely
+        # (ollama/ollama#15783). Left as None by default (opt-in via
+        # model_config.json) rather than a hardcoded value, since the right
+        # amount of penalty - and whether it does anything at all - depends
+        # on the specific model in use and needs to be verified empirically
+        # against a real run, the same way this whole finding was.
+        payload["frequency_penalty"] = config.frequency_penalty
 
     sender = request_fn or _default_request
 
