@@ -50,6 +50,14 @@ def test_optimal_status_is_valid():
     assert validate_results(results) is True
 
 
+def test_unbounded_status_is_valid():
+    results = valid_results()
+
+    results["status"] = "UNBOUNDED"
+
+    assert validate_results(results) is True
+
+
 def test_missing_required_field():
     results = valid_results()
 

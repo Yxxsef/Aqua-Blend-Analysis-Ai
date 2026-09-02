@@ -78,6 +78,19 @@ def test_unsupported_feasible_status_returns_invalid_input(valid_results: dict) 
     assert any("not supported by the App response contract" in warning for warning in response["warnings"])
 
 
+def test_unbounded_result_returns_status_only_response(valid_results: dict) -> None:
+    results = copy.deepcopy(valid_results)
+    results["status"] = "UNBOUNDED"
+
+    response = main.run_pipeline(results)
+
+    assert response["solver_status"] == "UNBOUNDED"
+    assert response["report_mode"] == "STATUS_ONLY"
+    assert response["kpis"] is None
+    assert response["comparison"] is None
+    assert response["report_mode"] != "INVALID_INPUT"
+
+
 def test_accepted_llm_rewrite_is_displayed(
     valid_results: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:

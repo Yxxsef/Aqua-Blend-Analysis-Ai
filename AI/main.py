@@ -22,7 +22,7 @@ for _module_dir in (
     if module_dir_text not in sys.path:
         sys.path.insert(0, module_dir_text)
 
-from app_response_adapter import build_app_response, write_response_json
+from app_response_adapter import SOLVER_STATUSES, build_app_response, write_response_json
 from confidence_flagger import ConfidenceError, determine_confidence
 from json_explainer import ExplainerInputError, generate_explanation
 from kpi_gate import evaluate
@@ -30,15 +30,6 @@ from llm_validator import ValidatorInputError, validate_llm_output
 from model_runner import ModelConfig, load_model_config, rewrite_report
 from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
-
-
-APP_SOLVER_STATUSES = {
-    "OPTIMAL",
-    "INFEASIBLE",
-    "UNBOUNDED",
-    "TIME_LIMIT",
-    "ERROR",
-}
 
 
 def load_results(path: str | Path) -> Any:
@@ -77,7 +68,7 @@ def run_pipeline(
         return _invalid_input_response(results, f"Results validation failed: {exc}")
 
     status = results["status"]
-    if status not in APP_SOLVER_STATUSES:
+    if status not in SOLVER_STATUSES:
         return _invalid_input_response(
             results,
             f"Solver status {status!r} is not supported by the App response contract.",
