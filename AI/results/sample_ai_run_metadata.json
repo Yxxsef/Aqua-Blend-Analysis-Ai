@@ -1,0 +1,12 @@
+{
+  "scenario_id": "scenario_001",
+  "run_id": "run_001",
+  "model_id": "test-model",
+  "prompt_version": "prompt-v1",
+  "runtime_ms": 1250,
+  "validator_result": "PASS",
+  "fallback_used": false,
+  "fallback_reason": null,
+  "confidence": "HIGH",
+  "module_version": "task-73-v1"
+}
