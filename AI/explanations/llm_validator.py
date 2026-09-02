@@ -383,12 +383,44 @@ def _is_embedded_in_identifier(text: str, start: int, end: int) -> bool:
     return any(ch.isalpha() or ch == "_" for ch in surrounding)
 
 
+def _is_numbered_list_marker(text: str, start: int, end: int) -> bool:
+    """True if the number match at text[start:end] is a numbered-list
+    marker ("1.", "2.") rather than a genuine numeric fact - found from a
+    real live run (Task 62): the model reformatted the Binding Constraints
+    section from a bullet list into a numbered list, and the plain number
+    regex read "2." as the standalone fact 2.0, since nothing after the
+    period was itself a digit. "1." happened to coincidentally match a
+    number that already existed elsewhere in the source, so it slipped
+    through unnoticed; "2." didn't, and was flagged as an invented number
+    that was never actually invented - it's list-item numbering, not
+    content.
+
+    Scoped narrowly and structurally, not by value: a match only counts as
+    a list marker if it sits at the very start of a line (only whitespace
+    before it back to the last newline), is immediately followed by a
+    period and then whitespace, and nothing follows that period as more
+    digits (a genuine decimal like "2.50" is a completely different regex
+    match already, this only ever applies to a bare integer). This
+    shouldn't ever misfire on a real fact, since nothing in this report's
+    actual generated content places a standalone number at the very start
+    of a line followed immediately by a period - only reformatting choices
+    like this one do."""
+    line_start = text.rfind("\n", 0, start) + 1
+    if text[line_start:start].strip():
+        return False  # something other than whitespace precedes it on this line
+    after = text[end:end + 2]
+    return after.startswith(".") and (len(after) < 2 or not after[1].isdigit())
+
+
 def _extract_numbers(text: str) -> set[tuple[float, bool]]:
     text = _normalise_percent_words(text)
     values = set()
     for m in _NUMBER_PATTERN.finditer(text):
-        if not _is_embedded_in_identifier(text, m.start(), m.end()):
-            values.add(_normalise_number(m.group()))
+        if _is_embedded_in_identifier(text, m.start(), m.end()):
+            continue
+        if _is_numbered_list_marker(text, m.start(), m.end()):
+            continue
+        values.add(_normalise_number(m.group()))
     return values
 
 
