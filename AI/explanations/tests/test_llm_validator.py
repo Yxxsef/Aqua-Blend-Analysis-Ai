@@ -516,6 +516,37 @@ class TestIdentifierFailures:
         assert result.critical_result == "FAIL"
         assert any(f.rule == "IDENTIFIER_MISSING" for f in result.critical_failures)
 
+    def test_sentence_case_rendering_of_a_field_name_is_recognised(self):
+        """Regression test for a real finding from a genuine live model
+        run (Task 62, Run 7): the model rendered source_activation_cost
+        and plant_activation_cost as ordinary sentence-case prose
+        ("Source activation cost is $0.00..."), which neither the
+        Title-Case pattern (requires every word capitalised, not just
+        the first) nor the snake_case pattern recognised as an identifier
+        at all - the fact was faithfully conveyed but invisible to
+        extraction. Fixed via _phrase_covers_snake_case_identifier."""
+        rewrite = CORRECT_REWRITE.replace("storage_capacity,", "Storage capacity,")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert not any(
+            f.rule == "IDENTIFIER_MISSING" and "storage_capacity" in f.detail
+            for f in result.critical_failures
+        )
+
+    def test_scattered_words_do_not_satisfy_the_sentence_case_fallback(self):
+        """The fallback requires the identifier's words as a genuine
+        contiguous phrase, not merely all present somewhere in the
+        document - scattering them across unrelated sentences must still
+        correctly fail."""
+        rewrite = CORRECT_REWRITE.replace(
+            "storage_capacity,",
+            "the storage limits,",
+        )
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert any(
+            f.rule == "IDENTIFIER_MISSING" and "storage_capacity" in f.detail
+            for f in result.critical_failures
+        )
+
 
 class TestStatusFailures:
 
@@ -1160,6 +1191,109 @@ AquaBlend is a public-data decision-support proof-of-concept. This report does n
 </deterministic_report>
 """
 
+# Run 7's exact real captured text, embedded verbatim (Task 62) - genuine
+# live model output after adding the explicit tag-prohibition rule
+# (prompt v1.2), on top of Run 6's fixes (frequency_penalty, stop-after-
+# final-section rule). Ends with proper terminal punctuation, no
+# repetition loop, no prompt-tag leak. Surfaced three real validator bugs
+# (the pair-association window, and sentence-case field-name rendering),
+# all fixed here - see LLM_Live_Run_Notes.md. This is the first genuine,
+# complete, PASSing live-model output on the flagship OPTIMAL scenario.
+REAL_LIVE_MODEL_OUTPUT_SAMPLE_4_RUN7 = """## Scenario & Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: OPTIMAL  
+Solved at: 2026-07-17T10:32:00Z  
+
+## Result Availability
+
+The model found a confirmed best solution under the current assumptions and inputs.
+
+## Demand-Zone Results
+
+Zone 1 required 500 ML/day and received exactly 500 ML/day.
+
+## Selected Sources & Blend Ratios
+
+- Yarra River, Kew: supplied 290 ML/day, making up 58.0% of the blend.  
+  Estimated cost per ML: $235 AUD.  
+  Total draw cost: $68,150.0 AUD.
+
+- Silvan Reservoir: supplied 210 ML/day, making up 42.0% of the blend.  
+  Estimated cost per ML: $400 AUD.  
+  Total draw cost: $84,000.0 AUD.
+
+## Unused Sources
+
+Groundwater Bore 1 was not used in this solution.
+
+## Active Plants & Transfer Results
+
+- Treatment Facility 1 processed 500 ML/day.  
+  Treatment cost per ML: $64 AUD.  
+  Total treatment cost: $32,000.0 AUD.
+
+Transfers:
+- Silvan Reservoir → Treatment Facility 1: 210 ML/day (active).  
+- Yarra River, Kew → Treatment Facility 1: 290 ML/day (active).  
+- Groundwater Bore 1 → Treatment Facility 1: 0 ML/day (inactive).  
+- Treatment Facility 1 → Zone 1: 500 ML/day (active).
+
+## Cost Summary
+
+Total cost for one day: $184,150.0 AUD  
+
+Breakdown:
+- Source activation cost: $0.0 AUD  
+- Plant activation cost: $0.0 AUD  
+- Source draw cost: $152,150.0 AUD  
+- Plant treatment cost: $32,000.0 AUD  
+
+## Plant-Inflow Water Quality
+
+These results apply to the blend arriving at the plant inlet (blend_at_plant_inflow).
+
+All quality parameters at Treatment Facility 1 passed the modelled limits.  
+- Alkalinity was closest to its limit, with a safety margin of 22.6%.  
+- Turbidity had the widest safety margin at 34.0%.
+
+These results describe the water entering the plant, not the final treated drinking water. They were checked against plant-inflow constraints and do not represent post-treatment quality.
+
+## Binding Constraints
+
+The solution was limited by:
+- The full demand of Zone 1: 500 ML/day must be delivered, so no less was supplied.  
+- The capacity of Yarra River, Kew: it was drawn to its maximum allowed level (290 ML/day), so no extra water could come from other sources.
+
+## Data Flags & Estimated Values
+
+The following sources have estimated values and should be treated as provisional:
+- Silvan Reservoir: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- Yarra River, Kew: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- Groundwater Bore 1: storage_capacity, reference_flow, max_available, cost, alkalinity  
+
+Additional notes:
+- Source activation cost is $0.00 because the model structure includes a cost term (F_s), but no input data was provided for it. The term evaluates to zero.  
+- Plant activation cost is $0.00 because the model assumes one plant is active and its fixed cost is set to zero in the input.  
+- Plant costs, plant capacity, link capacities, and quality limits are defined in the scenario file and have no data source tracking, unlike source fields which come from a database.  
+- Quality limits are applied at plant inflow, not after treatment.
+
+## Alternatives & Sensitivity
+
+Alternative solution:
+- Reduce Yarra River, Kew share to 45% and add Groundwater Bore 1 at 13%.  
+- Total cost: $189,400.0 AUD (higher by $5,250.0 AUD).  
+- This option reduces reliance on a single river source and adds redundancy if Yarra River, Kew becomes unavailable.
+
+Sensitivity notes:
+- This alternative depends on the actual cost of groundwater from Bore 1. If the real cost is 20% lower than estimated, Bore 1 would likely be included in the optimal solution.  
+- This solution depends on the actual availability of Yarra River, Kew. If real availability is less than assumed, the model may not be able to meet the 500 ML/day demand.
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.
+"""
+
 
 class TestRealLiveModelOutput:
     """Confirms the three real bugs this genuine model output found
@@ -1284,6 +1418,53 @@ class TestRealLiveModelOutputRun6:
         check."""
         result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_3_RUN6)
         assert any(
+            w.rule == "NEW_IDENTIFIER" and "deterministic_report" in w.detail
+            for w in result.warnings
+        )
+
+
+class TestRealLiveModelOutputRun7:
+    """Confirms the first genuine, complete PASS on the flagship OPTIMAL
+    scenario from a real live model call (Task 62, Run 7) - made after
+    adding the explicit tag-prohibition prompt rule (v1.2) on top of
+    Run 6's fixes. Three real validator bugs were found and fixed as a
+    direct result of checking this exact output, not assumed fixed - see
+    LLM_Live_Run_Notes.md for the full writeup."""
+
+    def test_real_output_is_a_genuine_pass(self):
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_4_RUN7)
+        assert result.critical_result == "PASS"
+        assert result.critical_failures == []
+
+    def test_no_false_positive_from_the_pair_association_check(self):
+        """The rewrite splits each source's volume/percentage onto a
+        bullet line and its cost onto an indented continuation line - a
+        real formatting choice that broke an earlier, more fragile
+        version of the pair-association window. Confirmed not to
+        re-trigger it here."""
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_4_RUN7)
+        assert not any(
+            f.rule == "NUMBER_WRONG_ASSOCIATION" for f in result.critical_failures
+        )
+
+    def test_no_false_positive_from_sentence_case_field_names(self):
+        """source_activation_cost and plant_activation_cost were rendered
+        as ordinary sentence-case prose ("Source activation cost is
+        $0.00...") - confirmed recognised as covered, not missing."""
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_4_RUN7)
+        assert not any(
+            f.rule == "IDENTIFIER_MISSING"
+            and ("activation_cost" in f.detail)
+            for f in result.critical_failures
+        )
+
+    def test_still_no_prompt_tag_leak_this_time(self):
+        """Unlike Run 6, this output does not echo the prompt's own
+        delimiter tags - the explicit tag-prohibition rule (prompt v1.2)
+        appears to have addressed this specific finding, though this is
+        one confirmation, not a guarantee it never recurs."""
+        result = validate_llm_output(REFERENCE_REPORT, REAL_LIVE_MODEL_OUTPUT_SAMPLE_4_RUN7)
+        assert not any(
             w.rule == "NEW_IDENTIFIER" and "deterministic_report" in w.detail
             for w in result.warnings
         )
