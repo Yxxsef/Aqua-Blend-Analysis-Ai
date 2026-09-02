@@ -21,15 +21,15 @@ the first time actual model output has gone through the pipeline.
   reports - tested for the first time, to see whether a model given a near-empty input pads it out
   with invented content. See section 7.
 - **Run 5**: the same OPTIMAL scenario again, with `max_tokens` raised after Runs 1-3 turned out to
-  be truncated - the first genuinely complete, passing rewrite of the flagship scenario. See
-  section 8.
+  be truncated - also failed, for a different and more concerning reason (a repetition loop, not
+  just running out of room). See section 8.
 
 Every real call also independently exercised the fallback path (a deliberately wrong port) - see
 section 9.
 
-### 1a. Corrections made after PR review (PR #46, Yousef) - read this before the rest of the doc
+### 1a. Corrections made - read this before the rest of the doc
 
-Three real problems in `llm_validator.py` were found by a genuine PR review, not by more live-model
+Three real problems in `llm_validator.py` were found through review, not by more live-model
 testing, and they change the headline claims made earlier in this document materially enough that
 they need stating plainly up front rather than buried in each section:
 
@@ -37,9 +37,11 @@ they need stating plainly up front rather than buried in each section:
    genuinely truncated - it cuts off mid-sentence at "All data and estimates" with nothing after,
    almost certainly from hitting the model's `max_tokens` limit. The validator had no check for
    output completeness at all until this review. `_check_output_completeness` now catches this
-   (`INCOMPLETE_OUTPUT`), and the real captured output correctly fails. **Resolved in Run 5** (section
-   8): `max_tokens` raised, the same scenario called again, and this time the response completed and
-   genuinely passed. See section 3, section 6, and section 8.
+   (`INCOMPLETE_OUTPUT`), and the real captured output correctly fails. **Not yet resolved** - Run 5
+   (section 8) was a second attempt at this, also originally reported as a PASS, and that report was
+   also wrong, for a related but distinct reason (an outdated local validator, not a new bug) and a
+   genuinely new failure mode (a repetition loop, not just truncation). There is still no confirmed
+   genuine complete PASS of the flagship OPTIMAL scenario. See section 3, section 6, and section 8.
 2. **Runs 2 and 3's raw text is identical**, not independent fresh generations as originally
    claimed. `model_config.json` sets `temperature: 0.0` (greedy decoding), and every call was fed
    the exact same `deterministic_report.txt` - under those conditions it's expected, not a data
@@ -52,7 +54,7 @@ they need stating plainly up front rather than buried in each section:
    an unrelated, genuinely unsafe claim later in the same sentence across a contrastive conjunction
    (e.g. "not safe to drink, **but** it is compliant") - fixed by treating "but"/"however"/"although"
    etc. as hard negation-scope boundaries. Both are documented in `Validation_Rules.md` sections 4
-   and 6, with regression tests using the reviewer's exact examples.
+   and 6, with regression tests using the exact examples that surfaced them.
 
 ## 2. Setup
 
@@ -223,30 +225,44 @@ identical-output situation, and both end with proper terminal punctuation ("...r
 health authorities."). At the time this was the only pair of results that held up as complete,
 genuinely-passing live-model output - see section 8 for the fix that closed the remaining gap.
 
-## 8. Run 5 (Sample 1, OPTIMAL) — the genuine, complete accepted rewrite
+## 8. Run 5 (Sample 1, OPTIMAL) — still no genuine complete PASS, and a new failure mode found
 
 Runs 1-3 all hit the same wall: `model_config.json`'s original `max_tokens: 1200` wasn't enough for
 the model to finish rewriting the full 12-section OPTIMAL report before being cut off, and with
-`temperature: 0.0` on an identical input, every attempt hit the identical cutoff point. Section 1a
-and section 10 both flagged this as the one thing still missing - a genuine, complete accepted
-rewrite of the actual flagship scenario, not just the two short samples in Run 4.
-
-`max_tokens` was raised (from the original 1200) and the same OPTIMAL scenario was called again.
+`temperature: 0.0` on an identical input, every attempt hit the identical cutoff point. `max_tokens`
+was raised and the same scenario was called again.
 
 | Field | Value |
 |---|---|
 | `runtime_ms` | 78,487 |
 | `fallback_used` | `False` |
-| `critical_result` | `PASS` |
-| Remaining items | One `NEW_IDENTIFIER` warning on "Bore 1" - not a failure, same as every earlier run |
+| `critical_result` reported at the time | `PASS` |
+| `critical_result` on re-validation against the final validator | `FAIL` - `INCOMPLETE_OUTPUT` |
 
-**This is the first genuinely complete, independently-confirmed accepted rewrite of the flagship
-scenario.** Two things make this a real, meaningful result rather than a repeat of the earlier
-mistake: the output was checked to end in proper terminal punctuation rather than trusted from the
-console summary, and `_check_output_completeness` (added directly because of the PR #46 review) is
-now part of every validation call - if this run had been truncated again, `INCOMPLETE_OUTPUT` would
-have shown up in the failures exactly as it did for Runs 1 and 3, and it did not. Saved in
-`AI/explanations/live_run_output_run5_optimal_pass/`.
+**This was originally reported as "the first genuine complete accepted rewrite of the flagship
+scenario." That was wrong, and worse than a simple repeat of the Run 1/3 mistake.** The reported
+`PASS` was checked against an outdated local copy of `llm_validator.py` that did not yet have the
+completeness check - the fix existed in this repository, but had not actually been placed on the
+machine that ran this call yet. Re-validating the actual saved output against the final validator
+returns `FAIL`, confirmed directly.
+
+**And this run is a genuinely different, more concerning failure than Runs 1-3.** It isn't simply
+truncated - the Prototype Disclaimer section entered a real repetition loop, generating roughly 85
+lines of near-duplicate filler sentences ("It does not...", "All values are...", "No estimation...")
+restating the same handful of ideas over and over, none of it present in the deterministic report at
+all, before still cutting off mid-sentence at the very end ("This report is a"). No fact was
+invented, no number was wrong, no unsafe claim was made - which is exactly why none of the existing
+checks (`_check_invented_content`, the number checks, the safety checks) caught this on their own.
+It was only caught here because the run also happened to run out of tokens before the loop ended.
+
+**This is a genuine, currently unaddressed gap, not just a fixed bug:** there is no check in
+`llm_validator.py` for excessive repetition or redundant, padded generation. A response that looped
+like this but happened to end on a clean sentence before hitting the token limit would pass every
+current check completely. Recommend the team consider this for a future pass - a repetition-ratio or
+near-duplicate-sentence check, distinct from the completeness check, which only catches truncation.
+
+**There is still no confirmed genuine complete PASS of the flagship OPTIMAL scenario on record.**
+Saved in `AI/explanations/live_run_output_run5_optimal_pass/`, corrected in `llm_evaluation.csv`.
 
 ## 9. Fallback demonstration (model unavailable)
 
@@ -282,27 +298,34 @@ in `model_runner.py`, not something this task's files should patch directly.
 ## 11. Recommendation
 
 **Continue, but with an honest correction, not a clean close.** This section originally claimed
-every checklist item was satisfied, including a genuine accepted rewrite. A real PR review (#46,
-Yousef) found that claim was wrong, along with two further validator gaps. All three are fixed as of
-this revision - see section 1a for the full list - but the correction changes what can honestly be
-claimed here.
+every checklist item was satisfied, including a genuine accepted rewrite. That claim was found to be
+wrong, along with two further validator gaps. All three are fixed as of this revision - see section
+1a for the full list - but the correction changes what can honestly be claimed here.
 
-**Seven real validator bugs have now been found and fixed** across this task's live runs and the PR
-review that followed, all covered by regression tests using actual captured output or the reviewer's
-own exact examples, not redescriptions: word-form percentages, reformatted/fuller identifier names,
+**Seven real validator bugs have now been found and fixed**, plus one genuine gap found and
+documented but not yet fixed, across this task's live runs and the corrections that followed - the
+fixed ones covered by regression tests using actual captured output or the exact examples that
+surfaced them, not redescriptions: word-form percentages, reformatted/fuller identifier names,
 negation-blind phrase matching, a negation incorrectly crossing a contrastive conjunction into an
 unrelated clause, swapped source figures passing silently, and missing output-completeness detection
-- plus the field-name exemption, a deliberate decision rather than a bug.
+- plus the field-name exemption, a deliberate decision rather than a bug. **The one gap not yet
+fixed**: no check exists for excessive repetition or padded generation (section 8) - a response that
+loops without inventing any wrong fact would currently pass every check, as Run 5 nearly did.
 
 **"Run existing deterministic explanation samples" (plural) is genuinely satisfied** - all three
 Task 23 sample types have real live-model calls on record (section 3, section 7).
 
-**"Demonstrate at least one accepted valid rewrite" is now genuinely satisfied.** Runs 1-3 are the
-same truncated text and all correctly fail, for a real reason, not a bug. Run 4's two samples pass
-genuinely but are short status-only reports. Run 5 (section 8) closes the actual gap: `max_tokens`
-raised, the same flagship OPTIMAL scenario called again, and this time the response completed and
-returned a genuine `critical_result: PASS`, confirmed specifically by the absence of
-`INCOMPLETE_OUTPUT` in the failures rather than assumed from the console summary.
+**"Demonstrate at least one accepted valid rewrite" is still not satisfied for the flagship
+scenario.** Runs 1, 3, and 5 all fail, for real reasons, not the same bug repeated: Runs 1 and 3
+were genuinely truncated; Run 5 was also genuinely truncated, after a repetition loop, and was only
+ever reported as passing due to a stale local validator, not a real result. Run 4's two samples pass
+genuinely, but they're short status-only reports, not the full 12-section case this checklist item
+is really asking about. **Getting a genuine, complete, accepted rewrite of the full OPTIMAL scenario
+is still an open item** - raising `max_tokens` alone was not sufficient; the repetition-loop finding
+in section 8 suggests the model may need prompt-level guidance against repeating itself as well,
+not just more room to finish. Any future attempt should be verified the same way this correction
+was made: by pulling the actual saved file and reading it, not trusting the console summary or
+assuming the local validator is current.
 
 **Human review is still pending** and this document should not describe any result as fully reviewed
 until reviewer names, dates, scores, and notes are actually recorded in `llm_evaluation.csv` and
