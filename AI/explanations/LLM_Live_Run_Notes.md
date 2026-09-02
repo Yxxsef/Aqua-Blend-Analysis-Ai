@@ -279,21 +279,27 @@ second call to a deliberately wrong port after the real one) - consistent result
 Confirmed each time that the fallback text is character-for-character identical to the deterministic
 report - the fallback path returns the trusted source unchanged, not a degraded or partial version.
 
-## 10. A real bug found along the way, not yet fixed (belongs to Task 24, not this task)
+## 10. A real bug found along the way - fixed
 
 The first attempt at Run 1 used the example config's default `timeout_seconds: 30.0` and hit that
 limit before the model finished generating (`runtime_ms: 30008`, essentially exactly the timeout).
 It was reported as `failure_type: MODEL_ERROR`, not `TIMEOUT`.
 
-Root cause: `model_runner.py` catches `except TimeoutError`, but on Python 3.9 (the version used for
+Root cause: `model_runner.py` caught `except TimeoutError`, but on Python 3.9 (the version used for
 this run), `urllib`'s real network timeout raises `socket.timeout`, a **separate sibling class** to
 the builtin `TimeoutError` - both are `OSError` subclasses, but not the same class before Python
-3.10, when they were unified. So a genuine timeout on 3.9 falls through the specific handler and
-lands in the generic `except Exception` catch-all, mis-labelled as `MODEL_ERROR`. Every existing
-test for this path injects a `TimeoutError` directly via a mocked `request_fn`, so none of them
-exercise the actual exception class a real network call raises on this Python version - only a
-genuine run against a real endpoint could have found this. Worth raising with Yousef as a fix needed
-in `model_runner.py`, not something this task's files should patch directly.
+3.10, when they were unified. So a genuine timeout on 3.9 fell through the specific handler and
+landed in the generic `except Exception` catch-all, mis-labelled as `MODEL_ERROR`. Every existing
+test for this path injected a `TimeoutError` directly via a mocked `request_fn`, so none of them
+exercised the actual exception class a real network call raises on this Python version - only a
+genuine run against a real endpoint could have found this.
+
+**Fixed**: `except TimeoutError` is now `except (TimeoutError, socket.timeout)`, correct and safe on
+every Python version - on 3.10+ the two are already the same class, so this only ever catches the
+same thing twice; on 3.9 it correctly catches both. A new regression test
+(`test_socket_timeout_also_returns_timeout_not_model_error`) injects `socket.timeout` directly,
+exercising the exact class the existing test never touched. Confirmed on the real Python 3.9.6
+environment this bug was originally found on - all 12 tests in `test_model_runner.py` pass.
 
 ## 11. Recommendation
 
