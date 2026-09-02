@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import socket
 import sys
 
 import pytest
@@ -82,6 +83,38 @@ def test_timeout_returns_template_fallback() -> None:
     assert result.report_mode == "TEMPLATE_FALLBACK"
     assert result.fallback_used is True
     assert result.failure_type == "TIMEOUT"
+
+
+def test_socket_timeout_also_returns_timeout_not_model_error() -> None:
+    """Regression test for a real bug found on a genuine live run (Task 62),
+    not a synthetic case: on Python < 3.10, urllib's real network timeout
+    raises socket.timeout, a class SEPARATE from the builtin TimeoutError -
+    they were only unified as the same class starting in Python 3.10.
+    Catching TimeoutError alone let a genuine timeout on Python 3.9 fall
+    through to the generic Exception handler and be mis-labelled
+    MODEL_ERROR instead of TIMEOUT - reproduced directly against a real
+    endpoint: a call that ran out of time returned failure_type=MODEL_ERROR
+    with runtime_ms almost exactly equal to timeout_seconds, the signature
+    of a timeout being mis-categorised, not a genuine model error.
+
+    test_timeout_returns_template_fallback above only ever exercised the
+    builtin TimeoutError directly, never socket.timeout - which is exactly
+    why this bug was never caught by the existing suite; only a real
+    network call was ever going to hit the class that mattered."""
+    def socket_timeout_request(*_args, **_kwargs):
+        raise socket.timeout("timed out")
+
+    result = rewrite_report(
+        TEMPLATE_REPORT,
+        ModelConfig(model_id="test-model"),
+        request_fn=socket_timeout_request,
+    )
+
+    assert result.report_text == TEMPLATE_REPORT.strip()
+    assert result.report_mode == "TEMPLATE_FALLBACK"
+    assert result.fallback_used is True
+    assert result.failure_type == "TIMEOUT"
+    assert result.failure_type != "MODEL_ERROR"
 
 
 @pytest.mark.parametrize(
