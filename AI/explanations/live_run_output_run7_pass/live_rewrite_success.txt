@@ -1,0 +1,93 @@
+## Scenario & Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: OPTIMAL  
+Solved at: 2026-07-17T10:32:00Z  
+
+## Result Availability
+
+The model found a confirmed best solution under the current assumptions and inputs.
+
+## Demand-Zone Results
+
+Zone 1 required 500 ML/day and received exactly 500 ML/day.
+
+## Selected Sources & Blend Ratios
+
+- Yarra River, Kew: supplied 290 ML/day, making up 58.0% of the blend.  
+  Estimated cost per ML: $235 AUD.  
+  Total draw cost: $68,150.0 AUD.
+
+- Silvan Reservoir: supplied 210 ML/day, making up 42.0% of the blend.  
+  Estimated cost per ML: $400 AUD.  
+  Total draw cost: $84,000.0 AUD.
+
+## Unused Sources
+
+Groundwater Bore 1 was not used in this solution.
+
+## Active Plants & Transfer Results
+
+- Treatment Facility 1 processed 500 ML/day.  
+  Treatment cost per ML: $64 AUD.  
+  Total treatment cost: $32,000.0 AUD.
+
+Transfers:
+- Silvan Reservoir → Treatment Facility 1: 210 ML/day (active).  
+- Yarra River, Kew → Treatment Facility 1: 290 ML/day (active).  
+- Groundwater Bore 1 → Treatment Facility 1: 0 ML/day (inactive).  
+- Treatment Facility 1 → Zone 1: 500 ML/day (active).
+
+## Cost Summary
+
+Total cost for one day: $184,150.0 AUD  
+
+Breakdown:
+- Source activation cost: $0.0 AUD  
+- Plant activation cost: $0.0 AUD  
+- Source draw cost: $152,150.0 AUD  
+- Plant treatment cost: $32,000.0 AUD  
+
+## Plant-Inflow Water Quality
+
+These results apply to the blend arriving at the plant inlet (blend_at_plant_inflow).
+
+All quality parameters at Treatment Facility 1 passed the modelled limits.  
+- Alkalinity was closest to its limit, with a safety margin of 22.6%.  
+- Turbidity had the widest safety margin at 34.0%.
+
+These results describe the water entering the plant, not the final treated drinking water. They were checked against plant-inflow constraints and do not represent post-treatment quality.
+
+## Binding Constraints
+
+The solution was limited by:
+- The full demand of Zone 1: 500 ML/day must be delivered, so no less was supplied.  
+- The capacity of Yarra River, Kew: it was drawn to its maximum allowed level (290 ML/day), so no extra water could come from other sources.
+
+## Data Flags & Estimated Values
+
+The following sources have estimated values and should be treated as provisional:
+- Silvan Reservoir: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- Yarra River, Kew: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- Groundwater Bore 1: storage_capacity, reference_flow, max_available, cost, alkalinity  
+
+Additional notes:
+- Source activation cost is $0.00 because the model structure includes a cost term (F_s), but no input data was provided for it. The term evaluates to zero.  
+- Plant activation cost is $0.00 because the model assumes one plant is active and its fixed cost is set to zero in the input.  
+- Plant costs, plant capacity, link capacities, and quality limits are defined in the scenario file and have no data source tracking, unlike source fields which come from a database.  
+- Quality limits are applied at plant inflow, not after treatment.
+
+## Alternatives & Sensitivity
+
+Alternative solution:
+- Reduce Yarra River, Kew share to 45% and add Groundwater Bore 1 at 13%.  
+- Total cost: $189,400.0 AUD (higher by $5,250.0 AUD).  
+- This option reduces reliance on a single river source and adds redundancy if Yarra River, Kew becomes unavailable.
+
+Sensitivity notes:
+- This alternative depends on the actual cost of groundwater from Bore 1. If the real cost is 20% lower than estimated, Bore 1 would likely be included in the optimal solution.  
+- This solution depends on the actual availability of Yarra River, Kew. If real availability is less than assumed, the model may not be able to meet the 500 ML/day demand.
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.
