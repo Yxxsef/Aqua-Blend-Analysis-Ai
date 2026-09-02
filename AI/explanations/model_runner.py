@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import socket
 import time
 from typing import Any, Callable, Mapping
 from urllib import error, request
@@ -203,7 +204,19 @@ def rewrite_report(
             config.timeout_seconds,
         )
         output_text = _extract_content(response_json)
-    except TimeoutError as exc:
+    except (TimeoutError, socket.timeout) as exc:
+        # Found from a genuine live model run (Task 62), not a synthetic test: on
+        # Python < 3.10, urllib raises socket.timeout on a real network timeout,
+        # which is a SEPARATE class from the builtin TimeoutError (they were only
+        # unified as the same class starting in Python 3.10). Catching TimeoutError
+        # alone let a genuine timeout fall through to the generic Exception handler
+        # below and be mis-labelled MODEL_ERROR instead of TIMEOUT - reproduced
+        # directly: a real call that ran out of time on Python 3.9 returned
+        # failure_type="MODEL_ERROR" with runtime_ms almost exactly equal to
+        # timeout_seconds, the signature of a timeout, not a genuine model error.
+        # Catching both classes explicitly is correct and safe on every Python
+        # version: on 3.10+, socket.timeout is already an alias for TimeoutError,
+        # so this only ever catches the same thing twice, never something new.
         return _fallback(
             original_report,
             config,
