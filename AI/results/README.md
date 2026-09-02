@@ -329,3 +329,44 @@ Implementation completed successfully.
 - Automated test suite completed
 
 **All tests passing (28/28).**
+---
+
+# Task 73 — AI Run Metadata and Traceability
+
+Task 73 adds a small, machine-readable metadata structure for tracing an AI execution through the AquaBlend integration pipeline.
+
+The metadata layer records execution information that is already supplied by upstream components. It does not generate solver results, scenario identifiers, run identifiers, confidence values, or LLM outcomes.
+
+## Metadata fields
+
+The current metadata structure supports:
+
+- `scenario_id` — scenario identifier supplied by the backend/orchestration layer.
+- `run_id` — optimisation run identifier supplied by the backend/orchestration layer.
+- `model_id` — identifier of the LLM/model used for the AI execution.
+- `prompt_version` — version of the prompt used by the LLM runner.
+- `runtime_ms` — AI/LLM execution runtime in milliseconds when available.
+- `validator_result` — result supplied by the LLM validation stage.
+- `fallback_used` — indicates whether deterministic fallback was used.
+- `fallback_reason` — reason for fallback when one occurred.
+- `confidence` — confidence information supplied by the existing confidence pipeline when available.
+- `module_version` — version identifier for the metadata structure.
+
+## Ownership and integration boundaries
+
+Task 73 follows the AquaBlend integration architecture:
+
+- The backend/orchestration layer owns `scenario_id` and `run_id`.
+- Task 73 records these identifiers only when they are supplied.
+- Missing optional metadata remains `None`; the module does not invent missing execution facts.
+- Existing MILP Results remain the numerical source of truth.
+- Secrets, credentials, API keys, and full prompts are not stored in metadata.
+- The existing App response contract is not modified by this module.
+
+The metadata component is intentionally independent of the final AI orchestration entry point. It can therefore be connected to the Sprint 3 integration pipeline once the relevant `main.py`/AI response interface is available without changing the existing Results, LLM runner, validator, or App response contracts.
+
+## Files
+
+- `ai_run_metadata.py` — metadata dataclass and builder.
+- `sample_ai_run_metadata.json` — example machine-readable metadata output.
+- `tests/test_ai_run_metadata.py` — tests for complete metadata, missing optional values, supplied identifiers, fallback information, and dictionary output.
