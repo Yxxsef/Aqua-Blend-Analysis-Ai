@@ -161,8 +161,39 @@ def test_build_context_preserves_link_ids_and_overrides():
     assert payload["source_to_plant_links"][0]["source_id"] == "SRC_010"
     assert payload["source_to_plant_links"][0]["plant_id"] == "PLANT_020"
     assert payload["source_to_plant_links"][0]["enabled"] is False
-    assert payload["source_to_plant_links"][0]["override"]["reason"] == "simulate outage"
+    assert (
+        payload["source_to_plant_links"][0]["override"]["reason"]
+        == "simulate outage"
+    )
 
     assert payload["plant_to_zone_links"][0]["plant_id"] == "PLANT_020"
     assert payload["plant_to_zone_links"][0]["zone_id"] == "ZONE_030"
-    assert payload["plant_to_zone_links"][0]["override"]["reason"] == "capacity reduction"
+    assert (
+        payload["plant_to_zone_links"][0]["override"]["reason"]
+        == "capacity reduction"
+    )
+
+
+def test_build_context_prefers_explicit_run_id_argument():
+    """
+    Explicit run_id argument should take precedence over any run_id
+    present in the scenario object.
+    """
+    scenario = {
+        "scenario_id": "scenario_004",
+        "run_id": "scenario_run_id",
+        "scenario_name": "Run ID Override Test",
+    }
+
+    adapter = ScenarioContextAdapter()
+
+    context = adapter.build(
+        scenario,
+        run_id="explicit_run_id",
+    )
+
+    payload = context.to_dict()
+
+    assert payload["scenario_id"] == "scenario_004"
+    assert payload["run_id"] == "explicit_run_id"
+    assert payload["scenario_name"] == "Run ID Override Test"
