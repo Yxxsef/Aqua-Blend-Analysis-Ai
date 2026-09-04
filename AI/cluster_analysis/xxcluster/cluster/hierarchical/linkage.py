@@ -14,18 +14,22 @@ way whether the hierarchy is built natively or by an adapted backend.
 
 Representation. A cluster is an ``ndarray`` of row indices into the
 pairwise dissimilarity matrix ``D``. Passing indices rather than the
-observation coordinates keeps the criterion working under a precomputed
-matrix -- the one case Ward's Euclidean requirement is checked against --
-and avoids allocating a new sub-array on every merge.
+observation coordinates keeps a criterion working under
+``metric="precomputed"`` and avoids allocating a new sub-array on every
+merge. Ward is the exception, and ``check_linkage_metric`` below is where
+that exception is enforced.
 
 Update rule. All four criteria implemented here follow the Lance-Williams
-recurrence (see references cited in the doc section), which expresses the
+recurrence (ref_10 Ch. 7; ref_11 Ch. 10.3), which expresses the
 dissimilarity between a newly merged cluster and every other cluster as a
 linear combination of the three prior dissimilarities. Overriding
 ``update`` with the recurrence is what makes the merge loop affordable:
 recomputing ``between`` for every pair on every step is quadratic in the
 sample size at each of ``m - 1`` merges, which is unusable at any real
 data volume.
+
+Document counterpart: the "Linkage criteria" section, labelled
+``sec:tech:linkage``.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from ...core.registry import register
+from ...core.registry import REGISTRY, register
 from ...core.types import DissimilarityMatrix
 
 
@@ -146,7 +150,7 @@ class SingleLinkage(BaseLinkage):
     def update(self, d_ai, d_bi, d_ab, size_a, size_b, size_i):
         # Lance-Williams coefficients (alpha_a, alpha_b, beta, gamma)
         # = (1/2, 1/2, 0, -1/2); simplifies to the minimum of the two
-        # prior dissimilarities. See ref_TODO_lance_williams.
+        # prior dissimilarities. Coefficient table: ref_10, Ch. 7.
         return min(d_ai, d_bi)
 
 
@@ -210,8 +214,12 @@ class WardLinkage(BaseLinkage):
     the SSE increase with a squared Euclidean distance between
     centroids; under any other dissimilarity the update formula is not
     the criterion it names, and a method built on it silently returns a
-    partition it did not compute. ``BaseHierarchicalClusterer._fit``
-    checks this against the method's ``metric`` before doing any work.
+    partition it did not compute.
+    ``BaseHierarchicalClusterer._validate_params`` calls
+    ``check_linkage_metric`` below, so the refusal happens at the first
+    step of ``fit``, before the input is even validated -- and on the
+    adapted path as well as the native one, since ``_validate_params``
+    is a step of the ``fit`` template rather than of ``_fit``.
 
     This implementation is the Ward2 variant (Murtagh & Legendre 2014):
     the input ``D`` holds Euclidean distances and the recurrence below
@@ -240,12 +248,127 @@ class WardLinkage(BaseLinkage):
         #   alpha_b = (n_b + n_i) / (n_a + n_b + n_i)
         #   beta    = -n_i        / (n_a + n_b + n_i)
         #   gamma   = 0
-        # See ref_TODO_murtagh_legendre for the derivation and the
-        # distinction between this ("Ward2") and the incompatible
-        # variant sometimes also called Ward.
+        # Derivation: ref_10, Ch. 7. The name "Ward2" for this variant,
+        # and the distinction from the incompatible one that takes
+        # squared distances, is Murtagh and Legendre's (2014) -- a
+        # source with no mapping-sheet key yet, recorded as read in the
+        # section's REFERENCES USED block.
         total = size_a + size_b + size_i
         return (
             (size_a + size_i) * d_ai
             + (size_b + size_i) * d_bi
             - size_i * d_ab
         ) / total
+
+
+#: Metric names that denote Euclidean distance, and therefore satisfy
+#: ``requires_euclidean``. Matches the pair scikit-learn's
+#: ``AgglomerativeClustering`` accepts under ``linkage="ward"``, so a
+#: criterion resolved natively and one resolved by an adapted backend
+#: refuse the same inputs.
+EUCLIDEAN_METRICS: frozenset[str] = frozenset({"euclidean", "l2"})
+
+
+def resolve_linkage(linkage: str | BaseLinkage | type[BaseLinkage]) -> BaseLinkage:
+    """Return a criterion instance for a name, a class, or an instance.
+
+    One resolution path for the whole family, so ``linkage="ward"``
+    means the same object whether the hierarchy is built natively or by
+    an adapted backend. Names go through the process-wide registry,
+    which is what makes them permanent and what lets a configuration
+    file name a criterion.
+
+    A name that resolves to something which is not a criterion is
+    refused here rather than at the first merge: the registry is shared
+    across component kinds, so ``linkage="kmeans"`` resolves to a class
+    -- just not to one that lifts a dissimilarity to clusters.
+    """
+    if isinstance(linkage, BaseLinkage):
+        return linkage
+
+    if isinstance(linkage, type):
+        cls = linkage
+    else:
+        cls = REGISTRY.get(str(linkage))
+
+    if not (isinstance(cls, type) and issubclass(cls, BaseLinkage)):
+        raise ValueError(
+            f"linkage={linkage!r} resolves to "
+            f"{getattr(cls, '__qualname__', cls)!r}, which is not a linkage "
+            f"criterion. Registered criteria: "
+            f"{', '.join(sorted(linkage_names()))}."
+        )
+    return cls()
+
+
+def linkage_names() -> list[str]:
+    """List the names the registered linkage criteria answer to."""
+    return [
+        name
+        for name, cls in REGISTRY
+        if isinstance(cls, type) and issubclass(cls, BaseLinkage)
+    ]
+
+
+def check_linkage_metric(
+    linkage: str | BaseLinkage | type[BaseLinkage],
+    metric: object,
+) -> BaseLinkage:
+    """Refuse a criterion/metric pair the criterion is not defined for.
+
+    Returns the resolved criterion, so a caller that needs it does not
+    resolve twice.
+
+    Only Ward declares ``requires_euclidean`` today, and the rule it
+    enforces is deliberately strict: anything this function cannot
+    *verify* as Euclidean is refused, rather than accepted on the
+    caller's word.
+
+    - A named metric passes only if it is in ``EUCLIDEAN_METRICS``.
+    - A callable is refused: its geometry is not readable from here.
+    - ``"precomputed"`` is refused: a supplied matrix may well hold
+      Euclidean distances, but nothing in the parameter says so, and the
+      failure mode of guessing wrong is a partition reported under a
+      criterion that never computed it. This is the same line
+      scikit-learn's ``AgglomerativeClustering`` draws, which keeps the
+      native and adapted paths in agreement.
+
+    The alternative -- letting Ward run on whatever matrix arrives -- is
+    the silent-wrong-answer case that ``requires_euclidean`` exists to
+    prevent, and is why this is checked before any work rather than
+    reported as a caveat afterwards.
+    """
+    criterion = resolve_linkage(linkage)
+    if not criterion.requires_euclidean:
+        return criterion
+
+    if isinstance(metric, str) and metric in EUCLIDEAN_METRICS:
+        return criterion
+
+    if metric == "precomputed":
+        detail = (
+            "a precomputed matrix carries no evidence that its entries are "
+            "Euclidean distances, and this criterion is only defined when "
+            "they are"
+        )
+    elif callable(metric):
+        detail = (
+            "a callable metric cannot be verified as Euclidean from the "
+            "parameter"
+        )
+    else:
+        detail = (
+            f"{metric!r} is not one of "
+            f"{sorted(EUCLIDEAN_METRICS)}"
+        )
+
+    raise ValueError(
+        f"linkage={criterion.name!r} requires Euclidean distance: {detail}. "
+        f"Ward's merge cost is an increase in within-cluster sum-of-squares, "
+        f"which equals a squared Euclidean distance between centroids and "
+        f"nothing else, so under metric={metric!r} the recurrence would "
+        f"return a number that is not the criterion it names. Pass "
+        f"metric='euclidean' (or 'l2'), or choose a criterion defined for "
+        f"any dissimilarity: "
+        f"{', '.join(sorted(n for n in linkage_names() if n != criterion.name))}."
+    )
