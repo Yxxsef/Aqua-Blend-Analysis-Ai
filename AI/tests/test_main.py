@@ -145,3 +145,124 @@ def test_rejected_llm_rewrite_uses_deterministic_fallback(
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
     assert PROTOTYPE_DISCLAIMER in response["display_explanation"]
     assert any("LLM rewrite was rejected by validation" in warning for warning in response["warnings"])
+
+
+# Task 61 follow-up: integration from MILP output to AI
+
+
+class _FakeExecuteResult:
+    def __init__(self, data: object) -> None:
+        self.data = data
+
+
+class _FakeQuery:
+    def __init__(self, row: object, calls: list) -> None:
+        self._row = row
+        self._calls = calls
+
+    def select(self, columns: str) -> _FakeQuery:
+        self._calls.append(("select", columns))
+        return self
+
+    def order(self, column: str, desc: bool) -> _FakeQuery:
+        self._calls.append(("order", column, desc))
+        return self
+
+    def limit(self, count: int) -> _FakeQuery:
+        self._calls.append(("limit", count))
+        return self
+
+    def single(self) -> _FakeQuery:
+        self._calls.append(("single",))
+        return self
+
+    def execute(self) -> _FakeExecuteResult:
+        self._calls.append(("execute",))
+        return _FakeExecuteResult(self._row)
+
+
+class _FakeSupabaseClient:
+    def __init__(self, row: object, calls: list) -> None:
+        self._row = row
+        self._calls = calls
+
+    def table(self, name: str) -> _FakeQuery:
+        self._calls.append(("table", name))
+        return _FakeQuery(self._row, self._calls)
+
+
+def _install_fake_supabase(monkeypatch: pytest.MonkeyPatch, row: object) -> list:
+    calls: list = []
+
+    def fake_create_client(**kwargs: object) -> _FakeSupabaseClient:
+        calls.append(("create_client", kwargs))
+        return _FakeSupabaseClient(row, calls)
+
+    monkeypatch.setattr(main, "create_client", fake_create_client)
+    return calls
+
+
+def test_load_milp_output_reads_the_latest_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, {"scenario_id": "row-from-db"})
+
+    output = main.load_milp_output("ignored.json")
+
+    assert output == {"scenario_id": "row-from-db"}
+    assert ("table", "milp_model_output") in calls
+    assert ("select", "*") in calls
+    assert ("order", "run_id", True) in calls
+    assert ("limit", 1) in calls
+    assert ("single",) in calls
+
+
+def test_load_milp_output_ignores_its_path_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, {"scenario_id": "same-row"})
+
+    from_fixture = main.load_milp_output(FIXTURE_PATH)
+    from_missing_path = main.load_milp_output("/nonexistent/path.json")
+
+    assert from_fixture == from_missing_path == {"scenario_id": "same-row"}
+    assert [call for call in calls if call[0] == "table"] == [
+        ("table", "milp_model_output"),
+        ("table", "milp_model_output"),
+    ]
+
+
+def test_run_from_file_runs_the_pipeline_on_the_supabase_row(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_supabase(monkeypatch, valid_results)
+
+    response = main.run_from_file("ignored.json")
+
+    assert response["scenario_id"] == "scenario_2026_07_17_001"
+    assert response["solver_status"] == "OPTIMAL"
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+
+
+def test_run_from_file_rejects_a_row_that_is_not_results_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_supabase(monkeypatch, {"run_id": 7, "scenario_id": "db-row"})
+
+    response = main.run_from_file("ignored.json")
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert response["scenario_id"] == "db-row"
+    assert any("Missing required fields" in warning for warning in response["warnings"])
+
+
+def test_run_from_file_handles_an_empty_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_supabase(monkeypatch, None)
+
+    response = main.run_from_file("ignored.json")
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert response["scenario_id"] is None
+    assert any("Results must be a JSON object" in warning for warning in response["warnings"])

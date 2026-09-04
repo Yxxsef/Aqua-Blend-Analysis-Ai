@@ -4,7 +4,9 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from typing import Any, Mapping
+from typing import Any, Mapping, Dict
+
+from supabase import create_client
 
 
 # Existing Task modules are intentionally usable as standalone scripts and
@@ -32,15 +34,30 @@ from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
 
 
-def load_results(path: str | Path) -> Any:
-    """Load a Results JSON file."""
-    path = Path(path)
+def load_milp_output(path: str | Path) -> Dict:
+    """Load a Results JSON file from the MILP output.
+        This must be loaded from the Supabase
+    """
+    # These are public keys, so no privacy concerns
+    db_url = "https://afthemgcztvadtpeipoq.supabase.co"
+    db_key = "sb_publishable_c0t-ufZAkxWEF6dUjFc0pg_WdsomLGV"
 
-    with path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+    sb = create_client(supabase_url = db_url, supabase_key = db_key)
+    # Return the current final row in the milp_model_output table
+    output = (
+        sb.table("milp_model_output")
+        .select("*")
+        .order("run_id", desc = True)
+        .limit(1)
+        .single()
+        .execute()
+        .data
+    )
+    # Returns a json dictionary
+    return output
 
 
-def _invalid_input_response(results: Any, reason: str) -> dict[str, Any]:
+def _invalid_input_response(results: Dict, reason: str) -> dict[str, Any]:
     """Build the standard App response for unprocessable input."""
     scenario_id = (
         results.get("scenario_id")
@@ -56,7 +73,7 @@ def _invalid_input_response(results: Any, reason: str) -> dict[str, Any]:
 
 
 def run_pipeline(
-    results: Any,
+    results: Dict,
     model_config: ModelConfig | None = None,
     comparison: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -144,7 +161,7 @@ def run_from_file(
     comparison: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Load a Results JSON file and run the pipeline."""
-    results = load_results(path)
+    results = load_milp_output(path)
     return run_pipeline(results, model_config=model_config, comparison=comparison)
 
 
