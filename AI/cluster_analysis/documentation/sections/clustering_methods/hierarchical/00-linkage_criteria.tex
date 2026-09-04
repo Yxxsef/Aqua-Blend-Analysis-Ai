@@ -8,10 +8,14 @@
 %
 %  Code counterpart: xxcluster/cluster/hierarchical/linkage.py.
 %
-%  NOTE: citation keys marked ref_TODO below need replacement from the
-%  shared citation-key mapping sheet before merge. Lance-Williams
-%  (1967) and Murtagh-Legendre (2014) are not yet in the bibliography.
-%  ref_11 (Han/Kamber/Pei) is already present and used in-place.
+%  Citations: every \cite below resolves against documentation/
+%  literature.bib. The primary sources for the criteria themselves
+%  (Ward 1963; Lance and Williams 1967; Murtagh and Legendre 2014;
+%  Muellner 2011) have no key in the shared mapping sheet yet, so they
+%  are attributed in the text by author and year and recorded in the
+%  REFERENCES USED block as read. Keys for them are the document
+%  lead's to allocate (CONTRIBUTING.md 1.6); literature.bib is not
+%  edited here.
 % ------------------------------------------------------------------
 \subsubsection{Linkage criteria}
 \label{sec:tech:linkage}
@@ -51,8 +55,10 @@ non-negative $d(\mathcal C_A, \mathcal C_B)$:
           \left\| \boldsymbol \mu_A - \boldsymbol \mu_B \right\|_2^2,
 \end{align}
 where $\boldsymbol \mu_A, \boldsymbol \mu_B$ are the cluster centroids
-and Ward's expression is the increase in the within-cluster
-sum-of-squared-error upon merging \cite{ref_TODO_ward1963}.
+and Ward's expression, due to Ward (1963), is the increase in the
+within-cluster sum-of-squared-error upon merging \cite{ref_10, ref_11}.
+It is the same objective $k$-means minimises \cite{ref_25}, which is
+where the shape bias reported below comes from.
 
 \paragraph{Lance--Williams recurrence}
 \label{sec:tech:linkage:recurrence}
@@ -62,8 +68,9 @@ therefore unusable at any real data volume. Lance and Williams observed
 that all four criteria above (and several others) express the
 dissimilarity between a newly merged cluster $\mathcal C_A \cup
 \mathcal C_B$ and every other cluster $\mathcal C_I$ as a linear
-combination of the three prior dissimilarities
-\cite{ref_TODO_lance_williams}:
+combination of the three prior dissimilarities; the recurrence and the
+coefficient table below follow the standard presentation
+\cite{ref_10, ref_11}:
 \begin{align}
     d(\mathcal C_A \cup \mathcal C_B, \mathcal C_I)
     = \alpha_A \, d(\mathcal C_A, \mathcal C_I)
@@ -140,15 +147,35 @@ The Ward increase written in the definition uses squared Euclidean
 distance between centroids, and the Lance--Williams recurrence above
 tracks that quantity as the criterion. Under any other dissimilarity
 the recurrence is not the criterion it names and a method built on it
-would silently return a partition it did not compute. The
-implementation therefore declares \texttt{requires\_euclidean = True},
-and \texttt{BaseHierarchicalClusterer.\_fit} refuses a
-non-Euclidean measure at fit time rather than at the boundary. Two
-distinct definitions in the literature both call themselves Ward: the
-implementation here is the ``Ward2'' variant matching
+would silently return a partition it did not compute
+\cite{ref_10, ref_11}.
+
+The implementation therefore declares
+\texttt{requires\_euclidean = True}, and
+\texttt{BaseHierarchicalClusterer.\_validate\_params} calls
+\texttt{check\_linkage\_metric} to refuse an invalid pairing. That is
+the first step of the \texttt{fit} template method
+(\texttt{ARCHITECTURE.md} \S3.2), so the refusal precedes input
+validation and any tree construction, and --- because it is a
+step of \texttt{fit} rather than of \texttt{\_fit} --- it applies to an
+adapted method whose backend builds the tree as much as to a native
+one. The rule is that anything not \emph{verifiable} as Euclidean is
+refused: the names \texttt{euclidean} and \texttt{l2} pass, while a
+callable metric and \texttt{metric="precomputed"} do not, the latter
+because a supplied matrix carries no evidence of its own geometry.
+This is the line scikit-learn's \texttt{AgglomerativeClustering} draws
+under \texttt{linkage="ward"}, so one registered name does not mean two
+things across the native and adapted paths. The consequence for Task~34's
+Gower coefficient, which reaches a method only as a precomputed matrix
+and is not a metric, is that Ward refuses it.
+
+Two distinct definitions in the literature both call themselves Ward,
+a confusion set out by Murtagh and Legendre (2014). The implementation
+here is the variant they label ``Ward2'', which takes distances rather
+than squared distances as input; that it agrees with
 \texttt{scipy.cluster.hierarchy.linkage(method="ward")} and
-scikit-learn's Agglomerative Ward
-\cite{ref_TODO_murtagh_legendre}.
+scikit-learn's Agglomerative Ward is asserted in the test suite rather
+than assumed.
 
 \paragraph{Monotonicity}
 \label{sec:tech:linkage:monotonic}
@@ -171,6 +198,16 @@ evidences the chains-versus-compacts distinction stated above, with
 single linkage joining the two groups at the intermediate height and
 complete linkage keeping them apart until the last merge.
 
+Ward's Euclidean requirement is verified as behaviour, not only as a
+declaration: a hierarchical method configured with
+\texttt{linkage="ward"} and a non-Euclidean metric raises at
+\texttt{fit}, and the test asserts that no tree was built when it did.
+A further test pairs each candidate metric against
+\texttt{AgglomerativeClustering} and requires the two to accept and
+refuse the same inputs, which is what keeps a criterion resolved by
+name identical whether the hierarchy is built natively or by an
+adapted backend.
+
 \paragraph{Summary}
 \label{sec:tech:linkage:summary}
 Four registered criteria fix the shape of cluster the hierarchical
@@ -180,3 +217,39 @@ affordable, each declares its Euclidean requirement and its
 monotonicity, and each reproduces its SciPy counterpart in the test
 suite. The first hierarchical method built on them, Ward's method, is
 introduced in Sect.~\ref{sec:tech:ward} (Task 40).
+
+% ==================================================================
+%  REFERENCES USED
+%
+%    ref_10   Tan, Steinbach, Karpatne & Kumar (2019), Introduction to
+%             Data Mining, Ch. 7 (hierarchical clustering, the
+%             Lance-Williams recurrence and its coefficient table,
+%             Ward's method)
+%                                    cited in: Definition, Recurrence,
+%                                              Regime shapes, Ward
+%    ref_11   Han, Kamber & Pei (2011), Data Mining: Concepts and
+%             Techniques, Ch. 10.3 (AGNES/DIANA, linkage measures)
+%                                    cited in: Overview, Definition,
+%                                              Recurrence, Regime shapes,
+%                                              Ward
+%    ref_25   Lloyd (1982), Least squares quantization in PCM
+%                                    cited in: Definition (the shared
+%                                              SSE objective behind
+%                                              Ward's shape bias)
+%
+%  READ, NOT CITED --- no key in the mapping sheet yet. These are the
+%  primary sources for the criteria and are attributed in the text by
+%  author and year. If the document lead allocates keys for them, the
+%  in-text attributions become \cite calls and this list moves up.
+%
+%    Ward, J. H. (1963), "Hierarchical grouping to optimize an objective
+%      function", JASA 58(301), 236-244.
+%    Lance, G. N. & Williams, W. T. (1967), "A general theory of
+%      classificatory sorting strategies: 1. Hierarchical systems",
+%      The Computer Journal 9(4), 373-380.
+%    Murtagh, F. & Legendre, P. (2014), "Ward's hierarchical
+%      agglomerative clustering method: which algorithms implement
+%      Ward's criterion?", Journal of Classification 31(3), 274-295.
+%    Muellner, D. (2011), "Modern hierarchical, agglomerative clustering
+%      algorithms", arXiv:1109.2378.
+% ==================================================================
