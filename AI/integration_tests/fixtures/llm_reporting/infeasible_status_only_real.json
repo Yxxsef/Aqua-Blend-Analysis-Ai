@@ -1,0 +1,6 @@
+{
+  "deterministic_report": "## Scenario & Solver Status\n\nScenario: scenario_2026_07_17_001. Solver status: INFEASIBLE. Solved at: 2026-07-17T10:32:00Z.\n\n## Result Availability\n\nSolver status is INFEASIBLE. This result is not confirmed as usable for a final recommendation.\n\n## Prototype Disclaimer\n\nAquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.",
+  "llm_output": "Scenario scenario_2026_07_17_001 finished with solver status INFEASIBLE, recorded at 2026-07-17T10:32:00Z. This result is not confirmed as usable for a final recommendation.\n\nAquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.",
+  "expected_critical_result": "PASS",
+  "source": "REFERENCE_REPORT_INFEASIBLE / CORRECT_REWRITE_INFEASIBLE, task-25-llm-validator branch, test_llm_validator.py (TestNonOptimalReportRobustness)"
+}
