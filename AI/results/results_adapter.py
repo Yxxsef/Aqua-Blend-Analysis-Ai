@@ -1,11 +1,17 @@
 """
 results_adapter.py
 
-Provides a stable internal adapter for the confirmed
-Results JSON contract.
+Provides a stable internal adapter for the MILP output
+contract v1 (fixture:
+AI/results/tests/fixtures/output_contract_v1.json).
 
 External MILP field names remain unchanged.
 Internal naming differences are handled here.
+
+Unresolved contract questions are recorded in
+MILP_Output_Validation_Notes.md. The adapter does not
+invent values or mappings that the v1 contract does
+not define.
 """
 
 from typing import Any
@@ -17,17 +23,18 @@ class AdapterError(Exception):
 
 
 REQUIRED_FIELDS = [
-    "scenario_id",
-    "status",
-    "objective",
-    "demand_zones",
+    "schema_version",
+    "run_id",
+    "scenario",
+    "validation",
+    "solver",
+    "summary",
     "sources",
-    "transfer_paths",
     "plants",
-    "water_quality",
-    "constraints",
-    "diagnostics",
-    "data_flags",
+    "demand_zones",
+    "flows",
+    "quality",
+    "warnings",
 ]
 
 
@@ -40,7 +47,7 @@ def adapt_results(
     The adapter:
     - preserves MILP result values;
     - converts approved external field names to internal names;
-    - preserves source, constraint, plant, transfer and quality structures;
+    - preserves scenario, source, plant, flow and quality structures;
     - safely handles optional fields;
     - raises AdapterError for missing required fields.
     """
@@ -62,40 +69,24 @@ def adapt_results(
             + ", ".join(missing_fields)
         )
 
-    data_flags = results["data_flags"]
-
-    if not isinstance(data_flags, dict):
-        raise AdapterError(
-            "'data_flags' must be a dictionary."
-        )
-
-    if "sources" not in data_flags:
-        raise AdapterError(
-            "'data_flags' must contain 'sources'."
-        )
-
-    if not isinstance(data_flags["sources"], list):
-        raise AdapterError(
-            "'data_flags.sources' must be a list."
-        )
-
     adapted = {
-        "scenarioId": results["scenario_id"],
-        "status": results["status"],
-        "objective": results["objective"],
-        "demandZones": results["demand_zones"],
+        "schemaVersion": results["schema_version"],
+        "runId": results["run_id"],
+        "scenario": results["scenario"],
+        "validation": results["validation"],
+        "solver": results["solver"],
+        "summary": results["summary"],
         "sources": results["sources"],
-        "transferPaths": results["transfer_paths"],
         "plants": results["plants"],
-        "waterQuality": results["water_quality"],
-        "constraints": results["constraints"],
-        "diagnostics": results["diagnostics"],
-
-        # Preserve the complete provenance metadata exactly as
-        # supplied by the confirmed Results JSON contract.
-        "dataFlags": data_flags,
+        "demandZones": results["demand_zones"],
+        "flows": results["flows"],
+        "quality": results["quality"],
+        "warnings": results["warnings"],
     }
 
+    # Optional fields confirmed by the Task 21 field map.
+    # `binding_constraints_summary` is also present in the
+    # v1 fixture. No values are invented for missing fields.
     optional_fields = {
         "solved_at": "solvedAt",
         "binding_constraints_summary": (
