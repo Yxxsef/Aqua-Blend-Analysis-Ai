@@ -35,6 +35,7 @@ VALID_STATUS = {
     "SUCCESS",
     "FEASIBLE",
     "INFEASIBLE",
+    "UNBOUNDED",
     "ERROR",
     "TIME_LIMIT",
 }

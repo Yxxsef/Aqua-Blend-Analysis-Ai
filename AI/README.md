@@ -10,6 +10,34 @@ AI/
 
 Do not create new top-level folders without raising it in the Analysis & AI team channel first.
 
+## Integrated Pipeline Entry Point
+
+`AI/main.py` is the Analysis & AI team's internal pipeline entry point. The
+wider AquaBlend backend should call it after receiving structured MILP Results
+JSON; the project-wide backend entry point remains separate.
+
+Pipeline order:
+
+1. Validate raw MILP Results JSON.
+2. Adapt the result into the internal format.
+3. Calculate KPIs and the KPI gate.
+4. Determine confidence from provenance.
+5. Generate the deterministic explanation.
+6. Optionally run and validate an LLM rewrite.
+7. Use the deterministic fallback when the LLM is unavailable or rejected.
+8. Return the App & Delivery response contract.
+
+`main.py` coordinates existing modules and does not replace their business
+logic. Model configuration is optional; without it, the deterministic fallback
+is used. Unvalidated LLM output is never returned for display.
+
+```text
+python AI/main.py AI/explanations/llm_reporting/fixtures/model_output_example.json
+python AI/main.py <results.json> --output <response.json>
+python AI/main.py <results.json> --model-config AI/explanations/model_config.example.json
+python -m pytest AI/tests/test_main.py -q
+```
+
 ## Sprint 1 Required Files
 
 | Folder | Required files |
