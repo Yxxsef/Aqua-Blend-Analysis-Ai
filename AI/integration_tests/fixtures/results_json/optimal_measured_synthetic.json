@@ -1,0 +1,120 @@
+{
+  "scenario_id": "scenario_synthetic_measured_001",
+  "solved_at": "2026-08-01T09:00:00Z",
+  "status": "OPTIMAL",
+  "objective": {
+    "total_cost": 150000.00,
+    "currency": "AUD",
+    "unit": "cost for one representative day",
+    "cost_breakdown": {
+      "source_activation_cost": 0.00,
+      "plant_activation_cost": 0.00,
+      "source_draw_cost": 118000.00,
+      "plant_treatment_cost": 32000.00
+    }
+  },
+  "demand_zones": [
+    {
+      "zone_id": "zone_1",
+      "zone_name": "Zone 1",
+      "demand_ml_per_day": 500,
+      "volume_supplied_ml_per_day": 500
+    }
+  ],
+  "sources": {
+    "selected": [
+      {
+        "source_id": "silvan_reservoir",
+        "source_name": "Silvan Reservoir",
+        "source_type": "reservoir",
+        "volume_drawn_ml_per_day": 350,
+        "percent_of_blend": 70.0,
+        "cost_per_ml": 200,
+        "draw_cost": 70000.00
+      },
+      {
+        "source_id": "yarra_kew",
+        "source_name": "Yarra River, Kew",
+        "source_type": "river",
+        "volume_drawn_ml_per_day": 150,
+        "percent_of_blend": 30.0,
+        "cost_per_ml": 320,
+        "draw_cost": 48000.00
+      }
+    ],
+    "unused": [
+      {
+        "source_id": "groundwater_bore_1",
+        "source_name": "Groundwater Bore 1",
+        "source_type": "groundwater",
+        "reason": "Higher cost per ML than the selected sources with no quality benefit large enough to justify inclusion for this demand level"
+      }
+    ]
+  },
+  "plants": {
+    "active": [
+      {
+        "plant_id": "facility_1",
+        "plant_name": "Treatment Facility 1",
+        "volume_processed_ml_per_day": 500,
+        "treatment_cost_per_ml": 64,
+        "treatment_cost": 32000.00
+      }
+    ],
+    "inactive": []
+  },
+  "water_quality": {
+    "applies_to": "blend_at_plant_inflow",
+    "by_plant": {
+      "facility_1": {
+        "pH": { "value": 7.20, "unit": "pH", "constraint_min": 6.5, "constraint_max": 8.5, "status": "PASS", "safety_margin_percent": 40.0 },
+        "alkalinity": { "value": 45.0, "unit": "mg/L CaCO3", "constraint_min": 20, "constraint_max": 100, "status": "PASS", "safety_margin_percent": 31.3 },
+        "turbidity": { "value": 3.0, "unit": "NTU", "constraint_min": 0, "constraint_max": 8.0, "status": "PASS", "safety_margin_percent": 62.5 }
+      }
+    }
+  },
+  "binding_constraints_summary": ["demand_satisfaction_zone_1"],
+  "data_flags": {
+    "sources": [
+      {
+        "source_id": "silvan_reservoir",
+        "has_estimated_values": false,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "measured",
+          "reference_flow": "measured",
+          "max_available": "measured",
+          "cost": "measured",
+          "alkalinity": "measured"
+        }
+      },
+      {
+        "source_id": "yarra_kew",
+        "has_estimated_values": false,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "measured",
+          "reference_flow": "measured",
+          "max_available": "measured",
+          "cost": "measured",
+          "alkalinity": "measured"
+        }
+      },
+      {
+        "source_id": "groundwater_bore_1",
+        "has_estimated_values": false,
+        "availability_origin": "database",
+        "provenance": {
+          "storage_capacity": "measured",
+          "reference_flow": "measured",
+          "max_available": "measured",
+          "cost": "measured",
+          "alkalinity": "measured"
+        }
+      }
+    ],
+    "notes": [
+      "All provenance fields for this scenario are measured, not estimated."
+    ]
+  }
+}

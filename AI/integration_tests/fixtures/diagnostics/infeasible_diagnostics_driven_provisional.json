@@ -1,0 +1,19 @@
+{
+  "solver_status": "INFEASIBLE",
+  "infeasibility_diagnostics": {
+    "likely_causes": [
+      {
+        "type": "insufficient_source_supply",
+        "severity": "high",
+        "details": "Available source capacity is below total required demand."
+      },
+      {
+        "type": "plant_capacity_limit",
+        "severity": "medium",
+        "plant_id": "plant_01"
+      }
+    ]
+  },
+  "expected_outcome": "INFEASIBLE_WITH_DIAGNOSTICS",
+  "expected_rendered_output": "Diagnostic information was supplied for this infeasible result:\n- insufficient_source_supply (severity: high): Available source capacity is below total required demand.\n- plant_capacity_limit (severity: medium) [plant_id=plant_01]"
+}
