@@ -1,3 +1,4 @@
+import json
 import sys
 import os
 import pytest
@@ -12,136 +13,103 @@ from results_adapter import (
     adapt_results,
     AdapterError,
 )
+from results_validator import validate_results
+
+FIXTURE_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "fixtures",
+    "output_contract_v1.json",
+)
 
 
-def sample_results():
-    return {
-        "scenario_id": "scenario_2026_07_17_001",
-        "status": "OPTIMAL",
-        "objective": {
-            "total_cost": 184150.00,
-            "currency": "AUD",
-        },
-        "demand_zones": [],
-        "sources": {
-            "selected": [],
-            "unused": [],
-        },
-        "transfer_paths": {},
-        "plants": {},
-        "water_quality": {},
-        "constraints": [],
-        "diagnostics": {},
-        "data_flags": {
-            "sources": []
-        },
-    }
+def load_fixture():
+    with open(FIXTURE_PATH, "r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
-def test_adapter_converts_fields():
-    result = adapt_results(sample_results())
+def test_adapter_maps_top_level_fields():
+    results = load_fixture()
+
+    adapted = adapt_results(results)
 
     assert (
-        result["scenarioId"]
-        == "scenario_2026_07_17_001"
+        adapted["schemaVersion"]
+        == results["schema_version"]
     )
 
-    assert result["status"] == "OPTIMAL"
-    assert result["demandZones"] == []
-    assert result["waterQuality"] == {}
-
-    # The adapter preserves the complete data_flags
-    # structure, even when sources is empty.
-    assert result["dataFlags"] == {
-        "sources": []
-    }
-
-
-def test_adapter_preserves_additional_data_flags_fields():
-    results = sample_results()
-
-    results["data_flags"]["notes"] = [
-        "Estimated demand data"
-    ]
-
-    result = adapt_results(results)
-
-    assert result["dataFlags"] == {
-        "sources": [],
-        "notes": [
-            "Estimated demand data"
-        ],
-    }
-
-
-def test_adapter_preserves_sources():
-    results = sample_results()
-
-    results["sources"]["selected"].append(
-        {
-            "source_id": "silvan_reservoir"
-        }
-    )
-
-    result = adapt_results(results)
+    assert adapted["runId"] is None
 
     assert (
-        result["sources"]["selected"][0]["source_id"]
-        == "silvan_reservoir"
+        adapted["demandZones"]
+        == results["demand_zones"]
     )
 
 
-def test_adapter_preserves_constraints():
-    results = sample_results()
+def test_adapter_preserves_v1_structures_unchanged():
+    results = load_fixture()
 
-    results["constraints"].append(
-        {
-            "name": "demand_satisfaction_zone_1",
-            "status": "PASS",
-        }
-    )
+    adapted = adapt_results(results)
 
-    result = adapt_results(results)
+    for field in (
+        "scenario",
+        "validation",
+        "solver",
+        "summary",
+        "sources",
+        "plants",
+        "flows",
+        "quality",
+        "warnings",
+    ):
+        assert adapted[field] == results[field]
 
-    assert len(result["constraints"]) == 1
+
+def test_adapter_maps_binding_constraints_summary():
+    results = load_fixture()
+
+    adapted = adapt_results(results)
+
     assert (
-        result["constraints"][0]["status"]
-        == "PASS"
+        adapted["bindingConstraintsSummary"]
+        == results["binding_constraints_summary"]
     )
 
 
-def test_adapter_optional_fields():
-    results = sample_results()
+def test_adapter_omits_missing_optional_fields():
+    results = load_fixture()
+
+    adapted = adapt_results(results)
+
+    assert "solvedAt" not in adapted
+    assert "explanation" not in adapted
+    assert "alternativeFeasibleSolutions" not in adapted
+    assert "sensitivityToKeyAssumptions" not in adapted
+
+
+def test_adapter_maps_task21_optional_fields_when_present():
+    results = load_fixture()
 
     results["solved_at"] = (
         "2026-07-17T10:32:00Z"
     )
 
-    results["binding_constraints_summary"] = [
-        "demand_satisfaction_zone_1"
-    ]
-
     results["explanation"] = "Test explanation."
 
-    result = adapt_results(results)
+    adapted = adapt_results(results)
 
-    assert result["solvedAt"] == (
+    assert adapted["solvedAt"] == (
         "2026-07-17T10:32:00Z"
     )
 
-    assert result["bindingConstraintsSummary"] == [
-        "demand_satisfaction_zone_1"
-    ]
-
-    assert result["explanation"] == (
+    assert adapted["explanation"] == (
         "Test explanation."
     )
 
 
 def test_adapter_missing_field():
-    results = sample_results()
+    results = load_fixture()
 
-    del results["status"]
+    del results["solver"]
 
     with pytest.raises(AdapterError):
         adapt_results(results)
@@ -150,3 +118,21 @@ def test_adapter_missing_field():
 def test_adapter_requires_dictionary():
     with pytest.raises(AdapterError):
         adapt_results([])
+
+
+def test_validate_then_adapt_round_trip():
+    results = load_fixture()
+
+    assert validate_results(results) is True
+
+    adapted = adapt_results(results)
+
+    assert (
+        adapted["scenario"]["scenario_id"]
+        == results["scenario"]["scenario_id"]
+    )
+
+    assert adapted["solver"] == results["solver"]
+    assert adapted["sources"] == results["sources"]
+    assert adapted["quality"] == results["quality"]
+    assert adapted["flows"] == results["flows"]

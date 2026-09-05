@@ -3,8 +3,14 @@ results_validator.py
 
 Validates the Results JSON produced by the MILP optimiser.
 
-The confirmed Results JSON contract is treated as the
-source of truth.
+The real MILP output contract v1 fixture
+(AI/results/tests/fixtures/output_contract_v1.json) is
+treated as the source of truth.
+
+Unresolved contract questions (provenance/data flags,
+diagnostics, status enums, objective/cost mapping) are
+recorded in MILP_Output_Validation_Notes.md and are
+intentionally not validated here rather than guessed.
 """
 
 from typing import Any
@@ -16,42 +22,24 @@ class ValidationError(Exception):
 
 
 REQUIRED_FIELDS = [
-    "scenario_id",
-    "status",
-    "objective",
-    "demand_zones",
+    "schema_version",
+    "run_id",
+    "scenario",
+    "validation",
+    "solver",
+    "summary",
     "sources",
-    "transfer_paths",
     "plants",
-    "water_quality",
-    "constraints",
-    "diagnostics",
-    "data_flags",
+    "demand_zones",
+    "flows",
+    "quality",
+    "warnings",
 ]
-
-
-VALID_STATUS = {
-    "OPTIMAL",
-    "SUCCESS",
-    "FEASIBLE",
-    "INFEASIBLE",
-    "ERROR",
-    "TIME_LIMIT",
-}
-
-
-REQUIRED_PROVENANCE_FIELDS = {
-    "storage_capacity",
-    "reference_flow",
-    "max_available",
-    "cost",
-    "alkalinity",
-}
 
 
 def validate_results(results: dict[str, Any]) -> bool:
     """
-    Validate the confirmed Results JSON contract.
+    Validate Results JSON against the MILP output contract v1.
 
     Returns:
         True if validation succeeds.
@@ -77,39 +65,60 @@ def validate_results(results: dict[str, Any]) -> bool:
             + ", ".join(missing_fields)
         )
 
-    # scenario_id
-    if not isinstance(results["scenario_id"], str):
+    # schema_version
+    if not isinstance(results["schema_version"], str):
         raise ValidationError(
-            "'scenario_id' must be a string."
+            "'schema_version' must be a string."
         )
 
-    if not results["scenario_id"].strip():
+    # scenario (scenario_id relocated here in v1)
+    scenario = results["scenario"]
+
+    if not isinstance(scenario, dict):
         raise ValidationError(
-            "'scenario_id' must not be empty."
+            "'scenario' must be an object."
         )
 
-    # status
-    if not isinstance(results["status"], str):
+    if "scenario_id" not in scenario:
         raise ValidationError(
-            "'status' must be a string."
+            "'scenario' must contain 'scenario_id'."
         )
 
-    if results["status"] not in VALID_STATUS:
+    if not isinstance(scenario["scenario_id"], str):
         raise ValidationError(
-            f"Invalid status '{results['status']}'. "
-            f"Expected one of: "
-            f"{', '.join(sorted(VALID_STATUS))}"
+            "'scenario.scenario_id' must be a string."
+        )
+
+    if not scenario["scenario_id"].strip():
+        raise ValidationError(
+            "'scenario.scenario_id' must not be empty."
+        )
+
+    # solver (type checks only; the v1 fixture defines
+    # no status enum, so no enum is invented here)
+    solver = results["solver"]
+
+    if not isinstance(solver, dict):
+        raise ValidationError(
+            "'solver' must be an object."
+        )
+
+    if "status" not in solver:
+        raise ValidationError(
+            "'solver' must contain 'status'."
+        )
+
+    if not isinstance(solver["status"], str):
+        raise ValidationError(
+            "'solver.status' must be a string."
         )
 
     # Required object fields
     object_fields = [
-        "objective",
-        "sources",
-        "transfer_paths",
-        "plants",
-        "water_quality",
-        "diagnostics",
-        "data_flags",
+        "validation",
+        "summary",
+        "flows",
+        "quality",
     ]
 
     for field in object_fields:
@@ -121,7 +130,7 @@ def validate_results(results: dict[str, Any]) -> bool:
     # Required list fields
     list_fields = [
         "demand_zones",
-        "constraints",
+        "warnings",
     ]
 
     for field in list_fields:
@@ -130,146 +139,51 @@ def validate_results(results: dict[str, Any]) -> bool:
                 f"'{field}' must be a list."
             )
 
-    # Validate sources structure
+    # Validate sources structure (flat list in v1)
     sources = results["sources"]
 
-    if "selected" not in sources:
+    if not isinstance(sources, list):
         raise ValidationError(
-            "'sources' must contain 'selected'."
+            "'sources' must be a list."
         )
 
-    if "unused" not in sources:
-        raise ValidationError(
-            "'sources' must contain 'unused'."
-        )
-
-    if not isinstance(sources["selected"], list):
-        raise ValidationError(
-            "'sources.selected' must be a list."
-        )
-
-    if not isinstance(sources["unused"], list):
-        raise ValidationError(
-            "'sources.unused' must be a list."
-        )
-
-    # Validate selected and unused source objects
-    for group in ("selected", "unused"):
-        for index, source in enumerate(sources[group]):
-
-            if not isinstance(source, dict):
-                raise ValidationError(
-                    f"'sources.{group}[{index}]' "
-                    "must be an object."
-                )
-
-            if "source_id" not in source:
-                raise ValidationError(
-                    f"'sources.{group}[{index}]' "
-                    "is missing 'source_id'."
-                )
-
-            if not isinstance(source["source_id"], str):
-                raise ValidationError(
-                    f"'sources.{group}[{index}].source_id' "
-                    "must be a string."
-                )
-
-            if not source["source_id"].strip():
-                raise ValidationError(
-                    f"'sources.{group}[{index}].source_id' "
-                    "must not be empty."
-                )
-
-    # Validate constraints
-    for index, constraint in enumerate(results["constraints"]):
-        if not isinstance(constraint, dict):
-            raise ValidationError(
-                f"'constraints[{index}]' "
-                "must be an object."
-            )
-
-    # Validate data_flags
-    data_flags = results["data_flags"]
-
-    if "sources" not in data_flags:
-        raise ValidationError(
-            "'data_flags' must contain 'sources'."
-        )
-
-    if not isinstance(data_flags["sources"], list):
-        raise ValidationError(
-            "'data_flags.sources' must be a list."
-        )
-
-    # Validate provenance records
-    for index, source in enumerate(data_flags["sources"]):
+    for index, source in enumerate(sources):
 
         if not isinstance(source, dict):
             raise ValidationError(
-                f"'data_flags.sources[{index}]' "
-                "must be an object."
+                f"'sources[{index}]' must be an object."
             )
 
-        # source_id
         if "source_id" not in source:
             raise ValidationError(
-                f"'data_flags.sources[{index}]' "
-                "is missing 'source_id'."
+                f"'sources[{index}]' is missing 'source_id'."
             )
 
         if not isinstance(source["source_id"], str):
             raise ValidationError(
-                f"'data_flags.sources[{index}].source_id' "
+                f"'sources[{index}].source_id' "
                 "must be a string."
             )
 
         if not source["source_id"].strip():
             raise ValidationError(
-                f"'data_flags.sources[{index}].source_id' "
+                f"'sources[{index}].source_id' "
                 "must not be empty."
             )
 
-        # has_estimated_values
-        if "has_estimated_values" not in source:
-            raise ValidationError(
-                f"'data_flags.sources[{index}]' "
-                "is missing 'has_estimated_values'."
-            )
+    # Validate plants structure (flat list in v1)
+    plants = results["plants"]
 
-        if not isinstance(
-            source["has_estimated_values"],
-            bool,
-        ):
-            raise ValidationError(
-                f"'data_flags.sources[{index}].has_estimated_values' "
-                "must be a boolean."
-            )
-
-        # provenance
-        if "provenance" not in source:
-            raise ValidationError(
-                f"'data_flags.sources[{index}]' "
-                "is missing 'provenance'."
-            )
-
-        provenance = source["provenance"]
-
-        if not isinstance(provenance, dict):
-            raise ValidationError(
-                f"'data_flags.sources[{index}].provenance' "
-                "must be an object."
-            )
-
-        missing = REQUIRED_PROVENANCE_FIELDS - set(
-            provenance.keys()
+    if not isinstance(plants, list):
+        raise ValidationError(
+            "'plants' must be a list."
         )
 
-        if missing:
+    for index, plant in enumerate(plants):
+
+        if not isinstance(plant, dict):
             raise ValidationError(
-                f"'data_flags.sources[{index}].provenance' "
-                "is missing required field(s): "
-                + ", ".join(sorted(missing))
+                f"'plants[{index}]' must be an object."
             )
 
     return True
