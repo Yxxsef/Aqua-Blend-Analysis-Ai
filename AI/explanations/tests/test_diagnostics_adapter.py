@@ -20,6 +20,7 @@ from diagnostics_adapter import (  # noqa: E402
     InfeasibilityContext,
     OUTCOME_INFEASIBLE_STATUS_ONLY,
     OUTCOME_INFEASIBLE_WITH_DIAGNOSTICS,
+    OUTCOME_OPTIMAL,
     OUTCOME_TECHNICAL_FAILURE,
     build_infeasibility_context,
     render_diagnostics_section,
@@ -49,13 +50,24 @@ class TestOptimalAndFeasibleStatuses:
     """Statuses this module was never asked to classify as infeasibility-
     shaped must still resolve safely, not crash."""
 
-    def test_optimal_is_technical_failure_bucket_not_a_crash(self):
-        """OPTIMAL is not infeasibility-shaped, so it correctly falls into
-        the same catch-all bucket as an unrecognised status - this module
-        is only ever called for non-optimal runs by its real caller, but
-        must not misbehave if it's called for OPTIMAL anyway."""
+    def test_optimal_gets_its_own_outcome_not_technical_failure(self):
+        """Regression test for a real PR review finding (Task 71,
+        Yousef): OPTIMAL must never be classified the same way as a
+        genuine solver crash. An earlier version of this function only
+        checked "is this infeasibility-shaped", so a successful solve
+        fell through to TECHNICAL_FAILURE simply because OPTIMAL is
+        neither INFEASIBLE nor UNBOUNDED - correct in the narrow sense,
+        actively misleading in the result it produced."""
         ctx = build_infeasibility_context("OPTIMAL")
-        assert ctx.outcome == OUTCOME_TECHNICAL_FAILURE
+        assert ctx.outcome == OUTCOME_OPTIMAL
+        assert ctx.outcome != OUTCOME_TECHNICAL_FAILURE
+
+    def test_optimal_renders_none_not_a_technical_failure_message(self):
+        """A successful solve must not produce a "this is a technical
+        failure" message - render_diagnostics_section() must correctly
+        have nothing to say for a genuinely successful run."""
+        ctx = build_infeasibility_context("OPTIMAL")
+        assert render_diagnostics_section(ctx) is None
 
     def test_time_limit_is_technical_failure_bucket(self):
         """TIME_LIMIT is not a proof of infeasibility either - Results_
