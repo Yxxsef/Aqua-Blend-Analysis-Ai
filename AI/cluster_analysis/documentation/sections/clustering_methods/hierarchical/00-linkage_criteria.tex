@@ -1,0 +1,191 @@
+% ------------------------------------------------------------------
+%  Linkage criteria: single, complete, average, Ward.
+%  Not from method_template: these are criteria shared by every
+%  hierarchical method, not methods themselves.
+%  Code counterpart: xxcluster/cluster/hierarchical/linkage.py.
+% ------------------------------------------------------------------
+\subsubsection{Linkage criteria}
+\label{sec:tech:linkage}
+
+\paragraph{Overview}
+\label{sec:tech:linkage:overview}
+A linkage criterion lifts a dissimilarity between observations to one
+between clusters, and is the component every hierarchical method
+shares~\cite{ref_11}. It is kept separate from the method because the
+same criterion is reused across methods, and because the choice of
+criterion decides the shape of cluster a method can recover --- a result
+to report, not an implementation detail. Four are implemented: single,
+complete, average and Ward. The first three apply to any dissimilarity;
+Ward requires Euclidean distance.
+
+\paragraph{Definition}
+\label{sec:tech:linkage:definition}
+Given $d(\cdot, \cdot)$ on observations and two disjoint clusters
+$\mathcal C_A, \mathcal C_B$, each criterion returns a non-negative
+$d(\mathcal C_A, \mathcal C_B)$:
+\begin{align}
+    \text{Single:}   \quad & \min_{\mathbf a \in \mathcal C_A, \mathbf b \in \mathcal C_B}
+          d(\mathbf a, \mathbf b), \\
+    \text{Complete:} \quad & \max_{\mathbf a \in \mathcal C_A, \mathbf b \in \mathcal C_B}
+          d(\mathbf a, \mathbf b), \\
+    \text{Average (UPGMA):} \quad &
+        \tfrac{1}{|\mathcal C_A| \, |\mathcal C_B|}
+          \textstyle \sum_{\mathbf a \in \mathcal C_A}
+                     \sum_{\mathbf b \in \mathcal C_B}
+          d(\mathbf a, \mathbf b), \\
+    \text{Ward:} \quad &
+        \tfrac{|\mathcal C_A| \, |\mathcal C_B|}
+              {|\mathcal C_A| + |\mathcal C_B|}
+          \left\| \boldsymbol \mu_A - \boldsymbol \mu_B \right\|_2^2,
+\end{align}
+where $\boldsymbol \mu_A, \boldsymbol \mu_B$ are the cluster centroids.
+Ward's expression is the increase in within-cluster sum-of-squared-error
+upon merging~\cite{ref_28}, the same objective $k$-means
+minimises~\cite{ref_25}, which is where its shape bias comes from.
+
+\paragraph{Lance--Williams recurrence}
+\label{sec:tech:linkage:recurrence}
+Computing $d(\mathcal C_A, \mathcal C_B)$ from the definition at every
+merge is $\mathcal O(m^2)$ at each of $m - 1$ merges, and unusable at any
+real data volume. Lance and Williams showed that all four criteria
+express the dissimilarity between a merged cluster and every other
+cluster $\mathcal C_I$ as a linear combination of the three prior
+dissimilarities~\cite{ref_29}:
+\begin{align}
+    d(\mathcal C_A \cup \mathcal C_B, \mathcal C_I)
+    = \alpha_A \, d(\mathcal C_A, \mathcal C_I)
+    + \alpha_B \, d(\mathcal C_B, \mathcal C_I)
+    + \beta   \, d(\mathcal C_A, \mathcal C_B)
+    + \gamma  \, \left| d(\mathcal C_A, \mathcal C_I) - d(\mathcal C_B, \mathcal C_I) \right|.
+\end{align}
+The coefficients are per criterion and, for Ward, depend on the cluster
+sizes~\cite{ref_10}:
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Criterion & $\alpha_A$ & $\alpha_B$ & $\beta$ & $\gamma$ \\
+\midrule
+Single   & $\tfrac{1}{2}$ & $\tfrac{1}{2}$ & $0$ & $-\tfrac{1}{2}$ \\
+Complete & $\tfrac{1}{2}$ & $\tfrac{1}{2}$ & $0$ & $+\tfrac{1}{2}$ \\
+Average (UPGMA) & $\tfrac{|\mathcal C_A|}{|\mathcal C_A|+|\mathcal C_B|}$
+                & $\tfrac{|\mathcal C_B|}{|\mathcal C_A|+|\mathcal C_B|}$
+                & $0$ & $0$ \\
+Ward     & $\tfrac{|\mathcal C_A|+|\mathcal C_I|}{|\mathcal C_A|+|\mathcal C_B|+|\mathcal C_I|}$
+         & $\tfrac{|\mathcal C_B|+|\mathcal C_I|}{|\mathcal C_A|+|\mathcal C_B|+|\mathcal C_I|}$
+         & $-\tfrac{|\mathcal C_I|}{|\mathcal C_A|+|\mathcal C_B|+|\mathcal C_I|}$
+         & $0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Each criterion implements the recurrence in \texttt{update} rather than
+falling back to the quadratic \texttt{between}. At this project's data
+volume that is a requirement, not an optimisation.
+
+\paragraph{Regime shapes recovered}
+\label{sec:tech:linkage:shapes}
+The criteria are not interchangeable: each imposes a shape bias that
+decides the regime a method can recover under it~\cite{ref_11}.
+\begin{description}[itemsep=2pt,topsep=2pt]
+    \item[Single] chains. Only the nearest pair is consulted, so one
+    bridging observation merges two otherwise distinct groups. Useful for
+    elongated regimes such as a slow drift along one operating variable;
+    pathological on dense plant data, where a stray reading between two
+    operating envelopes joins them into one meaningless regime.
+
+    \item[Complete] compacts. A merge is charged by its worst pairwise
+    disagreement, so clusters stay tight and comparably sized. The
+    matching failure is splitting a genuinely elongated regime into
+    pieces.
+
+    \item[Average (UPGMA)] compromises: less prone to chaining than
+    single, less brittle to boundary observations than complete, and with
+    no strong shape bias of its own.
+
+    \item[Ward] minimises within-cluster variance, so it rewards
+    spherical, equally-sized clusters --- the same bias as $k$-means, from
+    the same objective~\cite{ref_10}. That makes it the wrong choice where
+    regimes are elongated or unequal in size, and it pairs flatteringly
+    with a validity index sharing the bias
+    (Sect.~\ref{sec:measure:silhouette}).
+\end{description}
+
+\paragraph{Ward's Euclidean requirement}
+\label{sec:tech:linkage:ward}
+Ward's increase is a squared Euclidean distance between centroids, and
+the recurrence above tracks that quantity. Under any other dissimilarity
+the recurrence is not the criterion it names, and a method built on it
+returns a partition it did not compute~\cite{ref_28}. Ward therefore
+declares \texttt{requires\_euclidean}, and the hierarchical base checks it
+when validating parameters --- the first step of \texttt{fit}, so the
+refusal precedes any tree construction, and it applies to an adapted
+method as much as to a native one.
+
+Anything not \emph{verifiable} as Euclidean is refused: the names
+\texttt{euclidean} and \texttt{l2} pass, while a callable metric and
+\texttt{precomputed} do not, the latter because a supplied matrix carries
+no evidence of its own geometry. This is where scikit-learn's
+agglomerative clustering draws the line, so one registered name does not
+mean two things natively and through a backend. It also means Ward
+refuses Gower, which reaches a method only as a precomputed matrix.
+
+Two incompatible definitions both call themselves Ward~\cite{ref_30}. The
+one implemented here is their ``Ward2'', which takes distances rather than
+squared distances; agreement with SciPy's \texttt{linkage} is asserted in
+the tests rather than assumed.
+
+\paragraph{Monotonicity}
+\label{sec:tech:linkage:monotonic}
+A monotonic criterion gives non-decreasing merge heights, so the
+dendrogram has no inversions and a height threshold is a valid cut. All
+four implemented here are monotonic~\cite{ref_31}, and each declares it as
+an attribute that \texttt{cut} reads as a cheap guard alongside its own
+check on the fitted heights. The two must agree.
+
+\paragraph{Verification}
+\label{sec:tech:linkage:verification}
+Each criterion reproduces SciPy's merge heights on the iris benchmark to
+floating-point tolerance. A five-point fixture --- two tight groups joined
+by a stepping stone --- evidences the chains-versus-compacts contrast:
+single joins the groups at the intermediate height, complete keeps them
+apart until the last merge. Ward's requirement is verified as behaviour
+and not only as a declaration: a method given a non-Euclidean metric
+raises at \texttt{fit}, and the test asserts no tree was built when it
+did. A further test requires each candidate metric to be accepted or
+refused identically by this package and by the adapted backend, which is
+what keeps a criterion resolved by name the same on both paths. All of it
+is in \texttt{test\_linkage.py}.
+
+\paragraph{Summary}
+\label{sec:tech:linkage:summary}
+Four registered criteria fix the shape of cluster the hierarchical methods
+can recover. Each implements the Lance--Williams recurrence, declares its
+Euclidean requirement and its monotonicity, and reproduces its SciPy
+counterpart in the test suite. They are the component the first
+hierarchical method, Ward's, is built on.
+
+% ==================================================================
+%  REFERENCES USED
+%
+%    ref_10   Tan et al. (2019), Introduction to Data Mining, ch. 7
+%                                cited in: Recurrence, Regime shapes
+%    ref_11   Han, Kamber & Pei (2011), ch. 10
+%                                cited in: Overview, Regime shapes
+%    ref_25   Lloyd (1982), Least squares quantization in PCM
+%                                cited in: Definition
+%    ref_28   Ward (1963), Hierarchical grouping to optimize an
+%             objective function
+%                                cited in: Definition, Ward
+%    ref_29   Lance & Williams (1967), A general theory of
+%             classificatory sorting strategies: 1
+%                                cited in: Recurrence
+%    ref_30   Murtagh & Legendre (2014), Which algorithms implement
+%             Ward's criterion?
+%                                cited in: Ward
+%    ref_31   Muellner (2011), Modern hierarchical, agglomerative
+%             clustering algorithms
+%                                cited in: Monotonicity
+%
+%  Read, not cited:
+%    Milligan & Cooper (1985), Psychometrika 50(2) --- comparative
+%      study of stopping rules; background for the shape-bias claims.
+% ==================================================================
