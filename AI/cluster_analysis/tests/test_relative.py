@@ -207,3 +207,27 @@ def test_both_criteria_are_registered():
 
     assert REGISTRY.get("max") is MaxCriterion
     assert REGISTRY.get("elbow") is ElbowCriterion
+
+
+def test_both_register_as_selectors_not_validity_indices():
+    """A relative criterion selects among partitions; it does not score one.
+
+    The kind is not a label: `evaluation.report` resolves a scoring spec
+    as a VALIDITY_INDEX, and a rule that reads a curve has no score of its
+    own to answer that call with. Registering these as indices would let
+    one be passed where a score is expected.
+    """
+    from xxcluster.core.exceptions import RegistryError
+    from xxcluster.core.registry import REGISTRY
+    from xxcluster.core.types import ComponentKind
+
+    assert set(REGISTRY.names(kind=ComponentKind.SELECTOR)) >= {"max", "elbow"}
+    assert REGISTRY.get("max", kind=ComponentKind.SELECTOR) is MaxCriterion
+    assert REGISTRY.get("elbow", kind=ComponentKind.SELECTOR) is ElbowCriterion
+
+    # And the class declaration agrees with the registry entry.
+    assert MaxCriterion._kind is ComponentKind.SELECTOR
+    assert ElbowCriterion._kind is ComponentKind.SELECTOR
+
+    with pytest.raises(RegistryError):
+        REGISTRY.get("max", kind=ComponentKind.VALIDITY_INDEX)

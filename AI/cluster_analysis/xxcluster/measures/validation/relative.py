@@ -1,5 +1,5 @@
 """
-Relative validity criteria.
+Relative criteria: selection rules over a curve of index values.
 
 Compare partitions with each other rather than scoring one in isolation:
 the same method at several values of |C|, or several methods on the same
@@ -15,15 +15,21 @@ but the selection rule is separate from the index, and worth naming: the
 same silhouette curve yields different answers under "take the maximum"
 and "take the largest |C| within one standard error of the maximum".
 
-The criteria live here; the procedure that generates the candidates and
-applies one is `xxcluster.selection.n_clusters`.
+A relative criterion is therefore a *selection rule*, not a validity
+index, and it registers under `ComponentKind.SELECTOR` rather than
+`VALIDITY_INDEX`. The difference is not cosmetic: `evaluation.report`
+resolves a scoring spec as a `VALIDITY_INDEX`, and a rule that selects
+from a curve cannot answer that call -- it produces no score of its own.
+They live in this subpackage because they are defined on an index's
+output; the procedure that generates the candidates and applies one is
+`xxcluster.selection.n_clusters`.
 """
 
 from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Sequence
+from typing import Any, ClassVar, Mapping, Sequence
 
 from ...core.registry import register
 from ...core.types import ComponentKind
@@ -45,6 +51,11 @@ class BaseRelativeCriterion(ABC):
 
     name: str
     base_index: str | None = None
+
+    #: Registry partition. A relative criterion selects among partitions
+    #: rather than scoring one, so it is a selector, and declaring it here
+    #: keeps the class and the registry from disagreeing.
+    _kind: ClassVar[ComponentKind] = ComponentKind.SELECTOR
 
     @abstractmethod
     def select(self, scores: Mapping[Any, float], **kwargs: Any) -> Any:
@@ -92,7 +103,7 @@ def _finite(scores: Mapping[Any, float]) -> dict[Any, float]:
     return {k: float(v) for k, v in scores.items() if math.isfinite(float(v))}
 
 
-@register("max", kind=ComponentKind.VALIDITY_INDEX)
+@register("max", kind=ComponentKind.SELECTOR)
 class MaxCriterion(BaseRelativeCriterion):
     """Take the best-scoring candidate, in the direction its index declares.
 
@@ -232,7 +243,7 @@ class MaxCriterion(BaseRelativeCriterion):
         return rising or falling
 
 
-@register("elbow", kind=ComponentKind.VALIDITY_INDEX)
+@register("elbow", kind=ComponentKind.SELECTOR)
 class ElbowCriterion(BaseRelativeCriterion):
     """Take the candidate furthest from the chord of the curve.
 

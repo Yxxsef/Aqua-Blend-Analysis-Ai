@@ -74,10 +74,13 @@ observations and is the binding constraint at \projectname{} data volumes.
 
 \paragraph{Application to \projectname{} data}
 \label{sec:measure:relative:application}
-The criteria are registered as \texttt{"max"} and \texttt{"elbow"}. They
-decide only: the sweep generating the candidates lives in the selection
-subpackage, and the curve is drawn by the selection-curve figure, which
-marks the choice whether or not it was conclusive. \textsc{MaxCriterion}
+The criteria are registered as \texttt{"max"} and \texttt{"elbow"}, and
+registered as \emph{selectors} rather than validity indices: a rule that
+reads a curve produces no score of its own, so it cannot stand where an
+index is expected. They decide only --- the sweep generating the
+candidates lives in the selection subpackage, and the curve is drawn by
+the selection-curve figure, which marks the choice whether or not it was
+conclusive. \textsc{MaxCriterion}
 declares \texttt{flat\_tolerance} and \texttt{min\_margin}, each a fraction
 of the index's declared range; \textsc{ElbowCriterion} declares
 \texttt{min\_curvature}, a fraction of the chord length. They are
