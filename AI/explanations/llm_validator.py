@@ -192,10 +192,24 @@ _NEGATION_WORDS = {"not", "no", "never", "none", "without", "cannot", "nor"}
 # scanning was rejected).
 _NEGATION_WINDOW_WORDS = 12
 
-# How many characters apart two numbers can be and still count as a
-# written-together pair (e.g. "290 ML/day, ... 58.0% of the blend") -
-# see _extract_number_pairs.
-_PAIR_WINDOW_CHARS = 40
+# How many characters apart a volume and its percentage can be and still
+# count as a written-together pair (e.g. "290 ML/day, ... 58.0% of the
+# blend"/"of the total") - see _extract_number_pairs. The genuine pairing
+# is always short (9-19 characters across the real fixtures and live
+# outputs checked) since a source's volume and its own percentage are
+# always written in the same clause - 30 gives real margin above that
+# without reaching the 50+ character distance a structurally unrelated
+# pairing can reach once headings are stripped (Zone 1's own demand
+# figure, also ML/day-tagged, sitting a full section away from a source's
+# percentage - found from a real live run, Task 62, Run 7, and confirmed
+# to also affect REFERENCE_REPORT itself once _strip_headings shortens
+# the text between sections).
+_PAIR_WINDOW_CHARS = 30
+
+# Matches "ML/day" (optionally preceded by whitespace) immediately after a
+# volume value - used to scope _extract_number_pairs to genuine volumes,
+# not any plain number that happens to sit near a percentage.
+_ML_PER_DAY_PATTERN = re.compile(r"\s*ML/day", re.IGNORECASE)
 
 # A sentence/clause boundary the negation window must not cross - a
 # negation on one side of these should never suppress a phrase on the
@@ -383,12 +397,44 @@ def _is_embedded_in_identifier(text: str, start: int, end: int) -> bool:
     return any(ch.isalpha() or ch == "_" for ch in surrounding)
 
 
+def _is_numbered_list_marker(text: str, start: int, end: int) -> bool:
+    """True if the number match at text[start:end] is a numbered-list
+    marker ("1.", "2.") rather than a genuine numeric fact - found from a
+    real live run (Task 62): the model reformatted the Binding Constraints
+    section from a bullet list into a numbered list, and the plain number
+    regex read "2." as the standalone fact 2.0, since nothing after the
+    period was itself a digit. "1." happened to coincidentally match a
+    number that already existed elsewhere in the source, so it slipped
+    through unnoticed; "2." didn't, and was flagged as an invented number
+    that was never actually invented - it's list-item numbering, not
+    content.
+
+    Scoped narrowly and structurally, not by value: a match only counts as
+    a list marker if it sits at the very start of a line (only whitespace
+    before it back to the last newline), is immediately followed by a
+    period and then whitespace, and nothing follows that period as more
+    digits (a genuine decimal like "2.50" is a completely different regex
+    match already, this only ever applies to a bare integer). This
+    shouldn't ever misfire on a real fact, since nothing in this report's
+    actual generated content places a standalone number at the very start
+    of a line followed immediately by a period - only reformatting choices
+    like this one do."""
+    line_start = text.rfind("\n", 0, start) + 1
+    if text[line_start:start].strip():
+        return False  # something other than whitespace precedes it on this line
+    after = text[end:end + 2]
+    return after.startswith(".") and (len(after) < 2 or not after[1].isdigit())
+
+
 def _extract_numbers(text: str) -> set[tuple[float, bool]]:
     text = _normalise_percent_words(text)
     values = set()
     for m in _NUMBER_PATTERN.finditer(text):
-        if not _is_embedded_in_identifier(text, m.start(), m.end()):
-            values.add(_normalise_number(m.group()))
+        if _is_embedded_in_identifier(text, m.start(), m.end()):
+            continue
+        if _is_numbered_list_marker(text, m.start(), m.end()):
+            continue
+        values.add(_normalise_number(m.group()))
     return values
 
 
@@ -539,6 +585,29 @@ def _identifier_covered_by(det_id: str, llm_id: str) -> bool:
     return det_words <= _identifier_word_set(llm_id)
 
 
+def _phrase_covers_snake_case_identifier(text: str, identifier: str) -> bool:
+    """True if a snake_case identifier's underscore-separated words appear
+    as a contiguous, case-insensitive phrase somewhere in `text` - a
+    fallback for a real gap found on a genuine live run (Task 62, Run 7):
+    the model rendered source_activation_cost and plant_activation_cost
+    as ordinary sentence-case prose ("Source activation cost is $0.00..."),
+    which neither the Title-Case pattern (only the first word is
+    capitalized, not every word) nor the snake_case pattern (no
+    underscores) recognises as an identifier candidate at all - so the
+    fact was correctly, faithfully conveyed, but invisible to the normal
+    extraction-and-match logic entirely.
+
+    Deliberately narrow and one-directional: this only ever helps decide
+    whether a det-side snake_case identifier counts as covered - it never
+    adds anything to the set of identifiers extracted from llm_output, so
+    it cannot introduce a new false NEW_IDENTIFIER warning the way
+    broadening extraction itself might have."""
+    if "_" not in identifier:
+        return False
+    phrase = " ".join(identifier.split("_"))
+    return re.search(r"\b" + re.escape(phrase) + r"\b", text, re.IGNORECASE) is not None
+
+
 def _check_identifiers(
     det_body: str, llm_output: str
 ) -> tuple[list[CriticalFailure], list[Warning_]]:
@@ -557,6 +626,8 @@ def _check_identifiers(
         )
         if match is not None:
             covered_llm_ids.add(match)
+        elif _phrase_covers_snake_case_identifier(llm_output, det_id):
+            continue  # covered via a sentence-case phrase, not an extracted identifier
         else:
             missing.append(det_id)
 
@@ -584,25 +655,41 @@ def _check_identifiers(
 
 
 def _extract_number_pairs(text: str) -> set[tuple[tuple[float, bool], tuple[float, bool]]]:
-    """Returns the set of (plain_value, percent_value) pairs where the two
-    numbers appear within a short character window of each other in
-    `text` - the "290 ML/day, ... 58.0% of the blend" pattern a source's
-    volume and blend share are always written in together, in some order,
-    regardless of how the surrounding sentence is phrased.
+    """Returns the set of (volume_value, percent_value) pairs where a
+    volume specifically tagged "ML/day" and a percentage appear within a
+    short character window of each other in `text` - the
+    "290 ML/day, ... 58.0% of the blend" (or "...of the total", or any
+    other faithful rewording) pattern a source's volume and blend share
+    are always written in together, in some order, regardless of how the
+    surrounding sentence is phrased.
 
-    This is the check that replaced two earlier, broader attempts at
-    catching a swapped value (see _check_number_association) - both tried
-    to associate every number with whichever identifier sat nearest to it
-    positionally, and both produced false positives on CORRECT_REWRITE
-    itself once tested against it directly: real prose freely interleaves
-    numbers belonging to different identifiers once a rewrite restructures
-    a paragraph, so identifier-proximity alone is not a reliable signal.
-    Pair co-occurrence is far narrower and safer: it makes no claim about
-    which identifier a number belongs to at all, only that two SPECIFIC
-    values that were written together in the source stay written together
-    in the rewrite, in either order. A swap that separates a value from
-    its paired value is exactly what breaks this co-occurrence, which is
-    the concrete case this check exists for (PR #46, Yousef)."""
+    This is the third iteration of this check, after several earlier,
+    broader or differently-scoped attempts each proved fragile once
+    tested against real, varied phrasing rather than just the one case
+    that motivated it - see _check_number_association for why plain
+    identifier-proximity was rejected first. Within this pair-based
+    approach specifically: pairing ANY plain number with ANY nearby
+    percent was too broad (a real live run, Task 62 Run 7, showed a
+    source's cost figure sitting close enough to its percentage to be
+    mistaken for the pair). Scoping the plain-number side to values
+    followed by "ML/day" fixed that, but a wide window was still needed
+    to reach across a line break in one real case, which then caused a
+    genuinely unrelated pairing elsewhere (Zone 1's own demand figure,
+    also ML/day-tagged, sitting within that same wide window of a
+    source's percentage once _strip_headings shortens the text between
+    sections - found against REFERENCE_REPORT itself, not synthetic).
+    Anchoring the percent side to specific wording ("of the blend") was
+    tried next and also broken by a real, legitimate fixture phrasing it
+    as "of the total" instead.
+
+    What actually holds across every real case checked: a source's own
+    volume and its own percentage are always written within about 20
+    characters of each other, in the same clause, while every spurious
+    candidate pairing found so far sits 50+ characters away. The window
+    alone, combined with the ML/day requirement, does the real work here -
+    no wording anchor needed on the percent side, since distance already
+    reliably separates genuine from spurious once headings are stripped
+    consistently on both sides of the comparison."""
     text = _normalise_percent_words(text)
     matches = [
         m for m in _NUMBER_PATTERN.finditer(text)
@@ -611,13 +698,16 @@ def _extract_number_pairs(text: str) -> set[tuple[tuple[float, bool], tuple[floa
     pairs: set[tuple[tuple[float, bool], tuple[float, bool]]] = set()
     for i, m1 in enumerate(matches):
         v1 = _normalise_number(m1.group())
+        if v1[1]:
+            continue  # only a plain (non-percent) value can be the volume side
+        if not _ML_PER_DAY_PATTERN.match(text, m1.end()):
+            continue  # must specifically be a volume, not any plain number
         for m2 in matches[i + 1:i + 4]:
             if m2.start() - m1.end() > _PAIR_WINDOW_CHARS:
                 break
             v2 = _normalise_number(m2.group())
-            if v1[1] != v2[1]:  # exactly one of the pair must be a percent
-                pair = (v1, v2) if not v1[1] else (v2, v1)
-                pairs.add(pair)
+            if v2[1]:
+                pairs.add((v1, v2))
     return pairs
 
 

@@ -37,3 +37,4 @@ venv/
 *.out
 *.synctex.gz
 *.toc
+model_config.json

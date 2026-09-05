@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import socket
 import time
 from typing import Any, Callable, Mapping
 from urllib import error, request
@@ -43,6 +44,7 @@ class ModelConfig:
     max_tokens: int = 1200
     timeout_seconds: float = 30.0
     seed: int | None = 0
+    frequency_penalty: float | None = None
 
     def validate(self) -> None:
         if not self.model_id.strip():
@@ -57,6 +59,8 @@ class ModelConfig:
             raise ValueError("max_tokens must be positive")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if self.frequency_penalty is not None and not -2.0 <= self.frequency_penalty <= 2.0:
+            raise ValueError("frequency_penalty must be between -2.0 and 2.0")
 
 
 @dataclass(frozen=True)
@@ -192,6 +196,25 @@ def rewrite_report(
     }
     if config.seed is not None:
         payload["seed"] = config.seed
+    if config.frequency_penalty is not None:
+        # Found from a real live run (Task 62): temperature: 0.0 (greedy
+        # decoding) has no mechanism to escape a repetitive pattern once one
+        # starts, and a real run fell into a ~85-line repetition loop right
+        # at the end of the response (the Prototype Disclaimer, the point
+        # with the least genuinely new content left to generate) before
+        # still running out of tokens. frequency_penalty directly targets
+        # this by discouraging the model from repeating tokens it has
+        # already used. Confirmed supported by Ollama's OpenAI-compatible
+        # endpoint as a direct passthrough parameter - but not guaranteed to
+        # take effect for every model: some newer models on Ollama's
+        # Go-native sampler path are known to silently ignore
+        # frequency_penalty/presence_penalty/repeat_penalty entirely
+        # (ollama/ollama#15783). Left as None by default (opt-in via
+        # model_config.json) rather than a hardcoded value, since the right
+        # amount of penalty - and whether it does anything at all - depends
+        # on the specific model in use and needs to be verified empirically
+        # against a real run, the same way this whole finding was.
+        payload["frequency_penalty"] = config.frequency_penalty
 
     sender = request_fn or _default_request
 
@@ -203,7 +226,19 @@ def rewrite_report(
             config.timeout_seconds,
         )
         output_text = _extract_content(response_json)
-    except TimeoutError as exc:
+    except (TimeoutError, socket.timeout) as exc:
+        # Found from a genuine live model run (Task 62), not a synthetic test: on
+        # Python < 3.10, urllib raises socket.timeout on a real network timeout,
+        # which is a SEPARATE class from the builtin TimeoutError (they were only
+        # unified as the same class starting in Python 3.10). Catching TimeoutError
+        # alone let a genuine timeout fall through to the generic Exception handler
+        # below and be mis-labelled MODEL_ERROR instead of TIMEOUT - reproduced
+        # directly: a real call that ran out of time on Python 3.9 returned
+        # failure_type="MODEL_ERROR" with runtime_ms almost exactly equal to
+        # timeout_seconds, the signature of a timeout, not a genuine model error.
+        # Catching both classes explicitly is correct and safe on every Python
+        # version: on 3.10+, socket.timeout is already an alias for TimeoutError,
+        # so this only ever catches the same thing twice, never something new.
         return _fallback(
             original_report,
             config,
