@@ -52,15 +52,20 @@ contract may still change - see Infeasibility_AI_Interface.md.
 
 Outcomes this module distinguishes
 -----------------------------------
-Every run this module is given lands in exactly one of three buckets,
+Every run this module is given lands in exactly one of four buckets,
 returned as InfeasibilityContext.outcome:
 
+  OPTIMAL                      - the solver succeeded. Not a technical
+                                  failure, and nothing infeasibility-
+                                  related to say - render_diagnostics_
+                                  section() correctly returns None.
   TECHNICAL_FAILURE            - the solver did not run to a real
-                                  conclusion (status ERROR, or any status
-                                  this module does not recognise). This is
-                                  a tooling/technical problem, not a
-                                  mathematical proof of infeasibility, and
-                                  must never be described as one.
+                                  conclusion (status ERROR, TIME_LIMIT, or
+                                  any status this module does not
+                                  recognise). This is a tooling/technical
+                                  problem, not a mathematical proof of
+                                  infeasibility, and must never be
+                                  described as one.
   INFEASIBLE_WITH_DIAGNOSTICS  - status is INFEASIBLE, and at least one
                                   well-formed cause was supplied. The AI
                                   may explain these specific, supplied
@@ -72,6 +77,14 @@ returned as InfeasibilityContext.outcome:
                                   section() correctly returns None for
                                   this outcome, and callers must not
                                   substitute their own explanation for it.
+
+OPTIMAL is checked first and explicitly, before anything else - see
+build_infeasibility_context. Found via PR review (Task 71): an earlier
+version of this function only asked "is this infeasibility-shaped", so a
+genuinely successful solve fell through to the same TECHNICAL_FAILURE
+bucket as a real solver crash, simply because OPTIMAL is neither
+INFEASIBLE nor UNBOUNDED. Correct in the narrow sense, actively
+misleading in the outcome it produced.
 
 UNBOUNDED is treated the same as INFEASIBLE for this classification
 (Results_JSON_Field_Map.md's "do not report a recommended blend" rule
@@ -138,6 +151,7 @@ STATUS_ERROR = "ERROR"
 # see the module docstring's UNBOUNDED note.
 _INFEASIBILITY_SHAPED_STATUSES = frozenset({STATUS_INFEASIBLE, STATUS_UNBOUNDED})
 
+OUTCOME_OPTIMAL = "OPTIMAL"
 OUTCOME_TECHNICAL_FAILURE = "TECHNICAL_FAILURE"
 OUTCOME_INFEASIBLE_WITH_DIAGNOSTICS = "INFEASIBLE_WITH_DIAGNOSTICS"
 OUTCOME_INFEASIBLE_STATUS_ONLY = "INFEASIBLE_STATUS_ONLY"
@@ -261,11 +275,27 @@ def build_infeasibility_context(
             "build_infeasibility_context requires a non-empty solver_status"
         )
 
+    if solver_status == STATUS_OPTIMAL:
+        # A genuinely successful solve - not a technical failure, and
+        # nothing infeasibility-related to say. Checked explicitly and
+        # first: OPTIMAL must never fall into the same bucket as ERROR
+        # just because it isn't INFEASIBLE/UNBOUNDED either. Found via
+        # PR review (Task 71): the original version of this function only
+        # checked "is this infeasibility-shaped", so OPTIMAL fell through
+        # to the same TECHNICAL_FAILURE bucket as a genuine solver crash -
+        # correct in the narrow sense that OPTIMAL isn't infeasibility-
+        # shaped, but actively misleading, since a successful solve is the
+        # opposite of a technical failure.
+        return InfeasibilityContext(
+            outcome=OUTCOME_OPTIMAL,
+            solver_status=solver_status,
+        )
+
     if solver_status not in _INFEASIBILITY_SHAPED_STATUSES:
-        # Covers STATUS_ERROR explicitly, and any other/unrecognised status
-        # defensively - an unrecognised status is a technical/tooling
-        # situation this module was not told how to interpret, not a
-        # mathematical result, so it is never treated as one.
+        # Covers STATUS_ERROR, STATUS_TIME_LIMIT, and any other/
+        # unrecognised status defensively - none of these represent a
+        # solve that reached a genuine mathematical conclusion, so none
+        # are treated as one.
         return InfeasibilityContext(
             outcome=OUTCOME_TECHNICAL_FAILURE,
             solver_status=solver_status,
@@ -303,16 +333,18 @@ def render_diagnostics_section(context: InfeasibilityContext) -> str | None:
     covers the generic "Solver status is INFEASIBLE..." sentence for every
     non-OPTIMAL status.
 
-    Returns None for OUTCOME_INFEASIBLE_STATUS_ONLY - there is deliberately
-    nothing to say here, and a caller must not substitute its own guess
-    for that None. Returns a short, safe, non-diagnostic note for
-    OUTCOME_TECHNICAL_FAILURE, explicitly distinguishing "the solver did
-    not run to completion" from "the solver proved this infeasible" - the
-    exact distinction this module exists to keep from being blurred.
-    Returns a factual, template-only rendering of the supplied causes for
-    OUTCOME_INFEASIBLE_WITH_DIAGNOSTICS - every word traces to a supplied
-    cause's fields; nothing is invented or inferred beyond them."""
-    if context.outcome == OUTCOME_INFEASIBLE_STATUS_ONLY:
+    Returns None for OUTCOME_INFEASIBLE_STATUS_ONLY and OUTCOME_OPTIMAL -
+    in both cases there is deliberately nothing to say here (a successful
+    solve has no infeasibility to explain either), and a caller must not
+    substitute its own guess for that None. Returns a short, safe,
+    non-diagnostic note for OUTCOME_TECHNICAL_FAILURE, explicitly
+    distinguishing "the solver did not run to completion" from "the
+    solver proved this infeasible" - the exact distinction this module
+    exists to keep from being blurred. Returns a factual, template-only
+    rendering of the supplied causes for OUTCOME_INFEASIBLE_WITH_DIAGNOSTICS
+    - every word traces to a supplied cause's fields; nothing is invented
+    or inferred beyond them."""
+    if context.outcome in (OUTCOME_INFEASIBLE_STATUS_ONLY, OUTCOME_OPTIMAL):
         return None
 
     if context.outcome == OUTCOME_TECHNICAL_FAILURE:
