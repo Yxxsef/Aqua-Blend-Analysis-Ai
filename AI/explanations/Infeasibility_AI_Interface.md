@@ -85,16 +85,25 @@ feasibility workstream confirms their real contract.
     field, whatever it turns out to be called, is preserved without this
     module needing a code change for each new field name.
 
-## 4. The three outcomes
+## 4. The four outcomes
 
 Every call to `build_infeasibility_context()` resolves to exactly one of
-three outcomes:
+four outcomes:
 
 | Outcome | When | What the AI may say |
 |---|---|---|
-| `TECHNICAL_FAILURE` | Status is `ERROR`, `OPTIMAL`, `TIME_LIMIT`, or anything unrecognised | A safe, generic note that this is a tooling failure, not a proof of infeasibility - never treated as a mathematical result |
+| `OPTIMAL` | Status is `OPTIMAL` - a genuinely successful solve | Nothing - there's no infeasibility to explain. `render_diagnostics_section()` returns `None` |
+| `TECHNICAL_FAILURE` | Status is `ERROR`, `TIME_LIMIT`, or anything unrecognised | A safe, generic note that this is a tooling failure, not a proof of infeasibility - never treated as a mathematical result |
 | `INFEASIBLE_WITH_DIAGNOSTICS` | Status is `INFEASIBLE` and at least one well-formed cause was supplied | The specific, supplied causes only - nothing inferred beyond them |
 | `INFEASIBLE_STATUS_ONLY` | Status is `INFEASIBLE` or `UNBOUNDED`, and no usable diagnostics were supplied | Nothing. `render_diagnostics_section()` returns `None`, and callers must not substitute their own guess for it |
+
+**Corrected during PR review (Yousef):** an earlier version of this table
+classified `OPTIMAL` under `TECHNICAL_FAILURE`, since the original
+classification logic only checked "is this infeasibility-shaped" rather
+than checking for a genuine success first. Correct in the narrow sense
+that `OPTIMAL` isn't infeasibility-shaped, but actively misleading -
+lumping a successful solve in with a real solver crash. `OPTIMAL` is now
+checked first and explicitly, before anything else.
 
 ### Why `ERROR` is its own bucket, not folded into infeasibility
 
@@ -185,7 +194,7 @@ These are genuinely unresolved, not just left implicit:
 
 ## 8. Testing
 
-`tests/test_diagnostics_adapter.py` - 38 tests, organised by scenario:
+`tests/test_diagnostics_adapter.py` - 39 tests, organised by scenario:
 
 - Statuses this module doesn't treat as infeasibility-shaped (`OPTIMAL`,
   `TIME_LIMIT`, an unrecognised future status) degrade safely
