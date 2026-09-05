@@ -1,174 +1,140 @@
 % ==================================================================
 %  Relative validity criteria --- MaxCriterion and ElbowCriterion.
-%
-%  Copied from the measure template
-%  (documentation/sections/clustering_methods/00-template.tex is the
-%  method template; the measure template is the one measure_1.tex was
-%  made from). A relative criterion is a validity index, so the measure
-%  parts apply; the index-specific prompts are kept and the
-%  dissimilarity prompts dropped.
-%
-%  Add one \input line for this file under Section 7.1 in
-%  cluster_main.tex, beside measure_1.tex.
-%
+%  Written from the measure template; the index-specific parts kept,
+%  the dissimilarity prompts dropped.
 %  Code counterpart: xxcluster/measures/validation/relative.py.
-%  Part 3 (Properties) agrees with the class attributes declared there.
-%
-%  NOTE: citation keys below are written as ref_<n> placeholders. Before
-%  merge, replace each with the real key from the shared citation-key
-%  mapping sheet and record it in the REFERENCES USED block. The keys
-%  here are marked TODO so they are not mistaken for real ones.
 % ==================================================================
 \subsubsection{Relative criteria: taking a choice from a curve}
 \label{sec:measure:relative}
 
 \paragraph{Overview}
 \label{sec:measure:relative:overview}
-A relative criterion is a validity index in the third sense of
-Section~\ref{sec:clustering_methods}: it does not score one partition but
-reads a sequence of scores and selects from it. The sequence is produced
-by evaluating an internal index over a family of candidate partitions,
-typically the same method at each value of the cluster count~$k$, and the
-criterion returns the~$k$ the curve points to. This is the group the
-choice of~$k$ rests on: the peak of a silhouette curve, or the elbow of a
-sum-of-squares curve. Two criteria are implemented. \textsc{MaxCriterion}
-takes the best-scoring candidate; \textsc{ElbowCriterion} takes the
-candidate of greatest curvature, for the monotone curves on which a
-maximum is uninformative. The selection rule is deliberately kept separate
-from the index it reads, since the same curve yields different answers
-under different rules, and which rule was used is part of the reported
-result.
+A relative criterion does not score one partition: it reads a sequence of
+scores and selects from it. The sequence comes from evaluating an internal
+index over candidate partitions --- typically the same method at each
+cluster count~$k$ --- and the criterion returns the~$k$ the curve points
+to. Two are implemented. \textsc{MaxCriterion} takes the best-scoring
+candidate; \textsc{ElbowCriterion} takes the candidate of greatest
+curvature, for the monotone curves on which a maximum is uninformative.
+The rule is kept separate from the index it reads, because the same curve
+yields different answers under different rules, and which rule was used is
+part of the result.
 
 \paragraph{Definition}
 \label{sec:measure:relative:definition}
 Let $\mathcal{K}$ be the swept candidates and $s\colon \mathcal{K}\to
-\mathbb{R}$ the score of each under a fixed internal index, with the
-index's direction given by a relation $\succ$ (so $a \succ b$ reads ``$a$
-is better than $b$''). \textsc{MaxCriterion} returns
-$\arg\max_{k\in\mathcal{K}}^{\succ} s(k)$, the optimum \emph{in the
-direction the index declares} rather than the numerical maximum.
-\textsc{ElbowCriterion} is defined geometrically. Order the candidates,
-form the points $(k, s(k))$, and rescale both axes to the unit square.
-Let $\ell$ be the chord from the first point to the last --- the curve a
-constant marginal return would trace. The elbow is
-$\arg\max_{k\in\mathcal{K}} \operatorname{dist}\big((k, s(k)),\, \ell\big)$,
-the candidate whose normalised score lies furthest from the chord. The
-knee/elbow construction follows the distance-to-chord method of
-\cite{ref_TODO_satopaa_kneedle}; the use of a criterion curve to choose~$k$
-is standard, e.g.\ \cite{ref_TODO_thorndike_elbow}.
+\mathbb{R}$ their scores under a fixed internal index, whose direction is
+given by a relation $\succ$ (read ``is better than'').
+\textsc{MaxCriterion} returns $\arg\max^{\succ}_{k\in\mathcal{K}} s(k)$ ---
+the optimum \emph{in the direction the index declares}, not the numerical
+maximum. \textsc{ElbowCriterion} is geometric: order the candidates, form
+the points $(k, s(k))$, rescale both axes to the unit square, and let
+$\ell$ be the chord from the first point to the last, the curve a constant
+marginal return would trace. The elbow is
+\begin{align}
+    \arg\max_{k\in\mathcal{K}} \operatorname{dist}\big((k, s(k)),\, \ell\big),
+\end{align}
+the candidate lying furthest from that chord. The construction is the
+distance-to-chord method of~\cite{ref_27}; reading~$k$ off a criterion
+curve goes back to~\cite{ref_26}.
 
 \paragraph{Properties}
 \label{sec:measure:relative:properties}
-These agree with the class attributes in \texttt{relative.py}.
 \textsc{MaxCriterion} carries no direction of its own: it selects through
-the index's \texttt{is\_better}, so a maximised index (silhouette) yields
-the peak and a minimised index (Davies--Bouldin) the trough, with no code
-change. It requires the index at construction, with no default, for the
-same reason an index requires its direction to be declared --- a guessed
-direction eventually selects the worst candidate and reports it as the
-best. Ties break by sweep order, and since \texttt{is\_better} is strict
-this returns the smallest~$k$ achieving the best score, the conservative
-choice. \textsc{ElbowCriterion} is direction-free: distance from a chord
-does not depend on whether the index is maximised or minimised, which is
-why an elbow can be read from a minimised curve without inverting it. Both
-axes are normalised before the distance is taken, so the selection is
-invariant to the index's units and to the width of the sweep. A failed run
-enters the curve as \texttt{NaN}; it is retained so the run is still
-reported, and \texttt{is\_better} guarantees a \texttt{NaN} never wins.
+the index's \texttt{is\_better}, so a maximised index yields the peak and a
+minimised one the trough, with no code change. The index is required at
+construction with no default, for the same reason its direction must be
+declared --- a guessed direction eventually selects the worst candidate
+and reports it as the best. Ties break by sweep order, returning the
+smallest~$k$ achieving the best score. \textsc{ElbowCriterion} is
+direction-free, since distance from a chord does not depend on the index's
+direction, which is why an elbow can be read from a minimised curve
+without inverting it. Both axes are normalised first, so selection is
+invariant to the index's units and to the sweep width. A failed run enters
+the curve as \texttt{NaN} and is kept, so the run is still reported, and
+\texttt{is\_better} guarantees it never wins.
 
 \paragraph{Applicability}
 \label{sec:measure:relative:applicability}
-A relative criterion applies wherever a family of partitions is compared
-on a common index. \textsc{MaxCriterion} accepts any candidate type, since
-it only compares scores. \textsc{ElbowCriterion} requires numeric
-candidates, because it measures a distance along the swept axis; a sweep
-over a non-numeric parameter raises rather than returning a meaningless
-answer. Both consume a soft partition only once it has been defuzzified to
-the hard labels their underlying index scores. Noise handling is inherited
-from that index: where the index excludes noise-labelled observations, so
-does the curve, and the exclusion must be stated wherever the selection is
-reported.
+Both apply wherever partitions are compared on a common index.
+\textsc{MaxCriterion} accepts any candidate type, comparing only scores;
+\textsc{ElbowCriterion} needs numeric candidates, because it measures a
+distance along the swept axis, and raises on a non-numeric sweep rather
+than returning a meaningless answer. Noise handling is inherited: where
+the index beneath excludes noise-labelled observations, so does the curve,
+and that exclusion is stated wherever the selection is reported.
 
 \paragraph{Computation and complexity}
 \label{sec:measure:relative:complexity}
-Given the curve, both criteria are linear in the number of candidates
-$|\mathcal{K}|$: \textsc{MaxCriterion} is a single pass, and
-\textsc{ElbowCriterion} a sort followed by one pass of point-to-line
-distances. The cost of the procedure is therefore dominated not by the
-criterion but by producing the curve --- one clustering fit and one index
-evaluation per candidate. Where the index requires the full pairwise
-distance matrix (silhouette does), that evaluation is quadratic in the
-number of observations, and at \projectname{} data volumes it is the
-binding constraint, not the selection.
+Given the curve, both are linear in $|\mathcal{K}|$. The cost lies in
+producing it, at one clustering fit and one index evaluation per
+candidate; where the index needs the full pairwise distance matrix, as
+silhouette does, that evaluation is quadratic in the number of
+observations and is the binding constraint at \projectname{} data volumes.
 
 \paragraph{Application to \projectname{} data}
 \label{sec:measure:relative:application}
-The criteria are implemented in
-\texttt{xxcluster/measures/validation/relative.py} and registered as
-\texttt{"max"} and \texttt{"elbow"}. They decide only; the procedure that
-generates the candidate partitions and applies a criterion is
-\texttt{xxcluster.selection.n\_clusters}, and the curve a criterion
-returns is drawn by \texttt{plot\_selection\_curve} in
-\texttt{xxcluster.viz.diagnostics}, which marks the selection and draws the
-curve whether or not it was conclusive. \textsc{MaxCriterion} carries two
-declared thresholds, \texttt{flat\_tolerance} and \texttt{min\_margin},
-each a fraction of the index's declared range (for silhouette, the span
-from $-1$ to $1$); \textsc{ElbowCriterion} carries \texttt{min\_curvature},
-a fraction of the chord length. They are parameters rather than constants
-so that the write-up can state the threshold a selection had to clear. The
-accompanying notebook evidences the behaviour end to end (Appendix, notebook
-\texttt{task37\_relative\_criteria.ipynb}).
+The criteria are registered as \texttt{"max"} and \texttt{"elbow"}. They
+decide only: the sweep generating the candidates lives in the selection
+subpackage, and the curve is drawn by the selection-curve figure, which
+marks the choice whether or not it was conclusive. \textsc{MaxCriterion}
+declares \texttt{flat\_tolerance} and \texttt{min\_margin}, each a fraction
+of the index's declared range; \textsc{ElbowCriterion} declares
+\texttt{min\_curvature}, a fraction of the chord length. They are
+parameters rather than constants so the write-up can state the threshold a
+selection had to clear. The accompanying notebook evidences the behaviour
+end to end.
 
 \paragraph{Behaviour}
 \label{sec:measure:relative:behaviour}
-Demonstrated on the \texttt{iris} benchmark rather than asserted, since
-its structure is known. Sweeping $k=2,\dots,10$, the silhouette curve peaks
-at $k=2$ and \textsc{MaxCriterion} selects it; replacing the index with a
-minimised copy of itself makes the identical criterion select the trough at
-$k=9$, confirming the direction is the index's. The within-cluster
-sum-of-squares (inertia) curve falls monotonically, so its numerical best
-is always the largest~$k$ swept; \textsc{MaxCriterion} on it returns the
-sweep boundary $k=10$, while \textsc{ElbowCriterion} returns the bend at
-$k=4$. This is the behaviour the pair exists to provide: a maximum where
-the curve has a peak, and an elbow where it does not.
+Demonstrated on the iris benchmark, whose structure is known. Sweeping
+$k=2,\dots,10$, the silhouette curve peaks at $k=2$ and
+\textsc{MaxCriterion} selects it; replacing the index with a minimised
+copy makes the identical criterion select the trough at $k=9$, confirming
+the direction is the index's. The sum-of-squares curve falls
+monotonically, so its numerical best is always the largest~$k$ swept:
+\textsc{MaxCriterion} returns the sweep boundary $k=10$, while
+\textsc{ElbowCriterion} returns the bend at $k=4$. That is the behaviour
+the pair exists to provide.
 
 \paragraph{Limitations}
 \label{sec:measure:relative:limitations}
-A criterion can always return an answer, but the answer is not always
-warranted, and \texttt{is\_conclusive} reports when it is not. For
-\textsc{MaxCriterion} the curve is inconclusive when there are fewer than
-three candidates, when the spread is below \texttt{flat\_tolerance} (the
-candidates are indistinguishable), when the winner beats the runner-up by
-less than \texttt{min\_margin} (a tie, not a peak), or when the curve is
-monotone with its best value at a sweep boundary (an artefact of where the
-sweep stopped, to be answered by widening it, which is exactly the case the
-elbow handles). For \textsc{ElbowCriterion} the curve is inconclusive when
-its greatest normalised departure from the chord is below
-\texttt{min\_curvature} --- a straight line has no elbow, and reporting one
-turns rounding into a finding. A further limitation is inherited: the
-criterion is only as neutral as the index beneath it, and a shape-biased
-index (Section~\ref{sec:measure:relative:behaviour}) carries that bias into
-the selection, a threat to validity for Section~\ref{sec:methodology:threats}
-rather than a detail.
+A criterion can always return an answer, but it is not always warranted,
+and \texttt{is\_conclusive} reports when it is not. For
+\textsc{MaxCriterion} the curve is inconclusive with fewer than three
+candidates; when the spread falls below \texttt{flat\_tolerance}, the
+candidates being indistinguishable; when the margin over the runner-up
+falls below \texttt{min\_margin}, a tie rather than a peak; or when the
+curve is monotone with its best value at a sweep boundary, an artefact of
+where the sweep stopped and the case the elbow answers. For
+\textsc{ElbowCriterion} it is inconclusive when the greatest departure
+from the chord falls below \texttt{min\_curvature} --- a straight line has
+no elbow, and reporting one turns rounding into a finding. One limitation
+is inherited: a criterion is only as neutral as the index beneath it, so a
+shape-biased index carries that bias into the selection. That is a threat
+to validity for Sect.~\ref{sec:methodology:threats}, not a detail.
 
 \paragraph{Summary}
 \label{sec:measure:relative:summary}
-\textsc{MaxCriterion} is the default rule for a peaked curve and
-\textsc{ElbowCriterion} the rule for a monotone one; both defer the
-direction and the reporting to the index they read, and both declare when
-the curve does not support a choice. They are part of the reported protocol
-of Section~\ref{sec:methodology:metrics}, being the mechanism by which~$k$
-is chosen wherever a sweep is reported.
+\textsc{MaxCriterion} is the rule for a peaked curve and
+\textsc{ElbowCriterion} the rule for a monotone one. Both defer direction
+and reporting to the index they read, and both declare when the curve does
+not support a choice. They are the mechanism by which~$k$ is chosen
+wherever a sweep is reported, per Sect.~\ref{sec:methodology:metrics}.
 
 % ==================================================================
-%  REFERENCES USED --- fill this in before merge.
+%  REFERENCES USED
 %
-%  Replace each ref_TODO_* above with the real ref_<n> key from the
-%  shared citation-key mapping sheet, then list them here, one per line,
-%  including anything read but not cited. The same keys go in the
-%  `references' field where MaxCriterion/ElbowCriterion are registered
-%  in xxcluster (CONTRIBUTING.md, 2.3.1); the two lists must agree.
+%    ref_26   Thorndike (1953), Who belongs in the family?
+%                                cited in: Definition
+%    ref_27   Satopaa et al. (2011), Finding a "kneedle" in a
+%             haystack: detecting knee points in system behavior
+%                                cited in: Definition
 %
-%    ref_??   Thorndike (1953), "Who belongs in the family?"   cited in: Definition
-%    ref_??   Satopää et al. (2011), Kneedle / knee detection  cited in: Definition
+%  Read, not cited:
+%    Milligan & Cooper (1985), Psychometrika 50(2) --- the comparative
+%      study every stopping rule is measured against.
+%    Tibshirani, Walther & Hastie (2001), JRSS-B 63(2) --- the gap
+%      statistic and the one-standard-error rule, the alternative to
+%      the two rules implemented here.
 % ==================================================================
