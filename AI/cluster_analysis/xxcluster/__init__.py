@@ -12,7 +12,7 @@ Layout
     core/         the contract everything else implements
     cluster/      clustering methods, by family (Sect. 7)
     dim_red/      dimensionality reduction (Sect. 6)
-    measures/     dissimilarity and validation measures (Sect. 7.1)
+    measures/     dissimilarity and validation measures (Sect. 7.1-7.2)
     pipeline/     preprocessing and composition (Sect. 3.3)
     selection/    choosing |C| and testing stability (Sect. 4.3)
     evaluation/   the shared protocol and the comparison (Sect. 4, 8)

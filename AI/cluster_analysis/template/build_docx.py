@@ -398,7 +398,7 @@ def spec_measure() -> list[str]:
     blocks = front(
         "Measure",
         "measure_template.tex",
-        "clustering_methods/measures/NN-<name>",
+        "clustering_methods/measures/NN-<name> for a dissimilarity, or clustering_methods/validity/NN-<name> for a validity index",
         "Keep the ten parts in the order given. Parts 3 and 4 carry separate prompts "
         "for a dissimilarity measure and for a validity index — delete whichever does "
         "not apply.",

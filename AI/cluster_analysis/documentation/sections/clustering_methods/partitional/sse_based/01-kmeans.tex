@@ -1,0 +1,55 @@
+% ------------------------------------------------------------------
+%  Clustering method: K--Means.
+%  Written from template/method_template.tex; the part order is fixed.
+%  Code counterpart: xxcluster/cluster/partitional/sse_based/kmeans.py
+% ------------------------------------------------------------------
+\subsubsection{K–Means}
+\label{sec:tech:kmeans}
+
+\paragraph{Overview}
+\label{sec:tech:kmeans:overview}
+K–Means is the canonical crisp partitional method, belonging to the SSE–optimised family of \textbf{Sect. \ref{sec:background:families}}.
+It represents every cluster by a centroid and assigns each observation to the nearest one, so a partition is described by $|\mathcal C|$ prototypes rather than by the observations \cite{ref_10}. It serves as the baseline the other methods are compared against \cite{ref_1, ref_5}, and has precedent on operational water data \cite{ref_13, ref_17}.
+
+\paragraph{Assumptions and applicability}
+\label{sec:tech:kmeans:assumptions}
+Assignment to the nearest centroid induces a Voronoi partition of the feature space, hence clusters are assumed convex, roughly spherical, and of comparable size and density \cite{ref_10, ref_11}.
+It further assumes $|\mathcal C|$ known in advance, no noise label, and features on comparable scales, the objective below not being scale–invariant, where these fail, the partition remains well defined but ceases to be meaningful.
+
+\paragraph{Formulation}
+\label{sec:tech:kmeans:formulation}
+For fixed $|\mathcal C|$, K–Means minimises the within–cluster sum of squared error
+\begin{align}
+    \min_{\mathcal C} ~ \sum_{i = 1}^{|\mathcal C|} ~ \sum_{\mathbf x \in \mathcal C_i} \left\| \mathbf x - \boldsymbol \mu_i \right\|_2^2,
+    \qquad \text{where} \qquad
+    \boldsymbol \mu_i = \tfrac{1}{|\mathcal C_i|} \sum_{\mathbf x \in \mathcal C_i} \mathbf x,
+\end{align}
+the criterion–function reading of \textbf{Def. \ref{def:cluster_method}}, with a centroid standing in for pairwise comparison \cite{ref_10}.
+The standard algorithm alternates assignment of each $\mathbf x$ to the nearest centroid with recomputation of every $\boldsymbol \mu_i$ as the mean of its members \cite{ref_5, ref_11}, as neither step increases the objective, it terminates at a local minimum only \cite{ref_2, ref_25}.
+That $\ell_2$ norm is forced rather than chosen, so another dissimilarity breaks the descent above and calls for a medoid or median prototype \cite{ref_10, ref_11}.
+
+\paragraph{Hyperparameters and tuning}
+\label{sec:tech:kmeans:hyperparameters}
+Three: $|\mathcal C|$, fixed by the shared procedure of \textbf{Sect. \ref{sec:methodology:k}} rather than tuned per method; the initialisation and the number of restarts, which exist only because the objective is non–convex, so the best objective over several restarts is retained \cite{ref_2, ref_5}.
+
+\paragraph{Complexity}
+\label{sec:tech:kmeans:complexity}
+One iteration costs $O(m |\mathcal C| n)$ time and $O(|\mathcal C| n)$ space beyond the data \cite{ref_5, ref_10}: the cheapest method surveyed, and the only one needing no pairwise dissimilarity matrix, so it remains usable at full data volume.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:tech:kmeans:application}
+\placeholder{Library and version, seed, restarts, and any deviation from the pipeline of Section~\ref{sec:data:preprocessing}, scaling in particular.}
+
+\paragraph{Results}
+\label{sec:tech:kmeans:results}
+\placeholder{Every index of Section~\ref{sec:methodology:metrics}, the evidence behind the chosen $|\mathcal C|$, and the cluster profiles.}
+% \todo{export from the benchmark notebook}
+
+\paragraph{Limitations}
+\label{sec:tech:kmeans:limitations}
+Local convergence, so the partition depends on initialisation. The centroid is a mean, hence sensitive to outliers, which cannot be labelled noise. Spherical, equal–size bias splits elongated structure and merges structure of uneven density \cite{ref_2} \cite{ref_10}.
+The Silhouette Coefficient of \textbf{Sect. \ref{sec:measure:silhouette}} rewards precisely the geometry K–Means produces, so that pairing flatters it \textbf{(Sect. \ref{sec:methodology:threats})}.
+
+\paragraph{Summary}
+\label{sec:tech:kmeans:summary}
+The cheap, scale–sensitive baseline, linear in $m$, adequate wherever regimes are compact and comparable in size. Whether it earns more than that here is carried into \textbf{Sect. \ref{sec:comparison}}.
