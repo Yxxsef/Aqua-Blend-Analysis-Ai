@@ -245,3 +245,19 @@ def test_toy_path_still_validates_and_adapts():
     assert result["adapted_optimiser_result"] is not None
     assert result["confidence"] is not None
     assert result["unsupported"] == []
+
+
+# --- scenario context ------------------------------------------------------
+
+def test_scenario_context_carries_the_capacities_v1_dropped():
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    context = result["scenario_context"]
+    assert context["source_to_plant_capacity"]["yarra_kew->facility_1"] == 300
+    assert context["plants"]["facility_1"]["maximum_processing_capacity_ml_per_day"] == 600
+    assert context["demand"]["zone_1"] == 500
+
+
+def test_scenario_context_names_what_it_cannot_supply():
+    """Source bounds and costs live in Supabase — the gap must be stated, not implied."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["scenario_context"]["unavailable"]

@@ -93,6 +93,56 @@ def _gate_as_dict(gate: Any) -> dict[str, Any]:
     return dict(vars(gate))
 
 
+def build_scenario_context(scenario: dict[str, Any]) -> dict[str, Any]:
+    """Collect the scenario inputs that Results JSON v1.0 no longer echoes.
+
+    v1.0 deliberately dropped bounds, capacities and cost rates from the output
+    (see its section 5): they are inputs, and echoing them created two sources
+    of truth. That is defensible, but it means a consumer holding only a results
+    file cannot check utilisation, verify a bound, or compute a margin. The
+    harness therefore carries the scenario side alongside the result.
+
+    Nothing here is calculated. Every value is copied from the scenario file,
+    keyed so it can be joined back to a result by ID. Arc keys are written as
+    "source->plant" strings rather than tuples so the context stays JSON
+    serialisable for the run manifest.
+    """
+    network = scenario.get("network", {})
+
+    unavailable = [
+        "source withdrawal bounds — held in the Supabase source view, not the "
+        "scenario file",
+        "source cost_per_ml — same",
+    ]
+
+    return {
+        "scenario_id": scenario.get("scenario_id"),
+        "source_to_plant_capacity": {
+            f"{link.get('source_id')}->{link.get('plant_id')}": link.get("maximum_flow_ml_per_day")
+            for link in network.get("source_to_plant_links", [])
+        },
+        "plant_to_zone_capacity": {
+            f"{link.get('plant_id')}->{link.get('zone_id')}": link.get("maximum_flow_ml_per_day")
+            for link in network.get("plant_to_zone_links", [])
+        },
+        "plants": {
+            plant.get("plant_id"): {
+                "minimum_operating_flow_ml_per_day": plant.get("minimum_operating_flow_ml_per_day"),
+                "maximum_processing_capacity_ml_per_day": plant.get("maximum_processing_capacity_ml_per_day"),
+                "fixed_activation_cost": plant.get("fixed_activation_cost"),
+                "treatment_cost_per_ml": plant.get("treatment_cost_per_ml"),
+            }
+            for plant in network.get("plants", [])
+        },
+        "demand": {
+            zone.get("zone_id"): zone.get("demand_ml_per_day")
+            for zone in network.get("demand_zones", [])
+        },
+        "quality_limits": scenario.get("quality_limits", {}),
+        "unavailable": unavailable,
+    }
+
+
 def _evaluate_one(result: dict[str, Any]) -> dict[str, Any]:
     """Run the KPIs and gate for one result, recording failure rather than raising.
 
@@ -125,6 +175,7 @@ def run_scenario(
 
     scenario = load_scenario(scenario_path)
     validation = validate_scenario(scenario)
+    context = build_scenario_context(scenario)
 
     baseline_output = run_all_baselines(scenario)
 
@@ -164,6 +215,7 @@ def run_scenario(
         "mode": mode,
         "schema": schema,
         "scenario_validation": validation,
+        "scenario_context": context,
         "raw_optimiser_result": raw_results,
         "adapted_optimiser_result": adapted,
         "confidence": confidence,
