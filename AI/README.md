@@ -12,31 +12,51 @@ Do not create new top-level folders without raising it in the Analysis & AI team
 
 ## Integrated Pipeline Entry Point
 
-`AI/main.py` is the Analysis & AI team's internal pipeline entry point. The
-wider AquaBlend backend should call it after receiving structured MILP Results
-JSON; the project-wide backend entry point remains separate.
+`AI/main.py` is the Analysis & AI team's internal pipeline entry point. It reads
+the latest MILP result from Supabase and can write the App response back; the
+project-wide backend entry point remains separate.
 
 Pipeline order:
 
-1. Validate raw MILP Results JSON.
-2. Adapt the result into the internal format.
-3. Calculate KPIs and the KPI gate.
-4. Determine confidence from provenance.
-5. Generate the deterministic explanation.
-6. Optionally run and validate an LLM rewrite.
-7. Use the deterministic fallback when the LLM is unavailable or rejected.
-8. Return the App & Delivery response contract.
+1. Read the newest `milp_model_output` row from Supabase.
+2. Validate raw MILP Results JSON.
+3. Adapt the result into the internal format.
+4. Calculate KPIs and the KPI gate.
+5. Determine confidence from provenance.
+6. Generate the deterministic explanation.
+7. Optionally run and validate an LLM rewrite.
+8. Use the deterministic fallback when the LLM is unavailable or rejected.
+9. Return the App & Delivery response contract.
+10. Optionally insert that response into `milp_ai_output`.
 
 `main.py` coordinates existing modules and does not replace their business
 logic. Model configuration is optional; without it, the deterministic fallback
 is used. Unvalidated LLM output is never returned for display.
 
+### Setup
+
+Credentials are read from `AI/.env`, which is gitignored. Copy the example and
+fill in `DB_KEY`:
+
 ```text
-python AI/main.py AI/explanations/llm_reporting/fixtures/model_output_example.json
-python AI/main.py <results.json> --output <response.json>
-python AI/main.py <results.json> --model-config AI/explanations/model_config.example.json
+cp AI/.env.example AI/.env
+pip install supabase python-dotenv
+```
+
+### Commands
+
+The entry point takes no input path; it always reads the newest MILP row.
+
+```text
+python AI/main.py
+python AI/main.py --output <response.json>
+python AI/main.py --model-config AI/explanations/model_config.example.json
+python AI/main.py --push
 python -m pytest AI/tests/test_main.py -q
 ```
+
+`--push` inserts the response into `milp_ai_output`, keyed to the
+`milp_model_output` row it was computed from. Without it, nothing is written.
 
 ## Sprint 1 Required Files
 
