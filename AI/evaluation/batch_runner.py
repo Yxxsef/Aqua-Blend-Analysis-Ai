@@ -38,6 +38,23 @@ DEFAULT_FIXTURE = (
     AI_ROOT / "explanations" / "llm_reporting" / "fixtures" / "model_output_example.json"
 )
 
+V1_FIXTURE = AI_ROOT / "evaluation" / "fixtures" / "milp_v1_solved_example.json"
+
+SCHEMA_TOY = "toy"
+SCHEMA_V1 = "milp_v1"
+
+
+def detect_schema(results: dict[str, Any]) -> str:
+    """Return which Results JSON schema this payload uses.
+
+    The harness cannot assume a shape: once real MILP output arrives it will
+    receive whatever the optimiser sends. v1.0 is identified by its own
+    schema_version marker rather than by where the file came from.
+    """
+    if "schema_version" in results:
+        return SCHEMA_V1
+    return SCHEMA_TOY
+
 
 class OptimiserError(Exception):
     """Raised when an optimiser result cannot be produced."""

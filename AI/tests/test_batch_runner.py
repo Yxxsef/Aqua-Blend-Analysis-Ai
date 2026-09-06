@@ -15,6 +15,10 @@ sys.path.insert(0, str(REPO_ROOT / "AI" / "evaluation"))
 from batch_runner import (  # noqa: E402
     MOCK,
     MILP,
+    SCHEMA_TOY,
+    SCHEMA_V1,
+    V1_FIXTURE,
+    detect_schema,
     OptimiserError,
     get_optimiser_result,
     run_batch,
@@ -183,3 +187,21 @@ def test_csv_row_width_matches_header_when_not_comparable(tmp_path):
     assert len(row) == len(header)
     assert row[header.index("scenario_reason")] == comparison["comparisons"][0]["reason"]
     assert row[header.index("gate")] == ""
+
+# --- schema detection -----------------------------------------------------
+
+def test_v1_fixture_is_detected_as_milp_v1():
+    result = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    assert detect_schema(result) == SCHEMA_V1
+
+
+def test_toy_fixture_is_detected_as_toy():
+    result = get_optimiser_result({}, MOCK)
+    assert detect_schema(result) == SCHEMA_TOY
+
+
+def test_v1_fixture_is_a_solved_run():
+    """The v1 fixture must be solved, or it cannot test value-level behaviour."""
+    result = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    assert result["solver"]["status"] == "OPTIMAL"
+    assert result["solver"]["objective_value"] is not None
