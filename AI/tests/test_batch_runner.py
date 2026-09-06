@@ -205,3 +205,43 @@ def test_v1_fixture_is_a_solved_run():
     result = get_optimiser_result({}, MOCK, V1_FIXTURE)
     assert result["solver"]["status"] == "OPTIMAL"
     assert result["solver"]["objective_value"] is not None
+
+
+# --- v1 payloads must not take the run down --------------------------------
+
+def test_v1_scenario_still_returns_a_result():
+    """A schema the KPI layer cannot read yet must not raise out of run_scenario."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["schema"] == SCHEMA_V1
+    assert result["scenario_id"]
+
+
+def test_v1_run_survives_an_optimiser_that_cannot_be_evaluated():
+    """The three baselines stay comparable even when the optimiser entry fails."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    evaluations = result["evaluations"]
+
+    assert set(evaluations) == {
+        "optimiser",
+        "equal_blend",
+        "cheapest_first",
+        "fixed_priority",
+    }
+    for name in ("equal_blend", "cheapest_first", "fixed_priority"):
+        assert evaluations[name]["gate"] is not None
+
+
+def test_v1_failure_is_recorded_not_swallowed():
+    """A failure must name what broke, so the owning task can act on it."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["unsupported"]
+    assert any("56" in note for note in result["unsupported"])
+
+
+def test_toy_path_still_validates_and_adapts():
+    """The toy schema keeps its full pipeline — nothing was skipped for it."""
+    result = run_scenario(NORMAL, MOCK)
+    assert result["schema"] == SCHEMA_TOY
+    assert result["adapted_optimiser_result"] is not None
+    assert result["confidence"] is not None
+    assert result["unsupported"] == []

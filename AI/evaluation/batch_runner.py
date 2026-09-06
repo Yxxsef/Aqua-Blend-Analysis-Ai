@@ -93,6 +93,24 @@ def _gate_as_dict(gate: Any) -> dict[str, Any]:
     return dict(vars(gate))
 
 
+def _evaluate_one(result: dict[str, Any]) -> dict[str, Any]:
+    """Run the KPIs and gate for one result, recording failure rather than raising.
+
+    Each run is isolated so a schema the KPI layer cannot read yet costs one
+    entry, not the whole scenario. The baselines stay comparable even when the
+    optimiser result cannot be evaluated.
+    """
+    try:
+        report, gate = evaluate(result)
+    except Exception as error:
+        return {
+            "kpis": None,
+            "gate": None,
+            "error": f"{type(error).__name__}: {error}",
+        }
+    return {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
+
+
 def run_scenario(
     scenario_path: str | Path,
     mode: str = MOCK,
@@ -111,33 +129,47 @@ def run_scenario(
     baseline_output = run_all_baselines(scenario)
 
     raw_results = get_optimiser_result(scenario, mode, fixture_path)
-    validate_results(raw_results)
-    adapted = adapt_results(raw_results)
+    schema = detect_schema(raw_results)
+    unsupported: list[str] = []
 
-    confidence = determine_confidence(
-        raw_results.get("data_flags", {}).get("sources", []),
-        raw_results.get("sources", {}).get("selected", []),
-    )
+    if schema == SCHEMA_TOY:
+        validate_results(raw_results)
+        adapted = adapt_results(raw_results)
+        confidence = determine_confidence(
+            raw_results.get("data_flags", {}).get("sources", []),
+            raw_results.get("sources", {}).get("selected", []),
+        )
+    else:
+        # The validator, adapter and confidence flagger on master are written
+        # against the toy schema. Re-pointing them at v1.0 is Task 56 and
+        # Task 57, not Task 59, so the harness records the gap instead of
+        # patching around it.
+        adapted = None
+        confidence = None
+        unsupported.append(
+            f"{schema}: validator, adapter and confidence flagger skipped "
+            "(they target the toy schema; see Tasks 56 and 57)"
+        )
 
     evaluations: dict[str, Any] = {}
 
-    report, gate = evaluate(raw_results)
-    evaluations["optimiser"] = {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
-
-    for name, result in baseline_output["baselines"].items():
-        report, gate = evaluate(result)
-        evaluations[name] = {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
+    for name, result in [("optimiser", raw_results), *baseline_output["baselines"].items()]:
+        evaluations[name] = _evaluate_one(result)
+        if "error" in evaluations[name]:
+            unsupported.append(f"{name}: {evaluations[name]['error']}")
 
     return {
         "scenario_path": str(scenario_path),
         "scenario_id": scenario.get("scenario_id"),
         "mode": mode,
+        "schema": schema,
         "scenario_validation": validation,
         "raw_optimiser_result": raw_results,
         "adapted_optimiser_result": adapted,
         "confidence": confidence,
         "baseline_output": baseline_output,
         "evaluations": evaluations,
+        "unsupported": unsupported,
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
 
