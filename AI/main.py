@@ -1,9 +1,12 @@
 """AquaBlend Analysis & AI pipeline entry point."""
 
 import argparse
+import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
+import time
 from typing import Any, Mapping, Dict
 
 from supabase import create_client
@@ -24,28 +27,35 @@ for _module_dir in (
     if module_dir_text not in sys.path:
         sys.path.insert(0, module_dir_text)
 
-from app_response_adapter import SOLVER_STATUSES, build_app_response, write_response_json
+from app_response_adapter import (
+    SOLVER_STATUSES,
+    build_app_response,
+    validate_app_response,
+    write_response_json,
+)
 from confidence_flagger import ConfidenceError, determine_confidence
 from json_explainer import ExplainerInputError, generate_explanation
 from kpi_gate import evaluate
 from llm_validator import ValidatorInputError, validate_llm_output
 from model_runner import ModelConfig, load_model_config, rewrite_report
+from prompts import PROMPT_VERSION
 from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
+from env import DB_URL, DB_KEY
+
+def _client():
+    """Create a Supabase client for the AquaBlend project."""
+    return create_client(supabase_url = DB_URL, supabase_key = DB_KEY)
 
 
-def load_milp_output(path: str | Path) -> Dict:
+def load_milp_output() -> Dict:
     """Load a Results JSON file from the MILP output.
         This must be loaded from the Supabase
     """
-    # These are public keys, so no privacy concerns
-    db_url = "https://afthemgcztvadtpeipoq.supabase.co"
-    db_key = "sb_publishable_c0t-ufZAkxWEF6dUjFc0pg_WdsomLGV"
-
-    sb = create_client(supabase_url = db_url, supabase_key = db_key)
     # Return the current final row in the milp_model_output table
     output = (
-        sb.table("milp_model_output")
+        _client()
+        .table("milp_model_output")
         .select("*")
         .order("run_id", desc = True)
         .limit(1)
@@ -55,6 +65,65 @@ def load_milp_output(path: str | Path) -> Dict:
     )
     # Returns a json dictionary
     return output
+
+
+def _sha256_json(payload: Any) -> str:
+    """Stable SHA-256 digest of a JSON payload."""
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def save_ai_output(
+    response: Mapping[str, Any],
+    milp_row: Mapping[str, Any],
+    model_config: ModelConfig | None = None,
+    latency_ms: float | None = None,
+) -> Dict:
+    """Insert one App response into milp_ai_output and return the inserted row.
+
+    The row is keyed to the MILP output it was computed from, so the foreign
+    keys (scenario_id, milp_output_id, origin_run_id) are read from that row
+    rather than from the response, whose scenario_id is a display string.
+    """
+    validate_app_response(response)
+
+    if not isinstance(milp_row, Mapping):
+        raise ValueError(
+            "An App response can only be saved against a MILP output row."
+        )
+
+    missing = [key for key in ("id", "scenario_id") if milp_row.get(key) is None]
+    if missing:
+        raise ValueError(
+            "MILP output row is missing key(s) required by milp_ai_output: "
+            + ", ".join(missing)
+        )
+
+    row: dict[str, Any] = {
+        "milp_output_id": milp_row["id"],
+        "scenario_id": milp_row["scenario_id"],
+        "origin_run_id": milp_row.get("run_id"),
+        "status": (
+            "failed" if response["report_mode"] == "INVALID_INPUT" else "completed"
+        ),
+        "ai_contract_version": response["contract_version"],
+        "milp_output_hash": _sha256_json(milp_row),
+        "ai_output_hash": _sha256_json(response),
+        "ai_input_json": dict(milp_row),
+        "raw_ai_json": dict(response),
+        "decision_explanation": response["display_explanation"],
+        "warnings": list(response["warnings"]),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Only a model-backed run can describe which model produced the report.
+    if model_config is not None:
+        row["ai_model"] = model_config.model_id
+        row["prompt_version"] = PROMPT_VERSION
+    if latency_ms is not None:
+        row["latency_ms"] = latency_ms
+
+    return _client().table("milp_ai_output").insert(row).execute().data
 
 
 def _invalid_input_response(results: Dict, reason: str) -> dict[str, Any]:
@@ -156,13 +225,26 @@ def run_pipeline(
 
 
 def run_from_file(
-    path: str | Path,
     model_config: ModelConfig | None = None,
     comparison: Mapping[str, Any] | None = None,
+    push: bool = False,
 ) -> dict[str, Any]:
-    """Load a Results JSON file and run the pipeline."""
-    results = load_milp_output(path)
-    return run_pipeline(results, model_config=model_config, comparison=comparison)
+    """Load the latest MILP output from Supabase and run the pipeline."""
+    results = load_milp_output()
+
+    started_at = time.perf_counter()
+    response = run_pipeline(results, model_config=model_config, comparison=comparison)
+    latency_ms = (time.perf_counter() - started_at) * 1000
+
+    if push:
+        save_ai_output(
+            response,
+            results,
+            model_config=model_config,
+            latency_ms=latency_ms,
+        )
+
+    return response
 
 
 def main() -> None:
@@ -171,10 +253,6 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "results_json",
-        help="Path to a MILP or mock Results JSON file.",
-    )
-    parser.add_argument(
         "--model-config",
         help="Path to an OpenAI-compatible model configuration JSON file.",
     )
@@ -182,11 +260,16 @@ def main() -> None:
         "--output",
         help="Write the App response JSON to this path instead of stdout.",
     )
+    parser.add_argument(
+        "--push",
+        action="store_true",
+        help="Insert the App response into the milp_ai_output table.",
+    )
 
     args = parser.parse_args()
 
     model_config = load_model_config(args.model_config) if args.model_config else None
-    response = run_from_file(args.results_json, model_config=model_config)
+    response = run_from_file(model_config=model_config, push=args.push)
 
     if args.output:
         write_response_json(response, args.output)

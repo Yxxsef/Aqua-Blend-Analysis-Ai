@@ -16,6 +16,7 @@ if str(AI_DIR) not in sys.path:
 
 import main
 from model_runner import ModelConfig, rewrite_report
+from prompts import PROMPT_VERSION
 
 
 FIXTURE_PATH = (
@@ -176,6 +177,11 @@ class _FakeQuery:
         self._calls.append(("single",))
         return self
 
+    def insert(self, row: dict) -> _FakeQuery:
+        self._calls.append(("insert", row))
+        self._row = [row]
+        return self
+
     def execute(self) -> _FakeExecuteResult:
         self._calls.append(("execute",))
         return _FakeExecuteResult(self._row)
@@ -207,7 +213,7 @@ def test_load_milp_output_reads_the_latest_run(
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, {"scenario_id": "row-from-db"})
 
-    output = main.load_milp_output("ignored.json")
+    output = main.load_milp_output()
 
     assert output == {"scenario_id": "row-from-db"}
     assert ("table", "milp_model_output") in calls
@@ -217,27 +223,12 @@ def test_load_milp_output_reads_the_latest_run(
     assert ("single",) in calls
 
 
-def test_load_milp_output_ignores_its_path_argument(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls = _install_fake_supabase(monkeypatch, {"scenario_id": "same-row"})
-
-    from_fixture = main.load_milp_output(FIXTURE_PATH)
-    from_missing_path = main.load_milp_output("/nonexistent/path.json")
-
-    assert from_fixture == from_missing_path == {"scenario_id": "same-row"}
-    assert [call for call in calls if call[0] == "table"] == [
-        ("table", "milp_model_output"),
-        ("table", "milp_model_output"),
-    ]
-
-
 def test_run_from_file_runs_the_pipeline_on_the_supabase_row(
     valid_results: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _install_fake_supabase(monkeypatch, valid_results)
 
-    response = main.run_from_file("ignored.json")
+    response = main.run_from_file()
 
     assert response["scenario_id"] == "scenario_2026_07_17_001"
     assert response["solver_status"] == "OPTIMAL"
@@ -249,7 +240,7 @@ def test_run_from_file_rejects_a_row_that_is_not_results_json(
 ) -> None:
     _install_fake_supabase(monkeypatch, {"run_id": 7, "scenario_id": "db-row"})
 
-    response = main.run_from_file("ignored.json")
+    response = main.run_from_file()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] == "db-row"
@@ -261,8 +252,110 @@ def test_run_from_file_handles_an_empty_table(
 ) -> None:
     _install_fake_supabase(monkeypatch, None)
 
-    response = main.run_from_file("ignored.json")
+    response = main.run_from_file()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] is None
     assert any("Results must be a JSON object" in warning for warning in response["warnings"])
+
+
+@pytest.fixture
+def milp_row(valid_results: dict) -> dict:
+    """A milp_model_output row: the Results JSON plus its database columns."""
+    return {
+        **valid_results,
+        "id": "6f1d2c3b-0000-4000-8000-000000000001",
+        "run_id": 7,
+    }
+
+
+def test_save_ai_output_reads_foreign_keys_from_the_milp_row(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+    db_row = {"id": "6f1d2c3b-0000-4000-8000-000000000001", "scenario_id": 42, "run_id": 7}
+
+    main.save_ai_output(response, db_row)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert ("table", "milp_ai_output") in calls
+    assert row["milp_output_id"] == "6f1d2c3b-0000-4000-8000-000000000001"
+    assert row["scenario_id"] == 42
+    assert row["origin_run_id"] == 7
+    assert row["milp_output_hash"] == main._sha256_json(db_row)
+    assert row["ai_output_hash"] == main._sha256_json(response)
+    assert row["ai_contract_version"] == response["contract_version"]
+    assert row["raw_ai_json"] == response
+    assert row["warnings"] == response["warnings"]
+
+
+def test_save_ai_output_rejects_a_row_without_foreign_keys(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+
+    with pytest.raises(ValueError, match="milp_ai_output"):
+        main.save_ai_output(response, {"run_id": 7})
+
+
+def test_save_ai_output_records_the_model_only_when_one_ran(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+    db_row = {"id": "row-id", "scenario_id": 42}
+
+    main.save_ai_output(response, db_row)
+    main.save_ai_output(response, db_row, model_config=ModelConfig(model_id="test-model"))
+
+    without_model, with_model = [call[1] for call in calls if call[0] == "insert"]
+    assert "ai_model" not in without_model
+    assert with_model["ai_model"] == "test-model"
+    assert with_model["prompt_version"] == PROMPT_VERSION
+
+
+def test_run_from_file_pushes_the_response_when_requested(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    response = main.run_from_file(push=True)
+
+    inserts = [call for call in calls if call[0] == "insert"]
+    assert len(inserts) == 1
+    row = inserts[0][1]
+    assert ("table", "milp_ai_output") in calls
+    assert row["milp_output_id"] == milp_row["id"]
+    assert row["origin_run_id"] == 7
+    assert row["status"] == "completed"
+    assert row["raw_ai_json"] == response
+    assert row["decision_explanation"] == response["display_explanation"]
+    assert row["latency_ms"] >= 0
+
+
+def test_run_from_file_does_not_push_by_default(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.run_from_file()
+
+    assert [call for call in calls if call[0] == "insert"] == []
+    assert ("table", "milp_ai_output") not in calls
+
+
+def test_push_records_an_invalid_input_response_as_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_supabase(
+        monkeypatch, {"id": "row-id", "scenario_id": 42, "run_id": 7}
+    )
+
+    response = main.run_from_file(push=True)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert row["status"] == "failed"
+    assert row["scenario_id"] == 42
