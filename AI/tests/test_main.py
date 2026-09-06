@@ -218,7 +218,7 @@ def test_load_milp_output_reads_the_latest_run(
     assert output == {"scenario_id": "row-from-db"}
     assert ("table", "milp_model_output") in calls
     assert ("select", "*") in calls
-    assert ("order", "run_id", True) in calls
+    assert ("order", "created_at", True) in calls
     assert ("limit", 1) in calls
     assert ("single",) in calls
 
@@ -238,7 +238,7 @@ def test_run_from_file_runs_the_pipeline_on_the_supabase_row(
 def test_run_from_file_rejects_a_row_that_is_not_results_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_fake_supabase(monkeypatch, {"run_id": 7, "scenario_id": "db-row"})
+    _install_fake_supabase(monkeypatch, {"origin_run_id": 7, "scenario_id": "db-row"})
 
     response = main.run_from_file()
 
@@ -265,7 +265,8 @@ def milp_row(valid_results: dict) -> dict:
     return {
         **valid_results,
         "id": "6f1d2c3b-0000-4000-8000-000000000001",
-        "run_id": 7,
+        "scenario_db_id": 42,
+        "origin_run_id": 7,
     }
 
 
@@ -274,7 +275,11 @@ def test_save_ai_output_reads_foreign_keys_from_the_milp_row(
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, None)
     response = main.run_pipeline(valid_results)
-    db_row = {"id": "6f1d2c3b-0000-4000-8000-000000000001", "scenario_id": 42, "run_id": 7}
+    db_row = {
+        "id": "6f1d2c3b-0000-4000-8000-000000000001",
+        "scenario_db_id": 42,
+        "origin_run_id": 7,
+    }
 
     main.save_ai_output(response, db_row)
 
@@ -297,7 +302,7 @@ def test_save_ai_output_rejects_a_row_without_foreign_keys(
     response = main.run_pipeline(valid_results)
 
     with pytest.raises(ValueError, match="milp_ai_output"):
-        main.save_ai_output(response, {"run_id": 7})
+        main.save_ai_output(response, {"origin_run_id": 7})
 
 
 def test_save_ai_output_records_the_model_only_when_one_ran(
@@ -305,7 +310,7 @@ def test_save_ai_output_records_the_model_only_when_one_ran(
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, None)
     response = main.run_pipeline(valid_results)
-    db_row = {"id": "row-id", "scenario_id": 42}
+    db_row = {"id": "row-id", "scenario_db_id": 42}
 
     main.save_ai_output(response, db_row)
     main.save_ai_output(response, db_row, model_config=ModelConfig(model_id="test-model"))
@@ -350,7 +355,7 @@ def test_push_records_an_invalid_input_response_as_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _install_fake_supabase(
-        monkeypatch, {"id": "row-id", "scenario_id": 42, "run_id": 7}
+        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
     )
 
     response = main.run_from_file(push=True)

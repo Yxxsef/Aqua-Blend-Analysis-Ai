@@ -57,7 +57,7 @@ def load_milp_output() -> Dict:
         _client()
         .table("milp_model_output")
         .select("*")
-        .order("run_id", desc = True)
+        .order("created_at", desc = True)
         .limit(1)
         .single()
         .execute()
@@ -82,8 +82,10 @@ def save_ai_output(
     """Insert one App response into milp_ai_output and return the inserted row.
 
     The row is keyed to the MILP output it was computed from, so the foreign
-    keys (scenario_id, milp_output_id, origin_run_id) are read from that row
-    rather than from the response, whose scenario_id is a display string.
+    keys are read from that row rather than from the response. The MILP row
+    carries two scenario identifiers: ``scenario_id`` is the display string
+    ("SCN-005") and ``scenario_db_id`` is the integer that milp_ai_output's
+    foreign key into Scenarios("Id") requires.
     """
     validate_app_response(response)
 
@@ -92,7 +94,7 @@ def save_ai_output(
             "An App response can only be saved against a MILP output row."
         )
 
-    missing = [key for key in ("id", "scenario_id") if milp_row.get(key) is None]
+    missing = [key for key in ("id", "scenario_db_id") if milp_row.get(key) is None]
     if missing:
         raise ValueError(
             "MILP output row is missing key(s) required by milp_ai_output: "
@@ -101,8 +103,8 @@ def save_ai_output(
 
     row: dict[str, Any] = {
         "milp_output_id": milp_row["id"],
-        "scenario_id": milp_row["scenario_id"],
-        "origin_run_id": milp_row.get("run_id"),
+        "scenario_id": milp_row["scenario_db_id"],
+        "origin_run_id": milp_row.get("origin_run_id"),
         "status": (
             "failed" if response["report_mode"] == "INVALID_INPUT" else "completed"
         ),
