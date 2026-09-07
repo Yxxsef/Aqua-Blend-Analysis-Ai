@@ -312,7 +312,7 @@ def test_save_ai_output_rejects_a_row_without_foreign_keys(
     _install_fake_supabase(monkeypatch, None)
     response = main.run_pipeline(valid_results)
 
-    with pytest.raises(ValueError, match="milp_ai_output"):
+    with pytest.raises(main.SupabaseError, match="milp_ai_output"):
         main.save_ai_output(response, {"origin_run_id": 7})
 
 
@@ -434,3 +434,82 @@ def test_a_successful_push_adds_no_failure_warning(
         warning.startswith(main.PUSH_FAILURE_PREFIX)
         for warning in response["warnings"]
     )
+
+
+def test_push_uses_the_milp_published_output_hash(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+    db_row = {"id": "row-id", "scenario_db_id": 42, "output_hash": "milp-published"}
+
+    main.save_ai_output(response, db_row)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    # MILP's own digest, not one we recompute: both tables index on it.
+    assert row["milp_output_hash"] == "milp-published"
+
+
+def test_push_falls_back_to_a_computed_hash(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+    db_row = {"id": "row-id", "scenario_db_id": 42}  # output_hash is nullable
+
+    main.save_ai_output(response, db_row)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert row["milp_output_hash"] == main._sha256_json(db_row)
+
+
+def test_a_failed_analysis_fills_the_error_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_supabase(
+        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
+    )
+
+    response = main.run_from_file(push=True)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert row["status"] == "failed"
+    assert row["error_code"] == "INVALID_INPUT"
+    assert "Results validation failed" in row["error_message"]
+
+
+def test_a_successful_analysis_leaves_the_error_columns_unset(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.run_from_file(push=True)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert row["status"] == "completed"
+    assert "error_code" not in row
+    assert "error_message" not in row
+
+
+def test_push_records_when_the_run_started(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.run_from_file(push=True)
+
+    row = [call for call in calls if call[0] == "insert"][0][1]
+    assert row["started_at"] <= row["completed_at"]
+
+
+def test_a_row_without_scenario_db_id_is_a_supabase_error(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # scenario_db_id is nullable upstream but NOT NULL in milp_ai_output, so
+    # this must report cleanly rather than escape run_from_file's handler.
+    _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+
+    with pytest.raises(main.SupabaseError, match="scenario_db_id"):
+        main.save_ai_output(response, {"id": "row-id", "scenario_db_id": None})

@@ -104,6 +104,7 @@ def save_ai_output(
     milp_row: Mapping[str, Any],
     model_config: ModelConfig | None = None,
     latency_ms: float | None = None,
+    started_at: datetime | None = None,
 ) -> Dict:
     """Insert one App response into milp_ai_output and return the inserted row.
 
@@ -112,30 +113,37 @@ def save_ai_output(
     carries two scenario identifiers: ``scenario_id`` is the display string
     ("SCN-005") and ``scenario_db_id`` is the integer that milp_ai_output's
     foreign key into Scenarios("Id") requires.
+
+    Raises:
+        SupabaseError: the MILP row cannot key a milp_ai_output row, or the
+            insert failed.
     """
     validate_app_response(response)
 
     if not isinstance(milp_row, Mapping):
-        raise ValueError(
+        raise SupabaseError(
             "An App response can only be saved against a MILP output row."
         )
 
     missing = [key for key in ("id", "scenario_db_id") if milp_row.get(key) is None]
     if missing:
-        raise ValueError(
+        raise SupabaseError(
             "MILP output row is missing key(s) required by milp_ai_output: "
             + ", ".join(missing)
         )
+
+    failed = response["report_mode"] == "INVALID_INPUT"
 
     row: dict[str, Any] = {
         "milp_output_id": milp_row["id"],
         "scenario_id": milp_row["scenario_db_id"],
         "origin_run_id": milp_row.get("origin_run_id"),
-        "status": (
-            "failed" if response["report_mode"] == "INVALID_INPUT" else "completed"
-        ),
+        "status": "failed" if failed else "completed",
         "ai_contract_version": response["contract_version"],
-        "milp_output_hash": _sha256_json(milp_row),
+        # MILP publishes its own digest; both tables are indexed on their
+        # hashes so an AI row can be matched back to the output it analysed.
+        # Fall back to our own only when the column is null.
+        "milp_output_hash": milp_row.get("output_hash") or _sha256_json(milp_row),
         "ai_output_hash": _sha256_json(response),
         "ai_input_json": dict(milp_row),
         "raw_ai_json": dict(response),
@@ -143,6 +151,15 @@ def save_ai_output(
         "warnings": list(response["warnings"]),
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    if started_at is not None:
+        row["started_at"] = started_at.isoformat()
+
+    # A failure belongs in the dedicated columns, not only in the warnings
+    # payload, so it can be queried without unpacking jsonb.
+    if failed:
+        row["error_code"] = response["report_mode"]
+        row["error_message"] = next(iter(response["warnings"]), None)
 
     # Only a model-backed run can describe which model produced the report.
     if model_config is not None:
@@ -276,9 +293,10 @@ def run_from_file(
     except SupabaseError as exc:
         return _invalid_input_response(None, f"Supabase read failed: {exc}")
 
-    started_at = time.perf_counter()
+    started_at = datetime.now(timezone.utc)
+    started_counter = time.perf_counter()
     response = run_pipeline(results, model_config=model_config, comparison=comparison)
-    latency_ms = (time.perf_counter() - started_at) * 1000
+    latency_ms = (time.perf_counter() - started_counter) * 1000
 
     if push:
         try:
@@ -287,6 +305,7 @@ def run_from_file(
                 results,
                 model_config=model_config,
                 latency_ms=latency_ms,
+                started_at=started_at,
             )
         except SupabaseError as exc:
             response["warnings"].append(f"{PUSH_FAILURE_PREFIX}{exc}")
