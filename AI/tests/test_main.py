@@ -171,6 +171,14 @@ class _FakeQuery:
         self._calls.append(("order", column, desc))
         return self
 
+    def eq(self, column: str, value: object) -> _FakeQuery:
+        self._calls.append(("eq", column, value))
+        self._rows = [
+            row for row in self._rows
+            if isinstance(row, dict) and row.get(column) == value
+        ]
+        return self
+
     def limit(self, count: int) -> _FakeQuery:
         self._calls.append(("limit", count))
         return self
@@ -234,36 +242,36 @@ def test_load_milp_output_reads_the_latest_run(
     assert ("limit", 1) in calls
 
 
-def test_run_from_file_runs_the_pipeline_on_the_supabase_row(
+def test_run_from_source_runs_the_pipeline_on_the_supabase_row(
     valid_results: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _install_fake_supabase(monkeypatch, valid_results)
 
-    response = main.run_from_file()
+    response = main.run_from_source()
 
     assert response["scenario_id"] == "scenario_2026_07_17_001"
     assert response["solver_status"] == "OPTIMAL"
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
 
 
-def test_run_from_file_rejects_a_row_that_is_not_results_json(
+def test_run_from_source_rejects_a_row_that_is_not_results_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_fake_supabase(monkeypatch, {"origin_run_id": 7, "scenario_id": "db-row"})
 
-    response = main.run_from_file()
+    response = main.run_from_source()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] == "db-row"
     assert any("Missing required fields" in warning for warning in response["warnings"])
 
 
-def test_run_from_file_handles_an_empty_table(
+def test_run_from_source_handles_an_empty_table(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_fake_supabase(monkeypatch, None)
 
-    response = main.run_from_file()
+    response = main.run_from_source()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] is None
@@ -332,12 +340,12 @@ def test_save_ai_output_records_the_model_only_when_one_ran(
     assert with_model["prompt_version"] == PROMPT_VERSION
 
 
-def test_run_from_file_pushes_the_response_when_requested(
+def test_run_from_source_pushes_the_response_when_requested(
     milp_row: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, milp_row)
 
-    response = main.run_from_file(push=True)
+    response = main.run_from_source(push=True)
 
     inserts = [call for call in calls if call[0] == "insert"]
     assert len(inserts) == 1
@@ -351,12 +359,12 @@ def test_run_from_file_pushes_the_response_when_requested(
     assert row["latency_ms"] >= 0
 
 
-def test_run_from_file_does_not_push_by_default(
+def test_run_from_source_does_not_push_by_default(
     milp_row: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, milp_row)
 
-    main.run_from_file()
+    main.run_from_source()
 
     assert [call for call in calls if call[0] == "insert"] == []
     assert ("table", "milp_ai_output") not in calls
@@ -369,7 +377,7 @@ def test_push_records_an_invalid_input_response_as_failed(
         monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
     )
 
-    response = main.run_from_file(push=True)
+    response = main.run_from_source(push=True)
 
     row = [call for call in calls if call[0] == "insert"][0][1]
     assert response["report_mode"] == "INVALID_INPUT"
@@ -400,7 +408,7 @@ def test_unreachable_database_becomes_invalid_input(
 ) -> None:
     _install_fake_supabase(monkeypatch, None, fail_on="milp_model_output")
 
-    response = main.run_from_file()
+    response = main.run_from_source()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["solver_status"] is None
@@ -412,7 +420,7 @@ def test_failed_push_keeps_the_response_and_warns(
 ) -> None:
     _install_fake_supabase(monkeypatch, milp_row, fail_on="milp_ai_output")
 
-    response = main.run_from_file(push=True)
+    response = main.run_from_source(push=True)
 
     # The analysis still succeeded; only the write failed.
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
@@ -428,7 +436,7 @@ def test_a_successful_push_adds_no_failure_warning(
 ) -> None:
     _install_fake_supabase(monkeypatch, milp_row)
 
-    response = main.run_from_file(push=True)
+    response = main.run_from_source(push=True)
 
     assert not any(
         warning.startswith(main.PUSH_FAILURE_PREFIX)
@@ -470,7 +478,7 @@ def test_a_failed_analysis_fills_the_error_columns(
         monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
     )
 
-    response = main.run_from_file(push=True)
+    response = main.run_from_source(push=True)
 
     row = [call for call in calls if call[0] == "insert"][0][1]
     assert response["report_mode"] == "INVALID_INPUT"
@@ -484,7 +492,7 @@ def test_a_successful_analysis_leaves_the_error_columns_unset(
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, milp_row)
 
-    main.run_from_file(push=True)
+    main.run_from_source(push=True)
 
     row = [call for call in calls if call[0] == "insert"][0][1]
     assert row["status"] == "completed"
@@ -497,7 +505,7 @@ def test_push_records_when_the_run_started(
 ) -> None:
     calls = _install_fake_supabase(monkeypatch, milp_row)
 
-    main.run_from_file(push=True)
+    main.run_from_source(push=True)
 
     row = [call for call in calls if call[0] == "insert"][0][1]
     assert row["started_at"] <= row["completed_at"]
@@ -513,3 +521,82 @@ def test_a_row_without_scenario_db_id_is_a_supabase_error(
 
     with pytest.raises(main.SupabaseError, match="scenario_db_id"):
         main.save_ai_output(response, {"id": "row-id", "scenario_db_id": None})
+
+
+def test_a_file_path_bypasses_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_supabase(monkeypatch, None)
+
+    response = main.run_from_source(FIXTURE_PATH)
+
+    assert response["scenario_id"] == "scenario_2026_07_17_001"
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert calls == []  # the database was never touched
+
+
+def test_an_unreadable_file_returns_invalid_input(tmp_path: Path) -> None:
+    missing = tmp_path / "nope.json"
+
+    response = main.run_from_source(missing)
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert any("file could not be read" in warning for warning in response["warnings"])
+
+
+def test_malformed_json_returns_invalid_input(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.json"
+    broken.write_text("{ not json", encoding="utf-8")
+
+    response = main.run_from_source(broken)
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert any("file could not be read" in warning for warning in response["warnings"])
+
+
+def test_run_id_filters_on_origin_run_id(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.load_milp_output(run_id=7)
+
+    assert ("eq", "origin_run_id", 7) in calls
+
+
+def test_scenario_db_id_filters_on_that_column(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.load_milp_output(scenario_db_id=42)
+
+    assert ("eq", "scenario_db_id", 42) in calls
+
+
+def test_scenario_filters_on_the_display_string(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.load_milp_output(scenario="scenario_2026_07_17_001")
+
+    assert ("eq", "scenario_id", "scenario_2026_07_17_001") in calls
+
+
+def test_no_selector_keeps_the_newest_row_ordering(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _install_fake_supabase(monkeypatch, milp_row)
+
+    main.load_milp_output()
+
+    assert ("order", "created_at", True) in calls
+    assert not [call for call in calls if call[0] == "eq"]
+
+
+def test_an_unmatched_selector_names_what_was_asked_for(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_supabase(monkeypatch, milp_row)
+
+    with pytest.raises(main.SupabaseError, match="origin_run_id=999"):
+        main.load_milp_output(run_id=999)

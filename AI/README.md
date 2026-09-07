@@ -13,12 +13,12 @@ Do not create new top-level folders without raising it in the Analysis & AI team
 ## Integrated Pipeline Entry Point
 
 `AI/main.py` is the Analysis & AI team's internal pipeline entry point. It reads
-the latest MILP result from Supabase and can write the App response back; the
-project-wide backend entry point remains separate.
+a MILP result from a file or from Supabase, and can write the App response back;
+the project-wide backend entry point remains separate.
 
 Pipeline order:
 
-1. Read the newest `milp_model_output` row from Supabase.
+1. Read a Results JSON file, or one `milp_model_output` row from Supabase.
 2. Validate raw MILP Results JSON.
 3. Adapt the result into the internal format.
 4. Calculate KPIs and the KPI gate.
@@ -45,10 +45,16 @@ pip install -r AI/requirements.txt
 
 ### Commands
 
-The entry point takes no input path; it always reads the newest MILP row.
+Input is either a Results JSON file or one Supabase row. With no argument the
+newest row by `created_at` is used; the selectors name the `milp_model_output`
+column they filter.
 
 ```text
+python AI/main.py <results.json>
 python AI/main.py
+python AI/main.py --run-id 6
+python AI/main.py --scenario-db-id 8
+python AI/main.py --scenario SCN-008
 python AI/main.py --output <response.json>
 python AI/main.py --model-config AI/explanations/model_config.example.json
 python AI/main.py --push
@@ -56,7 +62,8 @@ python -m pytest AI/tests/test_main.py -q
 ```
 
 `--push` inserts the response into `milp_ai_output`, keyed to the
-`milp_model_output` row it was computed from. Without it, nothing is written.
+`milp_model_output` row it was computed from. It needs a Supabase row, so it
+cannot be combined with a file input. Without it, nothing is written.
 
 ## Sprint 1 Required Files
 

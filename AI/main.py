@@ -59,21 +59,43 @@ def _client():
     return create_client(supabase_url = DB_URL, supabase_key = DB_KEY)
 
 
-def load_milp_output() -> Dict:
-    """Load a Results JSON file from the MILP output.
-        This must be loaded from the Supabase
+def load_results(path: str | Path) -> Any:
+    """Load a Results JSON file from disk."""
+    path = Path(path)
+
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def load_milp_output(
+    run_id: int | None = None,
+    scenario_db_id: int | None = None,
+    scenario: str | None = None,
+) -> Dict:
+    """Load one row from the MILP output table in Supabase.
+
+    With no selector the newest row by ``created_at`` is returned. Each
+    selector names the real column it filters: ``origin_run_id``,
+    ``scenario_db_id`` (both nullable integers) and ``scenario_id`` (the
+    varchar display string, for example "SCN-008").
 
     Raises:
-        SupabaseError: the table could not be reached, or holds no rows.
+        SupabaseError: the table could not be reached, or no row matched.
     """
-    # Return the current final row in the milp_model_output table.
-    # limit(1) rather than single(): single() raises on an empty table, which
+    # limit(1) rather than single(): single() raises on an empty result, which
     # is a normal state to report rather than a transport failure.
     try:
+        query = _client().table("milp_model_output").select("*")
+
+        if run_id is not None:
+            query = query.eq("origin_run_id", run_id)
+        if scenario_db_id is not None:
+            query = query.eq("scenario_db_id", scenario_db_id)
+        if scenario is not None:
+            query = query.eq("scenario_id", scenario)
+
         rows = (
-            _client()
-            .table("milp_model_output")
-            .select("*")
+            query
             .order("created_at", desc = True)
             .limit(1)
             .execute()
@@ -87,7 +109,21 @@ def load_milp_output() -> Dict:
         raise SupabaseError(f"Unexpected Supabase failure: {exc}") from exc
 
     if not rows:
-        raise SupabaseError("milp_model_output contains no rows to analyse.")
+        selectors = {
+            "origin_run_id": run_id,
+            "scenario_db_id": scenario_db_id,
+            "scenario_id": scenario,
+        }
+        asked = ", ".join(
+            f"{name}={value!r}"
+            for name, value in selectors.items()
+            if value is not None
+        )
+        raise SupabaseError(
+            f"No milp_model_output row matched {asked}."
+            if asked
+            else "milp_model_output contains no rows to analyse."
+        )
 
     # Returns a json dictionary
     return rows[0]
@@ -276,22 +312,36 @@ def run_pipeline(
     )
 
 
-def run_from_file(
+def run_from_source(
+    path: str | Path | None = None,
     model_config: ModelConfig | None = None,
     comparison: Mapping[str, Any] | None = None,
     push: bool = False,
+    run_id: int | None = None,
+    scenario_db_id: int | None = None,
+    scenario: str | None = None,
 ) -> dict[str, Any]:
-    """Load the latest MILP output from Supabase and run the pipeline.
+    """Run the pipeline over one MILP result, from a file or from Supabase.
 
-    A database that cannot be read is reported through the App response
-    contract as unprocessable input. A failed write is recorded as a warning
-    on an otherwise complete response, so a computed result is never lost
-    just because it could not be stored.
+    ``path`` reads a Results JSON file; otherwise the row is selected from
+    Supabase. A database that cannot be read is reported through the App
+    response contract as unprocessable input. A failed write is recorded as a
+    warning on an otherwise complete response, so a computed result is never
+    lost just because it could not be stored.
     """
     try:
-        results = load_milp_output()
+        if path is not None:
+            results = load_results(path)
+        else:
+            results = load_milp_output(
+                run_id=run_id,
+                scenario_db_id=scenario_db_id,
+                scenario=scenario,
+            )
     except SupabaseError as exc:
         return _invalid_input_response(None, f"Supabase read failed: {exc}")
+    except (OSError, json.JSONDecodeError) as exc:
+        return _invalid_input_response(None, f"Results file could not be read: {exc}")
 
     started_at = datetime.now(timezone.utc)
     started_counter = time.perf_counter()
@@ -318,6 +368,30 @@ def main() -> None:
         description="Run the AquaBlend Analysis & AI pipeline."
     )
 
+    # Input is either a file or one Supabase row; the selectors below name the
+    # milp_model_output columns they filter, so they cannot be confused with
+    # the response's own scenario_id, which is a display string.
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "results_json",
+        nargs="?",
+        help="Path to a Results JSON file. Omit to read from Supabase.",
+    )
+    source.add_argument(
+        "--run-id",
+        type=int,
+        help="Select the newest row with this origin_run_id.",
+    )
+    source.add_argument(
+        "--scenario-db-id",
+        type=int,
+        help="Select the newest row with this scenario_db_id.",
+    )
+    source.add_argument(
+        "--scenario",
+        help="Select the newest row with this scenario_id, e.g. SCN-008.",
+    )
+
     parser.add_argument(
         "--model-config",
         help="Path to an OpenAI-compatible model configuration JSON file.",
@@ -334,8 +408,20 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # A file fixture carries no id or scenario_db_id, so it can never key a
+    # milp_ai_output row. Reject the combination here rather than at the insert.
+    if args.push and args.results_json:
+        parser.error("--push needs a Supabase row; it cannot be used with a file.")
+
     model_config = load_model_config(args.model_config) if args.model_config else None
-    response = run_from_file(model_config=model_config, push=args.push)
+    response = run_from_source(
+        args.results_json,
+        model_config=model_config,
+        push=args.push,
+        run_id=args.run_id,
+        scenario_db_id=args.scenario_db_id,
+        scenario=args.scenario,
+    )
 
     if args.output:
         write_response_json(response, args.output)
