@@ -171,6 +171,42 @@ def test_plant_entry_must_be_object():
         validate_results(results)
 
 
+def test_plant_entry_requires_plant_id():
+    results = load_fixture()
+
+    del results["plants"][0]["plant_id"]
+
+    with pytest.raises(ValidationError):
+        validate_results(results)
+
+
+def test_plant_id_must_not_be_empty():
+    results = load_fixture()
+
+    results["plants"][0]["plant_id"] = "  "
+
+    with pytest.raises(ValidationError):
+        validate_results(results)
+
+
+def test_demand_zone_entry_requires_zone_id():
+    results = load_fixture()
+
+    del results["demand_zones"][0]["zone_id"]
+
+    with pytest.raises(ValidationError):
+        validate_results(results)
+
+
+def test_zone_id_must_not_be_empty():
+    results = load_fixture()
+
+    results["demand_zones"][0]["zone_id"] = "  "
+
+    with pytest.raises(ValidationError):
+        validate_results(results)
+
+
 def test_flows_must_be_object():
     results = load_fixture()
 

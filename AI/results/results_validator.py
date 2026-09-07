@@ -186,4 +186,48 @@ def validate_results(results: dict[str, Any]) -> bool:
                 f"'plants[{index}]' must be an object."
             )
 
+        if "plant_id" not in plant:
+            raise ValidationError(
+                f"'plants[{index}]' is missing 'plant_id'."
+            )
+
+        if not isinstance(plant["plant_id"], str):
+            raise ValidationError(
+                f"'plants[{index}].plant_id' "
+                "must be a string."
+            )
+
+        if not plant["plant_id"].strip():
+            raise ValidationError(
+                f"'plants[{index}].plant_id' "
+                "must not be empty."
+            )
+
+    # Validate demand zones structure (flat list in v1)
+    demand_zones = results["demand_zones"]
+
+    for index, demand_zone in enumerate(demand_zones):
+
+        if not isinstance(demand_zone, dict):
+            raise ValidationError(
+                f"'demand_zones[{index}]' must be an object."
+            )
+
+        if "zone_id" not in demand_zone:
+            raise ValidationError(
+                f"'demand_zones[{index}]' is missing 'zone_id'."
+            )
+
+        if not isinstance(demand_zone["zone_id"], str):
+            raise ValidationError(
+                f"'demand_zones[{index}].zone_id' "
+                "must be a string."
+            )
+
+        if not demand_zone["zone_id"].strip():
+            raise ValidationError(
+                f"'demand_zones[{index}].zone_id' "
+                "must not be empty."
+            )
+
     return True
