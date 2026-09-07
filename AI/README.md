@@ -40,7 +40,7 @@ fill in `DB_KEY`:
 
 ```text
 cp AI/.env.example AI/.env
-pip install supabase python-dotenv
+pip install -r AI/requirements.txt
 ```
 
 ### Commands
