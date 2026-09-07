@@ -9,6 +9,8 @@ import sys
 import time
 from typing import Any, Mapping, Dict
 
+import httpx
+from postgrest.exceptions import APIError
 from supabase import create_client
 
 
@@ -43,6 +45,15 @@ from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
 from env import DB_URL, DB_KEY
 
+# Prefix used when a push fails, so main() can set a non-zero exit status
+# without re-inspecting the exception.
+PUSH_FAILURE_PREFIX = "Supabase write failed: "
+
+
+class SupabaseError(RuntimeError):
+    """A Supabase read or write could not be completed."""
+
+
 def _client():
     """Create a Supabase client for the AquaBlend project."""
     return create_client(supabase_url = DB_URL, supabase_key = DB_KEY)
@@ -51,20 +62,35 @@ def _client():
 def load_milp_output() -> Dict:
     """Load a Results JSON file from the MILP output.
         This must be loaded from the Supabase
+
+    Raises:
+        SupabaseError: the table could not be reached, or holds no rows.
     """
-    # Return the current final row in the milp_model_output table
-    output = (
-        _client()
-        .table("milp_model_output")
-        .select("*")
-        .order("created_at", desc = True)
-        .limit(1)
-        .single()
-        .execute()
-        .data
-    )
+    # Return the current final row in the milp_model_output table.
+    # limit(1) rather than single(): single() raises on an empty table, which
+    # is a normal state to report rather than a transport failure.
+    try:
+        rows = (
+            _client()
+            .table("milp_model_output")
+            .select("*")
+            .order("created_at", desc = True)
+            .limit(1)
+            .execute()
+            .data
+        )
+    except APIError as exc:
+        raise SupabaseError(f"milp_model_output query rejected: {exc}") from exc
+    except httpx.HTTPError as exc:
+        raise SupabaseError(f"Could not reach Supabase: {exc}") from exc
+    except Exception as exc:  # Safe boundary around the client runtime.
+        raise SupabaseError(f"Unexpected Supabase failure: {exc}") from exc
+
+    if not rows:
+        raise SupabaseError("milp_model_output contains no rows to analyse.")
+
     # Returns a json dictionary
-    return output
+    return rows[0]
 
 
 def _sha256_json(payload: Any) -> str:
@@ -125,7 +151,14 @@ def save_ai_output(
     if latency_ms is not None:
         row["latency_ms"] = latency_ms
 
-    return _client().table("milp_ai_output").insert(row).execute().data
+    try:
+        return _client().table("milp_ai_output").insert(row).execute().data
+    except APIError as exc:
+        raise SupabaseError(f"milp_ai_output insert rejected: {exc}") from exc
+    except httpx.HTTPError as exc:
+        raise SupabaseError(f"Could not reach Supabase: {exc}") from exc
+    except Exception as exc:  # Safe boundary around the client runtime.
+        raise SupabaseError(f"Unexpected Supabase failure: {exc}") from exc
 
 
 def _invalid_input_response(results: Dict, reason: str) -> dict[str, Any]:
@@ -231,20 +264,32 @@ def run_from_file(
     comparison: Mapping[str, Any] | None = None,
     push: bool = False,
 ) -> dict[str, Any]:
-    """Load the latest MILP output from Supabase and run the pipeline."""
-    results = load_milp_output()
+    """Load the latest MILP output from Supabase and run the pipeline.
+
+    A database that cannot be read is reported through the App response
+    contract as unprocessable input. A failed write is recorded as a warning
+    on an otherwise complete response, so a computed result is never lost
+    just because it could not be stored.
+    """
+    try:
+        results = load_milp_output()
+    except SupabaseError as exc:
+        return _invalid_input_response(None, f"Supabase read failed: {exc}")
 
     started_at = time.perf_counter()
     response = run_pipeline(results, model_config=model_config, comparison=comparison)
     latency_ms = (time.perf_counter() - started_at) * 1000
 
     if push:
-        save_ai_output(
-            response,
-            results,
-            model_config=model_config,
-            latency_ms=latency_ms,
-        )
+        try:
+            save_ai_output(
+                response,
+                results,
+                model_config=model_config,
+                latency_ms=latency_ms,
+            )
+        except SupabaseError as exc:
+            response["warnings"].append(f"{PUSH_FAILURE_PREFIX}{exc}")
 
     return response
 
@@ -277,6 +322,17 @@ def main() -> None:
         write_response_json(response, args.output)
     else:
         print(json.dumps(response, indent=2))
+
+    # The response is emitted either way; a failed write still exits non-zero
+    # so a caller is never told the row was stored when it was not.
+    push_failures = [
+        warning
+        for warning in response["warnings"]
+        if warning.startswith(PUSH_FAILURE_PREFIX)
+    ]
+    if push_failures:
+        print(push_failures[0], file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

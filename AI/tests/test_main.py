@@ -16,6 +16,8 @@ if str(AI_DIR) not in sys.path:
 
 import main
 from model_runner import ModelConfig, rewrite_report
+from postgrest.exceptions import APIError
+
 from prompts import PROMPT_VERSION
 
 
@@ -157,8 +159,8 @@ class _FakeExecuteResult:
 
 
 class _FakeQuery:
-    def __init__(self, row: object, calls: list) -> None:
-        self._row = row
+    def __init__(self, rows: object, calls: list) -> None:
+        self._rows = rows
         self._calls = calls
 
     def select(self, columns: str) -> _FakeQuery:
@@ -173,36 +175,46 @@ class _FakeQuery:
         self._calls.append(("limit", count))
         return self
 
-    def single(self) -> _FakeQuery:
-        self._calls.append(("single",))
-        return self
-
     def insert(self, row: dict) -> _FakeQuery:
         self._calls.append(("insert", row))
-        self._row = [row]
+        self._rows = [row]
         return self
 
     def execute(self) -> _FakeExecuteResult:
         self._calls.append(("execute",))
-        return _FakeExecuteResult(self._row)
+        return _FakeExecuteResult(self._rows)
 
 
 class _FakeSupabaseClient:
-    def __init__(self, row: object, calls: list) -> None:
-        self._row = row
+    def __init__(self, rows: object, calls: list, fail_on: str | None) -> None:
+        self._rows = rows
         self._calls = calls
+        self._fail_on = fail_on
 
     def table(self, name: str) -> _FakeQuery:
         self._calls.append(("table", name))
-        return _FakeQuery(self._row, self._calls)
+        if self._fail_on == name:
+            raise APIError({"message": f"{name} is unavailable", "code": "08006"})
+        return _FakeQuery(self._rows, self._calls)
 
 
-def _install_fake_supabase(monkeypatch: pytest.MonkeyPatch, row: object) -> list:
+def _install_fake_supabase(
+    monkeypatch: pytest.MonkeyPatch,
+    row: object,
+    fail_on: str | None = None,
+) -> list:
+    """Patch main.create_client with a fake.
+
+    ``row`` is the single milp_model_output row a read returns; None means an
+    empty table. ``fail_on`` names a table whose access raises, standing in for
+    a connection or permission failure.
+    """
     calls: list = []
+    rows = [] if row is None else [row]
 
     def fake_create_client(**kwargs: object) -> _FakeSupabaseClient:
         calls.append(("create_client", kwargs))
-        return _FakeSupabaseClient(row, calls)
+        return _FakeSupabaseClient(rows, calls, fail_on)
 
     monkeypatch.setattr(main, "create_client", fake_create_client)
     return calls
@@ -220,7 +232,6 @@ def test_load_milp_output_reads_the_latest_run(
     assert ("select", "*") in calls
     assert ("order", "created_at", True) in calls
     assert ("limit", 1) in calls
-    assert ("single",) in calls
 
 
 def test_run_from_file_runs_the_pipeline_on_the_supabase_row(
@@ -256,7 +267,7 @@ def test_run_from_file_handles_an_empty_table(
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] is None
-    assert any("Results must be a JSON object" in warning for warning in response["warnings"])
+    assert any("contains no rows to analyse" in warning for warning in response["warnings"])
 
 
 @pytest.fixture
@@ -364,3 +375,62 @@ def test_push_records_an_invalid_input_response_as_failed(
     assert response["report_mode"] == "INVALID_INPUT"
     assert row["status"] == "failed"
     assert row["scenario_id"] == 42
+
+
+def test_load_milp_output_wraps_a_database_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_supabase(monkeypatch, None, fail_on="milp_model_output")
+
+    with pytest.raises(main.SupabaseError, match="milp_model_output"):
+        main.load_milp_output()
+
+
+def test_load_milp_output_reports_an_empty_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_supabase(monkeypatch, None)
+
+    with pytest.raises(main.SupabaseError, match="no rows to analyse"):
+        main.load_milp_output()
+
+
+def test_unreachable_database_becomes_invalid_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_supabase(monkeypatch, None, fail_on="milp_model_output")
+
+    response = main.run_from_file()
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert response["solver_status"] is None
+    assert any("Supabase read failed" in warning for warning in response["warnings"])
+
+
+def test_failed_push_keeps_the_response_and_warns(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_supabase(monkeypatch, milp_row, fail_on="milp_ai_output")
+
+    response = main.run_from_file(push=True)
+
+    # The analysis still succeeded; only the write failed.
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert response["scenario_id"] == "scenario_2026_07_17_001"
+    assert any(
+        warning.startswith(main.PUSH_FAILURE_PREFIX)
+        for warning in response["warnings"]
+    )
+
+
+def test_a_successful_push_adds_no_failure_warning(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_supabase(monkeypatch, milp_row)
+
+    response = main.run_from_file(push=True)
+
+    assert not any(
+        warning.startswith(main.PUSH_FAILURE_PREFIX)
+        for warning in response["warnings"]
+    )
