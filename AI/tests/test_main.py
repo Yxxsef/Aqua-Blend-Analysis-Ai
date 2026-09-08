@@ -1,4 +1,4 @@
-"""Task 61 integration tests for the Analysis & AI pipeline entry point."""
+"""Task 61 and Task 64 integration tests for the Analysis & AI pipeline."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ if str(AI_DIR) not in sys.path:
     sys.path.insert(0, str(AI_DIR))
 
 import main
+from llm_validator import ValidationResult, ValidatorInputError, Warning_
 from model_runner import ModelConfig, rewrite_report
 
 
@@ -94,6 +95,9 @@ def test_unbounded_result_returns_status_only_response(valid_results: dict) -> N
 def test_accepted_llm_rewrite_is_displayed(
     valid_results: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    original_results = copy.deepcopy(valid_results)
+    deterministic_response = main.run_pipeline(valid_results)
+
     def fake_request(_url, _headers, payload, _timeout_seconds):
         prompt = payload["messages"][1]["content"]
         report = prompt.split("<deterministic_report>\n", 1)[1].rsplit(
@@ -116,11 +120,214 @@ def test_accepted_llm_rewrite_is_displayed(
     )
 
     assert response["report_mode"] == "LLM_VALIDATED"
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
+    assert valid_results == original_results
+
+
+def test_model_failure_uses_exact_deterministic_fallback(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_results = copy.deepcopy(valid_results)
+    deterministic_response = main.run_pipeline(valid_results)
+
+    def failing_request(*_args, **_kwargs):
+        raise RuntimeError("connection refused")
+
+    def rewrite_with_failure(deterministic_report, config):
+        return rewrite_report(
+            deterministic_report,
+            config,
+            request_fn=failing_request,
+        )
+
+    monkeypatch.setattr(main, "rewrite_report", rewrite_with_failure)
+
+    response = main.run_pipeline(
+        valid_results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
+    assert any("MODEL_ERROR" in warning for warning in response["warnings"])
+    assert valid_results == original_results
+
+
+def test_model_timeout_uses_deterministic_fallback(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deterministic_response = main.run_pipeline(valid_results)
+
+    def timeout_request(*_args, **_kwargs):
+        raise TimeoutError("request timed out")
+
+    def rewrite_with_timeout(deterministic_report, config):
+        return rewrite_report(
+            deterministic_report,
+            config,
+            request_fn=timeout_request,
+        )
+
+    monkeypatch.setattr(main, "rewrite_report", rewrite_with_timeout)
+
+    response = main.run_pipeline(
+        valid_results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
+    assert "request timed out" not in response["display_explanation"]
+    assert any("TIMEOUT" in warning for warning in response["warnings"])
+
+
+@pytest.mark.parametrize(
+    "model_response, expected_failure",
+    [
+        ({"choices": [{"message": {"content": ""}}]}, "EMPTY_OUTPUT"),
+        ({"choices": [{"message": {}}]}, "INVALID_RESPONSE"),
+    ],
+)
+def test_empty_or_malformed_model_output_uses_fallback(
+    valid_results: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    model_response: dict,
+    expected_failure: str,
+) -> None:
+    deterministic_response = main.run_pipeline(valid_results)
+
+    def fake_request(*_args, **_kwargs):
+        return model_response
+
+    def rewrite_with_fake_response(deterministic_report, config):
+        return rewrite_report(
+            deterministic_report,
+            config,
+            request_fn=fake_request,
+        )
+
+    monkeypatch.setattr(main, "rewrite_report", rewrite_with_fake_response)
+
+    response = main.run_pipeline(
+        valid_results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
+    assert any(expected_failure in warning for warning in response["warnings"])
+
+
+def test_validator_exception_uses_deterministic_fallback(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deterministic_response = main.run_pipeline(valid_results)
+
+    def fake_request(_url, _headers, payload, _timeout_seconds):
+        prompt = payload["messages"][1]["content"]
+        report = prompt.split("<deterministic_report>\n", 1)[1].rsplit(
+            "\n</deterministic_report>", 1
+        )[0]
+        return {"choices": [{"message": {"content": report}}]}
+
+    def rewrite_with_fake_request(deterministic_report, config):
+        return rewrite_report(
+            deterministic_report,
+            config,
+            request_fn=fake_request,
+        )
+
+    def validator_failure(*_args, **_kwargs):
+        raise ValidatorInputError("candidate text was not a string")
+
+    monkeypatch.setattr(main, "rewrite_report", rewrite_with_fake_request)
+    monkeypatch.setattr(main, "validate_llm_output", validator_failure)
+
+    response = main.run_pipeline(
+        valid_results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
+    assert any("could not be validated" in warning for warning in response["warnings"])
+
+
+def test_validator_warnings_are_preserved_when_rewrite_passes(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_request(_url, _headers, payload, _timeout_seconds):
+        prompt = payload["messages"][1]["content"]
+        report = prompt.split("<deterministic_report>\n", 1)[1].rsplit(
+            "\n</deterministic_report>", 1
+        )[0]
+        return {"choices": [{"message": {"content": report}}]}
+
+    def rewrite_with_fake_request(deterministic_report, config):
+        return rewrite_report(
+            deterministic_report,
+            config,
+            request_fn=fake_request,
+        )
+
+    monkeypatch.setattr(main, "rewrite_report", rewrite_with_fake_request)
+    monkeypatch.setattr(
+        main,
+        "validate_llm_output",
+        lambda *_args, **_kwargs: ValidationResult(
+            critical_result="PASS",
+            warnings=[Warning_("LENGTH_ANOMALY", "rewrite is shorter")],
+        ),
+    )
+
+    response = main.run_pipeline(
+        valid_results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "LLM_VALIDATED"
+    assert "LENGTH_ANOMALY" in response["warnings"][0]
+
+
+def test_no_model_configuration_does_not_call_runner(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_runner(*_args, **_kwargs):
+        raise AssertionError("model runner must not be called")
+
+    monkeypatch.setattr(main, "rewrite_report", unexpected_runner)
+
+    response = main.run_pipeline(valid_results)
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+
+
+def test_non_optimal_result_does_not_call_runner(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results = copy.deepcopy(valid_results)
+    results["status"] = "UNBOUNDED"
+
+    def unexpected_runner(*_args, **_kwargs):
+        raise AssertionError("model runner must not be called")
+
+    monkeypatch.setattr(main, "rewrite_report", unexpected_runner)
+
+    response = main.run_pipeline(
+        results,
+        model_config=ModelConfig(model_id="test-model"),
+    )
+
+    assert response["report_mode"] == "STATUS_ONLY"
+
 
 
 def test_rejected_llm_rewrite_uses_deterministic_fallback(
     valid_results: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    original_results = copy.deepcopy(valid_results)
+    deterministic_response = main.run_pipeline(valid_results)
+
     def fake_request(*_args, **_kwargs):
         return {
             "choices": [
@@ -143,5 +350,6 @@ def test_rejected_llm_rewrite_uses_deterministic_fallback(
     )
 
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
-    assert PROTOTYPE_DISCLAIMER in response["display_explanation"]
+    assert response["display_explanation"] == deterministic_response["display_explanation"]
     assert any("LLM rewrite was rejected by validation" in warning for warning in response["warnings"])
+    assert valid_results == original_results

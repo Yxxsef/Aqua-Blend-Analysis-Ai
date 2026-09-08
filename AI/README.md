@@ -38,6 +38,24 @@ python AI/main.py <results.json> --model-config AI/explanations/model_config.exa
 python -m pytest AI/tests/test_main.py -q
 ```
 
+## Task 64: LLM validation and automatic fallback
+
+The pipeline always generates the deterministic explanation first. Any LLM
+rewrite is untrusted until `validate_llm_output()` accepts it. `LLM_VALIDATED`
+means the rewrite passed critical validation; `TEMPLATE_FALLBACK` means the
+deterministic explanation is being used.
+
+Model errors, timeouts, empty or malformed output, validator errors, and
+critical validation failures all reject the rewrite and trigger deterministic
+fallback. Unvalidated LLM text is never shown. The integration tests use
+mocked model calls and do not require a live model.
+
+Run the focused pipeline tests with:
+
+```text
+python -m pytest AI/tests/test_main.py -v
+```
+
 ## Sprint 1 Required Files
 
 | Folder | Required files |
