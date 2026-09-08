@@ -10,6 +10,14 @@ import json
 from pathlib import Path
 
 CONTRACT = Path("contract_v1.json")
+
+# The frozen contract template, pinned to the commit it was reviewed at. It is
+# the MILP team's file, so it is not committed here — fetch it when needed.
+CONTRACT_URL = (
+    "https://raw.githubusercontent.com/ksuraev/Aqua-Blend-MILP-Team/"
+    "ef29b89c62ad46e88227482cb0dbd621bc69af88/MILP/json_contracts/"
+    "output_contract_v1.json"
+)
 OUT = Path("fixtures/milp_v1_solved_example.json")
 
 # Solved solution, taken from the Sprint 2 toy fixture.
@@ -42,6 +50,12 @@ def pass_all(block):
 
 
 def main():
+    if not CONTRACT.is_file():
+        raise SystemExit(
+            f"{CONTRACT} not found. Fetch the frozen contract first:\n\n"
+            f"    curl -sfL -o {CONTRACT} \\\n      {CONTRACT_URL}\n"
+        )
+
     doc = json.loads(CONTRACT.read_text())
 
     total_withdrawal = sum(WITHDRAWALS.values())
