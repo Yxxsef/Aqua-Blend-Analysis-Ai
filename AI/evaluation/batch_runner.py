@@ -33,6 +33,12 @@ from kpi_gate import evaluate  # noqa: E402
 
 MOCK = "mock"
 MILP = "milp"
+INGEST = "ingest"
+
+# Where the Optimisation team's real v1.0 output files are read from. The
+# harness ingests those files; it does not run the solver, because the v1.0
+# contract exposes no execution hooks. Confirmed with Yousef, 07/09/26.
+DEFAULT_INGEST_DIR = Path(__file__).resolve().parent / "milp_outputs"
 
 DEFAULT_FIXTURE = (
     AI_ROOT / "explanations" / "llm_reporting" / "fixtures" / "model_output_example.json"
@@ -56,6 +62,35 @@ def detect_schema(results: dict[str, Any]) -> str:
     return SCHEMA_TOY
 
 
+def find_output_file(scenario_id: str, ingest_dir: Path) -> Path:
+    """Find the real MILP output file for one scenario.
+
+    Prefers <scenario_id>.json. Falls back to reading each file's own
+    scenario.scenario_id, so a differently named file still matches rather
+    than being silently skipped.
+    """
+    directory = Path(ingest_dir)
+    if not directory.is_dir():
+        raise OptimiserError(f"Ingest directory not found: {directory}")
+
+    direct = directory / f"{scenario_id}.json"
+    if direct.is_file():
+        return direct
+
+    for candidate in sorted(directory.glob("*.json")):
+        try:
+            with candidate.open(encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("scenario", {}).get("scenario_id") == scenario_id:
+            return candidate
+
+    raise OptimiserError(
+        f"No MILP output found for scenario {scenario_id!r} in {directory}"
+    )
+
+
 class OptimiserError(Exception):
     """Raised when an optimiser result cannot be produced."""
 
@@ -64,12 +99,14 @@ def get_optimiser_result(
     scenario: dict[str, Any],
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Return a raw Results JSON for one scenario.
 
-    Mock mode reads a stored fixture so the pipeline runs before MILP v1
-    exists. MILP mode will call the solver. Both return the same shape, so
-    nothing downstream changes when v1 lands.
+    Ingest mode reads the real output file the Optimisation team produced for
+    this scenario. Mock mode reads a stored fixture and stays available as a
+    testing fallback. Both return whatever shape the file holds — the caller
+    detects the schema rather than assuming one.
     """
     if mode == MOCK:
         path = Path(fixture_path)
@@ -78,12 +115,25 @@ def get_optimiser_result(
         with path.open(encoding="utf-8") as handle:
             return json.load(handle)
 
+    if mode == INGEST:
+        scenario_id = scenario.get("scenario_id")
+        if not scenario_id:
+            raise OptimiserError("Cannot ingest: scenario has no scenario_id.")
+        path = find_output_file(scenario_id, ingest_dir)
+        with path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+        payload["_ingested_from"] = str(path)
+        return payload
+
     if mode == MILP:
         raise NotImplementedError(
-            "MILP v1 is not available yet. Use mode='mock' until it is wired up."
+            "The harness does not run the solver. v1.0 has no execution hooks, "
+            "so use mode='ingest' to read Optimisation's output files."
         )
 
-    raise OptimiserError(f"Unknown mode: {mode!r}. Use {MOCK!r} or {MILP!r}.")
+    raise OptimiserError(
+        f"Unknown mode: {mode!r}. Use {MOCK!r}, {INGEST!r} or {MILP!r}."
+    )
 
 
 def _gate_as_dict(gate: Any) -> dict[str, Any]:
@@ -165,6 +215,7 @@ def run_scenario(
     scenario_path: str | Path,
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Run one scenario through the optimiser, the baselines, and the gate.
 
@@ -179,7 +230,7 @@ def run_scenario(
 
     baseline_output = run_all_baselines(scenario)
 
-    raw_results = get_optimiser_result(scenario, mode, fixture_path)
+    raw_results = get_optimiser_result(scenario, mode, fixture_path, ingest_dir)
     schema = detect_schema(raw_results)
     unsupported: list[str] = []
 
@@ -229,6 +280,7 @@ def run_batch(
     path: str | Path,
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Run one scenario file, or every scenario in a folder.
 
@@ -248,7 +300,9 @@ def run_batch(
 
     for scenario_file in scenario_files:
         try:
-            results.append(run_scenario(scenario_file, mode, fixture_path))
+            results.append(
+                run_scenario(scenario_file, mode, fixture_path, ingest_dir)
+            )
         except Exception as error:
             failures.append(
                 {

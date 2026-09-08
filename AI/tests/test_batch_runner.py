@@ -15,6 +15,8 @@ sys.path.insert(0, str(REPO_ROOT / "AI" / "evaluation"))
 from batch_runner import (  # noqa: E402
     MOCK,
     MILP,
+    INGEST,
+    find_output_file,
     SCHEMA_TOY,
     SCHEMA_V1,
     V1_FIXTURE,
@@ -261,3 +263,76 @@ def test_scenario_context_names_what_it_cannot_supply():
     """Source bounds and costs live in Supabase — the gap must be stated, not implied."""
     result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
     assert result["scenario_context"]["unavailable"]
+
+
+# --- ingest mode -----------------------------------------------------------
+
+def _drop_output(directory, scenario_id, filename="milp_run_output.json"):
+    """Write the solved v1 fixture into directory, under the given scenario id."""
+    payload = json.loads(Path(V1_FIXTURE).read_text())
+    payload["scenario"]["scenario_id"] = scenario_id
+    target = Path(directory) / filename
+    target.write_text(json.dumps(payload, indent=2))
+    return target
+
+
+def test_ingest_reads_the_real_output_file(tmp_path):
+    _drop_output(tmp_path, "toy_model_normal_year")
+    result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
+
+    assert result["schema"] == SCHEMA_V1
+    assert result["raw_optimiser_result"]["solver"]["status"] == "OPTIMAL"
+
+
+def test_ingest_records_which_file_it_read(tmp_path):
+    """The manifest has to say where a number came from, not just what it was."""
+    dropped = _drop_output(tmp_path, "toy_model_normal_year")
+    result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
+
+    assert result["raw_optimiser_result"]["_ingested_from"] == str(dropped)
+
+
+def test_ingest_matches_on_scenario_id_not_filename(tmp_path):
+    """Optimisation names its own files, so the join is on scenario_id."""
+    _drop_output(tmp_path, "toy_model_normal_year", filename="whatever_they_called_it.json")
+    found = find_output_file("toy_model_normal_year", tmp_path)
+
+    assert found.name == "whatever_they_called_it.json"
+
+
+def test_ingest_prefers_a_file_named_after_the_scenario(tmp_path):
+    _drop_output(tmp_path, "toy_model_normal_year", filename="toy_model_normal_year.json")
+    _drop_output(tmp_path, "toy_model_normal_year", filename="another_run.json")
+    found = find_output_file("toy_model_normal_year", tmp_path)
+
+    assert found.name == "toy_model_normal_year.json"
+
+
+def test_ingest_says_which_scenario_had_no_output(tmp_path):
+    """A silent skip would look like a passing run with nothing in it."""
+    _drop_output(tmp_path, "some_other_scenario")
+
+    with pytest.raises(OptimiserError) as error:
+        find_output_file("toy_model_normal_year", tmp_path)
+    assert "toy_model_normal_year" in str(error.value)
+
+
+def test_ingest_reports_a_missing_directory(tmp_path):
+    with pytest.raises(OptimiserError):
+        find_output_file("toy_model_normal_year", tmp_path / "not_there")
+
+
+def test_ingest_ignores_unreadable_files(tmp_path):
+    """A stray or half-written file must not stop the real one being found."""
+    (tmp_path / "broken.json").write_text("{ not json")
+    _drop_output(tmp_path, "toy_model_normal_year")
+
+    found = find_output_file("toy_model_normal_year", tmp_path)
+    assert found.name == "milp_run_output.json"
+
+
+def test_solver_mode_points_at_ingest(tmp_path):
+    """The harness ingests output files; it does not run the solver."""
+    with pytest.raises(NotImplementedError) as error:
+        get_optimiser_result({}, MILP)
+    assert "ingest" in str(error.value)
