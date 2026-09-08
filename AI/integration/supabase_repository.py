@@ -29,7 +29,7 @@ for _module_dir in (_AI_DIR, _AI_DIR / "results" / "app_response"):
     if module_dir_text not in sys.path:
         sys.path.insert(0, module_dir_text)
 
-from env import DB_KEY, DB_URL, require_db_credentials  # noqa: E402
+from env import require_db_credentials  # noqa: E402
 
 
 class SupabaseError(RuntimeError):
@@ -43,10 +43,10 @@ def _client():
         SupabaseError: DB_URL/DB_KEY are not set (see AI/.env.example).
     """
     try:
-        require_db_credentials()
+        db_url, db_key = require_db_credentials()
     except RuntimeError as exc:
         raise SupabaseError(str(exc)) from exc
-    return create_client(supabase_url=DB_URL, supabase_key=DB_KEY)
+    return create_client(supabase_url=db_url, supabase_key=db_key)
 
 
 def _sha256_json(payload: Any) -> str:
@@ -296,10 +296,17 @@ def load_input_provenance(output_row: Mapping[str, Any]) -> tuple[Dict[str, Any]
     """Best-effort retrieval of the ``milp_model_input`` row linked through
     ``output_row["input_id"]``.
 
-    Never raises: provenance is optional context for confidence/analysis,
-    per the pipeline rule that missing optional data produces a warning and
-    a lowered confidence rather than a failed analysis. Returns
-    ``(None, warnings)`` when the link is missing or the row cannot be read.
+    KNOWN INTEGRATION BLOCKER: this only fetches the row. It does NOT map
+    its fields into ``data_flags`` or otherwise feed the confidence
+    calculation - no real ``milp_model_input`` row has been seen yet, so the
+    JSON shape of ``scenario_data_json``/``source_data_snapshot_json`` is
+    unconfirmed, and inventing a mapping now would risk fabricating a
+    confidence signal from a guess. The caller (``main.run_from_source``)
+    currently discards the returned dict and keeps only the warnings.
+
+    Never raises: a missing link or an unreadable row produces a warning,
+    per the pipeline rule that missing optional data must not fail the
+    analysis. Returns ``(None, warnings)`` in that case.
     """
     input_id = output_row.get("input_id")
     if not input_id:

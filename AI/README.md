@@ -25,13 +25,15 @@ Pipeline order:
      analysis payload when it is complete; otherwise a documented,
      best-effort normalization of the flat `milp_model_output` columns is
      used instead (see `supabase_repository.normalize_output_columns`).
-   - The linked `milp_model_input` row (via `input_id`) is also fetched for
-     provenance context. A read failure here is a warning, not a hard
-     failure - confidence degrades instead of the analysis failing.
+   - The linked `milp_model_input` row (via `input_id`) is also fetched, but
+     **is not yet mapped into confidence/provenance analysis** - see "Known
+     integration blocker" below. A read failure here is only a warning.
 2. Validate raw MILP Results JSON.
 3. Adapt the result into the internal format.
 4. Calculate KPIs and the KPI gate.
-5. Determine confidence from provenance.
+5. Determine confidence from `data_flags.sources` already present in the
+   canonical/normalized payload (empty in the flat-column fallback, which
+   correctly yields `UNKNOWN` rather than a guess).
 6. Generate the deterministic technical report (`detailed_explanation`) and a
    short deterministic executive summary (`executive_summary` source).
 7. Optionally rewrite ONLY the short executive summary with an LLM, and
@@ -104,7 +106,7 @@ milp_model_input
   MILP solver
       |
       v
-milp_model_output  --input_id-->  milp_model_input (provenance, read separately)
+milp_model_output  --input_id-->  milp_model_input (fetched; not yet mapped - see below)
       |
       v
 Analysis & AI pipeline (this folder)
@@ -119,6 +121,22 @@ milp_ai_output
 See `AI/integration/supabase_schema/README.md` for the reference table
 schemas and `AI/integration/supabase_repository.py` for the read/write and
 normalization logic.
+
+#### Known integration blocker: `milp_model_input` provenance is not yet used
+
+`supabase_repository.load_input_provenance` fetches the linked
+`milp_model_input` row (`scenario_data_json`, `source_data_snapshot_json`,
+`model_parameters_json`, `validation_policy`, `allow_estimated_values`), but
+`main.run_from_source` currently **discards the fetched dict** and keeps only
+its warnings. No real `milp_model_input` row has been seen yet, so the exact
+JSON shape of those fields is unconfirmed - mapping them into
+`data_flags.sources` now would mean guessing that shape, which could silently
+fabricate a confidence signal. Confidence is therefore derived only from
+whatever `data_flags.sources` the canonical (or normalized) MILP output
+payload already carries; the flat-column fallback leaves that list empty,
+which `confidence_flagger.determine_confidence` correctly reports as
+`UNKNOWN` rather than `MEASURED`/`PROVISIONAL`. This should be revisited once
+a real `milp_model_input` row is available to confirm the mapping.
 
 ### App response fields: executive_summary, detailed_explanation, visualization_data
 

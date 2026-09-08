@@ -55,6 +55,7 @@ from json_explainer import (
     PROTOTYPE_DISCLAIMER,
     WATER_QUALITY_STAGE_NOTE,
 )
+from llm_validator import _extract_identifiers, _strip_headings
 
 
 # ---------------------------------------------------------------------------
@@ -441,9 +442,51 @@ class TestReferenceJSON:
         assert summary_a == summary_b
         assert "scenario_2026_07_17_001" in summary_a
         assert "OPTIMAL" in summary_a
-        assert "500 of 500 ML/day demand supplied" in summary_a
+        assert "500 ML/day" in summary_a
         assert "Yarra River, Kew" in summary_a
         assert len(summary_a) < len(generate_explanation(ref()))
+
+    def test_executive_summary_contains_every_required_fact(self):
+        """AquaBlend final AI integration: the executive summary must cover
+        scenario/status, demand satisfaction, cost, every selected source's
+        blend share, the closest plant-inflow quality margin, one binding
+        constraint, a provisional/estimated-data note, and one alternative
+        or sensitivity finding - using only values already in the fixture."""
+        summary = generate_executive_summary(ref())
+
+        assert "scenario_2026_07_17_001" in summary
+        assert "OPTIMAL" in summary
+        assert "500 ML/day" in summary
+        assert "184,150" in summary
+        assert "Yarra River, Kew" in summary and "58.0%" in summary
+        assert "Silvan Reservoir" in summary and "42.0%" in summary
+        assert "22.6%" in summary
+        assert "plant inflow" in summary
+        assert "Yarra River, Kew" in summary and "capacity" in summary
+        assert "provisional" in summary.lower()
+        assert "estimated" in summary.lower()
+        assert "189,400" in summary or "5,250" in summary
+
+    def test_executive_summary_word_count_is_bounded(self):
+        summary = generate_executive_summary(ref())
+        word_count = len(summary.split())
+        assert word_count <= 180
+        assert 60 <= word_count <= 160
+
+    def test_executive_summary_never_triggers_false_identifier_matches(self):
+        """Regression: a real live Qwen run rejected a rewrite because the
+        deterministic summary contained 'OPTIMAL, 500', which
+        llm_validator's Title-Case identifier pattern misread as a two-word
+        proper noun. Every extracted 'identifier' in the summary must be a
+        genuine source/plant/scenario name, never a status word or any
+        other capitalised word glued to a following number."""
+        summary = generate_executive_summary(ref())
+        identifiers = _extract_identifiers(_strip_headings(summary))
+        known = {
+            "Yarra River, Kew", "Silvan Reservoir", "Treatment Facility 1",
+            "scenario_2026_07_17_001", "facility_1",
+        }
+        assert identifiers <= known, identifiers - known
 
     def test_executive_summary_never_contains_the_full_report(self):
         summary = generate_executive_summary(ref())

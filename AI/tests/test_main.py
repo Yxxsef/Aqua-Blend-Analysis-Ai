@@ -449,8 +449,6 @@ def _install_fake_supabase(
     monkeypatch.setattr(supabase_repository, "create_client", fake_create_client)
     monkeypatch.setenv("DB_URL", "https://example.supabase.co")
     monkeypatch.setenv("DB_KEY", "test-key")
-    monkeypatch.setattr(supabase_repository, "DB_URL", "https://example.supabase.co")
-    monkeypatch.setattr(supabase_repository, "DB_KEY", "test-key")
     return calls
 
 
@@ -599,8 +597,6 @@ def test_local_json_mode_needs_no_supabase_credentials(
     """Local JSON mode must work without DB_URL or DB_KEY set."""
     monkeypatch.delenv("DB_URL", raising=False)
     monkeypatch.delenv("DB_KEY", raising=False)
-    monkeypatch.setattr(supabase_repository, "DB_URL", "")
-    monkeypatch.setattr(supabase_repository, "DB_KEY", "")
 
     response = main.run_from_source(FIXTURE_PATH)
 
@@ -610,13 +606,43 @@ def test_local_json_mode_needs_no_supabase_credentials(
 def test_supabase_read_without_credentials_is_invalid_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(supabase_repository, "DB_URL", "")
-    monkeypatch.setattr(supabase_repository, "DB_KEY", "")
+    monkeypatch.delenv("DB_URL", raising=False)
+    monkeypatch.delenv("DB_KEY", raising=False)
 
     response = main.run_from_source()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert any("DB_URL" in warning or "DB_KEY" in warning for warning in response["warnings"])
+
+
+def test_credentials_set_after_import_reach_create_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: _client() must pass require_db_credentials()'s RETURNED
+    values to create_client(), not module-level DB_URL/DB_KEY captured once
+    at import time - those would go stale if the environment changes later."""
+    monkeypatch.delenv("DB_URL", raising=False)
+    monkeypatch.delenv("DB_KEY", raising=False)
+
+    captured: dict = {}
+
+    def fake_create_client(**kwargs: object) -> _FakeSupabaseClient:
+        captured.update(kwargs)
+        return _FakeSupabaseClient({"milp_model_output": []}, [], None)
+
+    monkeypatch.setattr(supabase_repository, "create_client", fake_create_client)
+
+    # Set only now - strictly after supabase_repository was imported.
+    monkeypatch.setenv("DB_URL", "https://late-set.supabase.co")
+    monkeypatch.setenv("DB_KEY", "late-set-key")
+
+    with pytest.raises(main.SupabaseError, match="no rows to analyse"):
+        main.load_milp_output()
+
+    assert captured == {
+        "supabase_url": "https://late-set.supabase.co",
+        "supabase_key": "late-set-key",
+    }
 
 
 # --- Provenance retrieval ----------------------------------------------------
@@ -691,6 +717,59 @@ def test_unavailable_input_row_adds_a_warning_not_a_failure(
     assert any(
         "milp_model_input" in warning for warning in response["warnings"]
     )
+
+
+def test_successfully_fetched_provenance_cannot_elevate_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """KNOWN INTEGRATION BLOCKER (see AI/README.md): milp_model_input's
+    provenance fields are fetched but not mapped into data_flags, so even a
+    fully populated, successfully-read milp_model_input row must not push
+    confidence to MEASURED or PROVISIONAL - only UNKNOWN is honest here."""
+    row = {
+        "id": "row-id",
+        "scenario_db_id": 42,
+        "scenario_id": "SCN-FLAT",
+        "origin_run_id": None,
+        "input_id": "input-row-id",
+        "output_hash": None,
+        "raw_output_json": {},
+        "solver_status": "OPTIMAL",
+        "sources": [
+            {"source_id": "a", "source_name": "A", "volume_drawn_ml_per_day": 500,
+             "percent_of_blend": 100.0},
+        ],
+        "demand_zones": [
+            {"zone_id": "z1", "zone_name": "Zone 1", "demand_ml_per_day": 500,
+             "volume_supplied_ml_per_day": 500},
+        ],
+        "plants": [],
+        "flows_source_to_plant": [],
+        "flows_plant_to_zone": [],
+        "quality": {},
+        "binding_constraints_summary": [],
+        "warnings": [],
+        "total_cost": 1000.0,
+    }
+    # A rich, fully-populated, successfully-read input row - if provenance
+    # mapping existed, this is exactly the data it would need to report
+    # MEASURED. It must still have no effect on confidence_flag.
+    input_row = {
+        "id": "input-row-id",
+        "scenario_data_json": {"demand": 500},
+        "source_data_snapshot_json": [
+            {"source_id": "a", "has_estimated_values": False},
+        ],
+        "model_parameters_json": {"solver": "HiGHS"},
+        "validation_policy": {"fail_if_source_missing_from_database": True},
+        "allow_estimated_values": False,
+    }
+    _install_fake_supabase(monkeypatch, row, input_row=input_row)
+
+    response = main.run_from_source()
+
+    assert response["confidence_flag"] == "UNKNOWN"
+    assert response["confidence_flag"] not in ("MEASURED", "PROVISIONAL")
 
 
 def test_save_ai_output_reads_foreign_keys_from_the_milp_row(

@@ -81,6 +81,19 @@ def _invalid_input_response(
     )
 
 
+def _summarise_llm_failures(failures: list) -> str:
+    """One safe-for-logs line naming each rejected validation rule and its
+    detail: newlines/repeated whitespace collapsed and each detail capped in
+    length, so a warning can never inject unbounded or multi-line text."""
+    parts = []
+    for failure in failures:
+        detail = " ".join(str(failure.detail).split())
+        if len(detail) > 200:
+            detail = detail[:197] + "..."
+        parts.append(f"{failure.rule} ({detail})")
+    return "; ".join(parts)
+
+
 def run_pipeline(
     results: Dict,
     model_config: ModelConfig | None = None,
@@ -157,8 +170,8 @@ def run_pipeline(
                     llm_summary = rewrite.report_text
                     llm_summary_validated = True
                 else:
-                    failures = ", ".join(
-                        failure.rule for failure in llm_validation.critical_failures
+                    failures = _summarise_llm_failures(
+                        llm_validation.critical_failures
                     )
                     warnings.append(
                         "LLM rewrite was rejected by validation"
@@ -205,8 +218,10 @@ def run_from_source(
     analysis payload when it is complete; otherwise a documented, best-effort
     normalization of the flat ``milp_model_output`` columns is used instead
     (see ``supabase_repository.normalize_output_columns``). The linked
-    ``milp_model_input`` row is also fetched for provenance context; if either
-    step is incomplete, a warning is added rather than failing the analysis.
+    ``milp_model_input`` row is fetched too, but is NOT YET mapped into the
+    confidence/provenance calculation - see the KNOWN INTEGRATION BLOCKER
+    note below. If either fetch is incomplete, a warning is added rather
+    than failing the analysis.
     """
     output_row: Dict[str, Any] | None = None
     extra_warnings: list[str] = []
@@ -222,6 +237,19 @@ def run_from_source(
             )
             results, canonical_warnings = extract_canonical_output(output_row)
             extra_warnings.extend(canonical_warnings)
+
+            # KNOWN INTEGRATION BLOCKER: milp_model_input's provenance fields
+            # (scenario_data_json, source_data_snapshot_json, ...) are fetched
+            # here but deliberately NOT mapped into `results["data_flags"]` or
+            # otherwise used to influence confidence. No real
+            # milp_model_input row has been seen yet, so the JSON shape of
+            # those fields is unknown; inventing a mapping now would risk
+            # silently fabricating a confidence signal. Until a real row is
+            # available to confirm the shape, confidence is derived only
+            # from whatever `data_flags.sources` the canonical/normalized
+            # payload itself already carries (empty in the flat-column
+            # fallback, which correctly yields UNKNOWN - see
+            # confidence_flagger.determine_confidence).
             _, provenance_warnings = load_input_provenance(output_row)
             extra_warnings.extend(provenance_warnings)
     except SupabaseError as exc:
