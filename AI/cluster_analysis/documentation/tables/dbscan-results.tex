@@ -1,0 +1,12 @@
+\begin{table}
+\caption{DBSCAN against k-means.}
+\label{tab:dbscan:results}
+\begin{tabular}{lrrlr}
+\toprule
+method & n_clusters & n_noise & scored_on & silhouette \\
+\midrule
+dbscan & 2 & 6 & 280/286 assigned & 0.328000 \\
+kmeans & 2 & 0 & 286/286 (assigns everything) & 0.473600 \\
+\bottomrule
+\end{tabular}
+\end{table}

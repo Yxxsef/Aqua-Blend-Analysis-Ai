@@ -17,3 +17,7 @@ selection are the candidates of interest for consumption profiles.
 """
 
 from __future__ import annotations
+
+# Imported for its registration side effect; see the note in
+# `sse_based/__init__.py`. One line per method module.
+from . import dbscan  # noqa: F401

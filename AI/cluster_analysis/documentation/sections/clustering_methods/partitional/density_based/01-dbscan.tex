@@ -1,0 +1,148 @@
+% ------------------------------------------------------------------
+%  Clustering method: DBSCAN.
+%  Written from template/method_template.tex; the part order is fixed.
+%  Code counterpart:
+%    xxcluster/cluster/partitional/density_based/dbscan.py
+% ------------------------------------------------------------------
+\subsubsection{DBSCAN}
+\label{sec:tech:dbscan}
+
+\paragraph{Overview}
+\label{sec:tech:dbscan:overview}
+DBSCAN defines a cluster as a maximal set of points connected through
+regions of sufficient density, and belongs to the density-based family of
+\textbf{Sect.~\ref{sec:background:families}}~\cite{ref_32}. Two properties
+distinguish it from every other method reported here. The number of
+clusters is a result rather than a request, so it is not asked to commit
+to $|\mathcal C|$ in advance~\cite{ref_1}. And it may decline to assign an
+observation at all, labelling it noise. That refusal is the reason it is
+on this list: a method that assigns everything must fold a handful of
+upset conditions into some regime, and the resulting scenario would
+describe an operating state the plant never held.
+
+\paragraph{Assumptions and applicability}
+\label{sec:tech:dbscan:assumptions}
+The assumption is local density, not shape: clusters may be elongated,
+curved or nested, which is what a Voronoi partition cannot express. What
+it does assume is that one density threshold separates cluster from noise
+across the whole dataset. Where genuine regimes differ in density, a
+single $(\varepsilon, \mathit{minPts})$ pair cannot recover both --- it
+either splits the sparse one or merges the dense ones~\cite{ref_33}, and
+that limitation is recorded in
+\textbf{Sect.~\ref{sec:methodology:threats}}. The neighbourhood is a
+distance in feature units, so the method is not scale-invariant and the
+scaling step of \textbf{Sect.~\ref{sec:data:preprocessing}} decides which
+operating variables drive the result.
+
+\paragraph{Formulation}
+\label{sec:tech:dbscan:formulation}
+Let $N_\varepsilon(\mathbf p) = \{\mathbf q : d(\mathbf p, \mathbf q) \le
+\varepsilon\}$ be the neighbourhood of $\mathbf p$, itself included. Three
+definitions follow~\cite{ref_32}:
+\begin{description}[itemsep=2pt,topsep=2pt]
+    \item[Core point] $\mathbf p$ with $|N_\varepsilon(\mathbf p)| \ge
+    \mathit{minPts}$.
+    \item[Directly density-reachable] $\mathbf q$ from $\mathbf p$ when
+    $\mathbf q \in N_\varepsilon(\mathbf p)$ and $\mathbf p$ is a core
+    point. The requirement on $\mathbf p$ alone is what makes the relation
+    asymmetric.
+    \item[Density-connected] $\mathbf p$ and $\mathbf q$ when some core
+    point reaches both through a chain of directly density-reachable
+    steps.
+\end{description}
+A cluster is a maximal density-connected set. A non-core point inside the
+radius of a core point joins it as a \emph{border point} but does not
+extend the chain, which is what stops two clusters bridged by sparse
+points from merging. An observation in no such set is noise, labelled
+$-1$, which is the package-wide convention for an unassigned observation.
+
+\paragraph{Hyperparameters and tuning}
+\label{sec:tech:dbscan:hyperparameters}
+Two, and neither has a default worth trusting. $\mathit{minPts}$ is the
+smallest group the analyst is willing to call a regime rather than a rare
+state, so it is a modelling choice before it is a parameter;
+\cite{ref_33} recommends at least $n + 1$ for $n$ features and larger for
+noisy data. $\varepsilon$ is a distance in the units of the scaled
+features, chosen from the $k$-distance curve for $k = \mathit{minPts}$,
+whose knee marks where points stop having close neighbours. Both are swept
+rather than tuned to a favourable answer, and the sweep is over the
+density parameters, not over $|\mathcal C|$: the selector of
+\textbf{Sect.~\ref{sec:methodology:k}} does not apply to this family by
+construction, since $|\mathcal C|$ is not an input it could vary.
+
+\paragraph{Complexity}
+\label{sec:tech:dbscan:complexity}
+The cost is dominated by the radius query. With a spatial index over
+low-dimensional data this is $\mathcal{O}(m \log m)$ time; without one, or
+where the index degrades with dimension, it falls back to the
+$\mathcal{O}(m^2)$ of computing every pair~\cite{ref_33}. Space is
+$\mathcal{O}(mk)$ for the neighbourhoods, $k$ the mean number of
+neighbours within $\varepsilon$, which grows quickly if $\varepsilon$ is
+set too generously. A precomputed dissimilarity matrix is
+$\mathcal{O}(m^2)$ in space by construction, so it is the route for a
+custom measure rather than for volume.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:tech:dbscan:application}
+Implemented natively against the definitions above rather than adapted,
+since they are the content of this section; the only borrowed component is
+the radius neighbourhood query, which is an index and not the algorithm.
+The implementation sets \texttt{labels\_} and the family base recounts
+$|\mathcal C|$ and the noise from them, so the two cannot disagree with
+the partition. Agreement with the reference implementation is asserted in
+the test suite, labels and core points alike, rather than assumed.
+Noise observations are reported with their position, their timestamp where
+the dataset carries one, and how many neighbours short of the threshold
+they fell --- a point one neighbour short is a different finding from one
+entirely alone. Whether any of them becomes a rare-event scenario is not
+decided here; that belongs to the scenario task, and must be recorded
+there.
+
+\paragraph{Results}
+\label{sec:tech:dbscan:results}
+\placeholder{Every index of Section~\ref{sec:methodology:metrics} over the
+swept $(\varepsilon, \mathit{minPts})$ grid, the noise fraction at each
+setting, and the timestamps of the noise observations at the chosen one.}
+
+\paragraph{Limitations}
+\label{sec:tech:dbscan:limitations}
+One global density threshold, as above: regimes of differing density
+cannot both be recovered by one parameter pair, which is the case
+hierarchical density methods exist to answer~\cite{ref_1}. The result is
+sensitive to $\varepsilon$, and the sensitivity is not symmetric --- a
+slightly generous radius merges regimes, a slightly tight one converts
+their edges to noise. A border point in reach of two clusters joins
+whichever is scanned first, so its label is an artefact of order rather
+than of the data; the count of such points is worth reporting where the
+partition is close. Finally, the method is transductive: it labels the
+sample it was given and offers no rule for an unseen observation, so it
+cannot score a held-out period without refitting.
+
+\paragraph{Summary}
+\label{sec:tech:dbscan:summary}
+The only method reported here that can say an operating state is too rare
+to be a regime, and the only one whose cluster count is discovered rather
+than requested. It earns its place on the scenario path by that refusal
+rather than by scoring well on indices that assume the compact geometry it
+is meant to escape --- a caveat carried into
+\textbf{Sect.~\ref{sec:comparison}}.
+
+% ==================================================================
+%  REFERENCES USED
+%
+%    ref_1    Singh & Singh (2024), density-based section
+%                                cited in: Overview, Limitations
+%    ref_32   Ester, Kriegel, Sander & Xu (1996), A density-based
+%             algorithm for discovering clusters in large spatial
+%             databases with noise
+%                                cited in: Overview, Formulation
+%    ref_33   Schubert et al. (2017), DBSCAN revisited, revisited
+%                                cited in: Assumptions, Hyperparameters,
+%                                          Complexity
+%
+%  Read, not cited:
+%    ref_18   Kapanski et al. (2025), density clustering for temporal
+%      segmentation of urban water consumption -- the precedent for
+%      reporting noise with its period rather than discarding it. To be
+%      cited in Results once the run on project data is reported.
+% ==================================================================
