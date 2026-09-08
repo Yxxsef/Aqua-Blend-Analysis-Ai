@@ -39,9 +39,13 @@ are filled in for all eight rows in `llm_evaluation.csv` — human review is no 
 
 ### 1b. What Task 63 added on top of Task 62
 
-- **Re-validated every run against the final validator**, not the validator state active at the time
-  each call was made. This is what surfaced that Runs 1, 3, and 5 were originally reported as PASS
-  in error — see section 1a and `LLM_Live_Run_Notes.md` section 1a for the full correction.
+- **Re-validated every run whose raw output was preserved, against the final validator** — not
+  the validator state active at the time each call was made. This covers Runs 1, 3, 4 (both
+  samples), 5, 6, and 7. **Run 2 is the one exception**: its raw text was not preserved on disk
+  before the completeness-check fix landed, so it could not be re-run against the final
+  validator and remains recorded against the validator state active at the time it was made.
+  Re-validating the other six is what surfaced that Runs 1, 3, and 5 were originally reported as
+  PASS in error — see section 1a and `LLM_Live_Run_Notes.md` section 1a for the full correction.
 - **Completed second-reviewer scoring** for all eight live-model output rows. Reviewer 1 (Abdulla)
   and Reviewer 2 (Yousef) scored independently; several rows show a real, legitimate gap between the
   two scores (e.g. `LIVE_RUN_1`: 3.83 vs. 2.0) reflecting a genuine difference in reviewer approach
@@ -69,11 +73,13 @@ timed for them, only the eight `LIVE_RUN_*` rows carry a real value here.
   added after a PR review finding — see section 4.
 - **1 borderline fixture (F14) correctly PASSes with a warning**, not a failure.
 
-**Fallback rate**: now meaningful, unlike the original Task 25 pass. Every genuine live run (Runs
-1-3) independently exercised the fallback path via a deliberate connection failure, and all three
-returned the deterministic report unchanged, exactly as designed. This confirms the fallback
-mechanism itself works; it is not yet a measure of how often a live model call would fail in
-production, since these three were deliberately forced failures, not organic ones.
+**Fallback rate**: the mechanism is now confirmed working, which the original Task 25 pass could
+not do. Every genuine live run (Runs 1-3) independently exercised the fallback path via a
+deliberate connection failure, and all three returned the deterministic report unchanged,
+exactly as designed. **This is not a production fallback rate** — these three were deliberately
+forced failures, not organic ones, so there is still no evidence of how often a live call would
+fail on its own. What's confirmed is narrower and more useful than a rate: when the fallback
+does trigger, it produces the correct output every time.
 
 ## 3. What this pass confirms about the pipeline so far
 
@@ -135,8 +141,9 @@ What's resolved since the original Task 25 recommendation:
    covered (OPTIMAL, INFEASIBLE, TIME_LIMIT).
 2. **Get two reviewers to style-score the live runs — done.** All eight rows have both
    `reviewer_1_style_score` and `reviewer_2_style_score` recorded.
-3. **Record the real fallback rate — done for the mechanism.** Confirmed working three times; not
-   yet a production-representative rate, since these were deliberate forced failures.
+3. **Confirm the fallback mechanism itself works — done.** Exercised three times via deliberate
+   forced failures, correct output every time. **Not done**: a real, production-representative
+   fallback rate — that requires organic failures, not forced ones, and doesn't exist yet.
 4. **Add full rubric entries for every live run — done.** All eight have entries in
    `llm_evaluation_full_rubric.csv`.
 
