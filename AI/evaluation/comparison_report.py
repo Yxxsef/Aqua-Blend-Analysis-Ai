@@ -69,13 +69,19 @@ def compare_scenario(result: dict[str, Any]) -> dict[str, Any]:
 
     rows = []
     for name, evaluation in evaluations.items():
-        kpis = evaluation.get("kpis", {})
+        # A run the KPI layer could not read carries an error instead of KPIs
+        # and a gate. It still gets a row: an omitted row reads as a run that
+        # was never attempted, which is a different thing entirely.
+        kpis = evaluation.get("kpis") or {}
+        gate = evaluation.get("gate") or {}
         is_baseline = name != "optimiser"
         row = {
             "run": name,
             "is_baseline": is_baseline,
-            "gate": evaluation.get("gate", {}).get("overall_status"),
+            "gate": gate.get("overall_status"),
         }
+        if evaluation.get("error"):
+            row["error"] = evaluation["error"]
         for measure in MEASURES:
             row[measure] = _measure(kpis, measure, is_baseline)
         rows.append(row)

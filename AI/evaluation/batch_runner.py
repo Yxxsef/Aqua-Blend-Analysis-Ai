@@ -319,6 +319,10 @@ def run_batch(
         "failed": len(failures),
         "results": results,
         "failures": failures,
+        # What this run actually read, so the manifest can record it rather
+        # than assuming the default.
+        "fixture_path": str(fixture_path),
+        "ingest_dir": str(ingest_dir),
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
 
@@ -364,6 +368,9 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
                 "scenario_path": result["scenario_path"],
                 "status": "ok",
                 "runtime_seconds": result["runtime_seconds"],
+                "schema": result.get("schema"),
+                "source": result["raw_optimiser_result"].get("_ingested_from"),
+                "unsupported": result.get("unsupported", []),
                 "raw_output": str(raw_path.relative_to(run_dir)),
                 "processed_output": str(processed_path.relative_to(run_dir)),
             }
@@ -384,11 +391,8 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         "run_id": run_dir.name,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": batch["mode"],
-        "mock_fixture": (
-            str(DEFAULT_FIXTURE.relative_to(AI_ROOT.parent))
-            if batch["mode"] == MOCK
-            else None
-        ),
+        "mock_fixture": batch.get("fixture_path") if batch["mode"] == MOCK else None,
+        "ingest_dir": batch.get("ingest_dir") if batch["mode"] == INGEST else None,
         "mock_warning": (
             "Mock mode returns the same stored optimiser result for every "
             "scenario. Optimiser values are not scenario-specific."
