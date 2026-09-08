@@ -61,11 +61,13 @@ def compare_scenario(result: dict[str, Any]) -> dict[str, Any]:
             "rows": [],
         }
 
-    quality_stage = (
-        result.get("raw_optimiser_result", {})
-        .get("water_quality", {})
-        .get(QUALITY_STAGE_KEY)
-    )
+    raw = result.get("raw_optimiser_result", {})
+    quality_stage = raw.get("water_quality", {}).get(QUALITY_STAGE_KEY)
+    if quality_stage is None and raw.get("quality", {}).get("plant_inflow"):
+        # v1.0 restructured this: quality is reported per plant inflow, which
+        # is the same stage the toy schema named. Water before treatment, not
+        # final drinking water.
+        quality_stage = "blend_at_plant_inflow"
 
     rows = []
     for name, evaluation in evaluations.items():
@@ -131,7 +133,9 @@ def write_comparison(comparison: dict[str, Any], run_dir: str | Path) -> dict[st
                 for measure in MEASURES:
                     cells.append(row[measure]["value"])
                     cells.append(row[measure].get("reason", ""))
-                cells.append("")
+                # A blank row reads as a run that passed. If it could not be
+                # evaluated, the CSV has to say so too, not just the JSON.
+                cells.append(row.get("error", ""))
                 writer.writerow(cells)
 
     return {"json": json_path, "csv": csv_path}

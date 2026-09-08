@@ -1,0 +1,415 @@
+{
+  "mode": "mock",
+  "scenario_count": 4,
+  "comparisons": [
+    {
+      "scenario_id": "scenario_2026_07_17_high_demand",
+      "comparable": true,
+      "quality_stage": "blend_at_plant_inflow",
+      "rows": [
+        {
+          "run": "optimiser",
+          "is_baseline": false,
+          "gate": null,
+          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "feasibility": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "total_cost": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          }
+        },
+        {
+          "run": "equal_blend",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "cheapest_first",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "fixed_priority",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        }
+      ]
+    },
+    {
+      "scenario_id": "scenario_2026_07_17_plant_outage",
+      "comparable": true,
+      "quality_stage": "blend_at_plant_inflow",
+      "rows": [
+        {
+          "run": "optimiser",
+          "is_baseline": false,
+          "gate": null,
+          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "feasibility": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "total_cost": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          }
+        },
+        {
+          "run": "equal_blend",
+          "is_baseline": true,
+          "gate": "FAIL",
+          "feasibility": {
+            "value": "INFEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 0.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "cheapest_first",
+          "is_baseline": true,
+          "gate": "FAIL",
+          "feasibility": {
+            "value": "INFEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 0.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "fixed_priority",
+          "is_baseline": true,
+          "gate": "FAIL",
+          "feasibility": {
+            "value": "INFEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 0.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        }
+      ]
+    },
+    {
+      "scenario_id": "toy_model_dry_year",
+      "comparable": true,
+      "quality_stage": "blend_at_plant_inflow",
+      "rows": [
+        {
+          "run": "optimiser",
+          "is_baseline": false,
+          "gate": null,
+          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "feasibility": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "total_cost": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          }
+        },
+        {
+          "run": "equal_blend",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "cheapest_first",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "fixed_priority",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        }
+      ]
+    },
+    {
+      "scenario_id": "toy_model_normal_year",
+      "comparable": true,
+      "quality_stage": "blend_at_plant_inflow",
+      "rows": [
+        {
+          "run": "optimiser",
+          "is_baseline": false,
+          "gate": null,
+          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "feasibility": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "total_cost": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": null,
+            "reason": "not reported"
+          }
+        },
+        {
+          "run": "equal_blend",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "cheapest_first",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        },
+        {
+          "run": "fixed_priority",
+          "is_baseline": true,
+          "gate": "UNABLE_TO_EVALUATE",
+          "feasibility": {
+            "value": "FEASIBLE",
+            "status": "OK"
+          },
+          "total_cost": {
+            "value": null,
+            "status": "N/A",
+            "reason": "not reported"
+          },
+          "demand_satisfaction": {
+            "value": 100.0,
+            "status": "OK"
+          },
+          "minimum_safety_margin": {
+            "value": null,
+            "status": "N/A",
+            "reason": "baselines do not compute water quality"
+          }
+        }
+      ]
+    }
+  ],
+  "failed_scenarios": []
+}
