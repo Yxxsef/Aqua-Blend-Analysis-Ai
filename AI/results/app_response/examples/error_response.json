@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.1-draft",
+  "contract_version": "0.2-draft",
   "scenario_id": "scenario_2026_07_17_001",
   "solver_status": "INFEASIBLE",
   "kpis": null,
@@ -7,6 +7,9 @@
   "confidence_flag": "UNKNOWN",
   "comparison": null,
   "report_mode": "STATUS_ONLY",
+  "executive_summary": "The solver returned INFEASIBLE. No optimal solution is available for display.",
+  "detailed_explanation": null,
+  "visualization_data": null,
   "display_explanation": "The solver returned INFEASIBLE. No optimal solution is available for display.",
   "warnings": [
     "Solver status is INFEASIBLE; optimal-solution metrics and comparisons are not displayed."

@@ -495,6 +495,11 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         )
 
     if category == "source_capacity":
+        # Names the specific other selected source(s), rather than a vague
+        # "additional water had to come from other sources" clause - a real
+        # LLM rewrite inverted that wording into "no extra water could come
+        # from other sources" (the opposite meaning). Stating who supplied
+        # the remainder removes the ambiguity that inversion exploited.
         source_id = name[len("source_capacity_"):]
         s = selected.get(source_id)
         if not s:
@@ -502,18 +507,39 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         source_name = s.get("source_name") or source_id
         vol = s.get("volume_drawn_ml_per_day")
         binding_label = f"the available capacity of {source_name}"
+
+        other_names = [
+            sel.get("source_name") or sid
+            for sid, sel in selected.items()
+            if sid != source_id
+        ]
+        if len(other_names) == 1:
+            other_clause = (
+                f"The remaining demand was supplied by the other selected "
+                f"source, {other_names[0]}."
+            )
+        elif len(other_names) > 1:
+            other_clause = (
+                "The remaining demand was supplied by the other selected "
+                "sources: " + ", ".join(other_names) + "."
+            )
+        else:
+            other_clause = (
+                "No other selected source was available to supply the "
+                "remaining demand."
+            )
+
         if vol is None:
             return (
-                f"The solution was limited by {binding_label}: {source_name} was "
-                "drawn up to the most its capacity allows, so any additional water "
-                "had to come from other sources."
+                f"The solution was limited by {binding_label}: {source_name} "
+                f"reached its maximum available capacity. {other_clause}"
             )
         has_estimated = bool(source_flags.get(source_id, {}).get("has_estimated_values"))
         tag = ", estimated" if has_estimated else ""
         return (
-            f"The solution was limited by {binding_label}: {source_name} was drawn "
-            f"up to the most its capacity allows ({vol} ML{tag}), so any additional "
-            "water had to come from other sources."
+            f"The solution was limited by {binding_label}: {source_name} "
+            f"reached its maximum available capacity ({vol} ML{tag}). "
+            f"{other_clause}"
         )
 
     if category == "plant_capacity":
@@ -850,6 +876,67 @@ def explain_alternatives_and_sensitivity(data: dict):
     if not lines:
         return None
     return "\n\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Executive summary (AquaBlend final AI integration)
+#
+# A short, deterministic, operator-readable summary - distinct from the full
+# 12-section report generate_explanation() builds. This is the ONLY text an
+# LLM rewrite may ever touch; the full report is always deterministic. Never
+# invents a figure that isn't in `data`; a missing value is stated as
+# "not reported", never guessed or defaulted to zero.
+# ---------------------------------------------------------------------------
+
+def generate_executive_summary(data: dict) -> str:
+    """Build a short, plain-language summary suitable for an LLM to lightly
+    reword (see AI/explanations/prompts.py). Requires the same minimum
+    fields as generate_explanation(): `status` and `scenarioId`."""
+    validate_input(data)
+
+    scenario_id = data.get(F_SCENARIO_ID)
+    status = data.get(F_STATUS)
+
+    if status not in FULL_REPORT_STATUSES:
+        return (
+            f"Scenario {scenario_id}: solver status {status}. No optimal "
+            "solution is available to summarise."
+        )
+
+    objective = data.get(F_OBJECTIVE) or {}
+    currency = objective.get(F_CURRENCY)
+    total_cost = objective.get("total_cost")
+    cost_clause = (
+        f"total cost {_format_money(total_cost, currency)}"
+        if total_cost is not None
+        else "total cost not reported"
+    )
+
+    zones = data.get(F_DEMAND_ZONES) or []
+    demand = sum(z.get("demand_ml_per_day") or 0 for z in zones) or None
+    supplied = sum(z.get("volume_supplied_ml_per_day") or 0 for z in zones) or None
+    if demand is not None and supplied is not None:
+        demand_clause = f"{supplied} of {demand} ML/day demand supplied"
+    else:
+        demand_clause = "demand satisfaction not reported"
+
+    selected = (data.get(F_SOURCES) or {}).get(F_SELECTED) or []
+    ordered = sorted(selected, key=lambda s: s.get("percent_of_blend", 0), reverse=True)
+    if ordered:
+        top = ordered[0]
+        top_name = top.get("source_name") or top.get("source_id")
+        top_pct = top.get("percent_of_blend")
+        blend_clause = (
+            f"Largest contributor {top_name}"
+            + (f" at {top_pct}% of the blend" if top_pct is not None else "")
+        )
+    else:
+        blend_clause = "No selected-source result was provided"
+
+    return (
+        f"Scenario {scenario_id}: solver status {status}, {demand_clause}, "
+        f"{cost_clause}. {blend_clause}."
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -14,20 +14,33 @@ Do not create new top-level folders without raising it in the Analysis & AI team
 
 `AI/main.py` is the Analysis & AI team's internal pipeline entry point. It reads
 a MILP result from a file or from Supabase, and can write the App response back;
-the project-wide backend entry point remains separate.
+the project-wide backend entry point remains separate. All detailed Supabase
+queries and insert mappings live in `AI/integration/supabase_repository.py` -
+`main.py` only coordinates the pipeline.
 
 Pipeline order:
 
 1. Read a Results JSON file, or one `milp_model_output` row from Supabase.
+   - When reading from Supabase, `raw_output_json` is used as the canonical
+     analysis payload when it is complete; otherwise a documented,
+     best-effort normalization of the flat `milp_model_output` columns is
+     used instead (see `supabase_repository.normalize_output_columns`).
+   - The linked `milp_model_input` row (via `input_id`) is also fetched for
+     provenance context. A read failure here is a warning, not a hard
+     failure - confidence degrades instead of the analysis failing.
 2. Validate raw MILP Results JSON.
 3. Adapt the result into the internal format.
 4. Calculate KPIs and the KPI gate.
 5. Determine confidence from provenance.
-6. Generate the deterministic explanation.
-7. Optionally run and validate an LLM rewrite.
-8. Use the deterministic fallback when the LLM is unavailable or rejected.
-9. Return the App & Delivery response contract.
-10. Optionally insert that response into `milp_ai_output`.
+6. Generate the deterministic technical report (`detailed_explanation`) and a
+   short deterministic executive summary (`executive_summary` source).
+7. Optionally rewrite ONLY the short executive summary with an LLM, and
+   validate it. The full detailed report is never sent to an LLM.
+8. Use the deterministic summary when the LLM is unavailable or rejected.
+9. Build deterministic `visualization_data` (chart-ready values) from the
+   validated MILP result - never from LLM wording.
+10. Return the App & Delivery response contract.
+11. Optionally insert that response into `milp_ai_output`.
 
 `main.py` coordinates existing modules and does not replace their business
 logic. Model configuration is optional; without it, the deterministic fallback
@@ -43,6 +56,11 @@ cp AI/.env.example AI/.env
 pip install -r AI/requirements.txt
 ```
 
+`DB_URL`/`DB_KEY` are only loaded and validated lazily, right before a
+Supabase call is made (a read with no local file, or `--push`). **Local JSON
+mode never needs them** - running the pipeline against a results file works
+with no `AI/.env` at all. Never commit `AI/.env` or a real Supabase key.
+
 ### Commands
 
 Input is either a Results JSON file or one Supabase row. With no argument the
@@ -50,16 +68,77 @@ newest row by `created_at` is used; the selectors name the `milp_model_output`
 column they filter.
 
 ```text
+# Local JSON file, deterministic output only (no LLM, no Supabase)
 python AI/main.py <results.json>
+
+# Local JSON file, with a local Ollama-compatible model rewriting only the
+# short executive summary (see AI/explanations/model_config.example.json)
+python AI/main.py <results.json> --model-config AI/explanations/model_config.example.json
+
+# Read the newest milp_model_output row from Supabase (needs AI/.env)
 python AI/main.py
 python AI/main.py --run-id 6
 python AI/main.py --scenario-db-id 8
 python AI/main.py --scenario SCN-008
+
+# Read from Supabase and write the computed App response back to milp_ai_output
+python AI/main.py --scenario-db-id 8 --push
+
 python AI/main.py --output <response.json>
-python AI/main.py --model-config AI/explanations/model_config.example.json
-python AI/main.py --push
-python -m pytest AI/tests/test_main.py -q
+python -m pytest tests/test_main.py -q   # run with AI/ as the working directory
 ```
+
+### Required environment variables
+
+| Variable | Required for | Notes |
+|---|---|---|
+| `DB_URL` | Supabase reads/`--push` only | Read from `AI/.env`, gitignored. |
+| `DB_KEY` | Supabase reads/`--push` only | Never commit a real key. |
+
+### Database input/output flow
+
+```text
+milp_model_input
+      |
+      v
+  MILP solver
+      |
+      v
+milp_model_output  --input_id-->  milp_model_input (provenance, read separately)
+      |
+      v
+Analysis & AI pipeline (this folder)
+      |
+      v
+milp_ai_output
+      |
+      v
+  App dashboard
+```
+
+See `AI/integration/supabase_schema/README.md` for the reference table
+schemas and `AI/integration/supabase_repository.py` for the read/write and
+normalization logic.
+
+### App response fields: executive_summary, detailed_explanation, visualization_data
+
+- `executive_summary` - a short, operator-readable summary. This is the ONLY
+  text an LLM rewrite may touch; a failed/unavailable rewrite falls back to
+  the deterministic summary text, never an empty or partial report.
+- `detailed_explanation` - the complete deterministic technical report
+  (`json_explainer.generate_explanation`). Always deterministic; never sent
+  to or rewritten by an LLM.
+- `display_explanation` - kept equal to `executive_summary`, for backward
+  compatibility with earlier consumers of this field.
+- `visualization_data` - deterministic chart-ready values (`blend_ratios`,
+  `cost_breakdown`, `quality_margins`, `solution_costs`) built directly from
+  the validated MILP result. Unknown values are `null` or omitted, never `0`.
+  This pipeline does not render charts; the App team turns this data into
+  graphs on their side.
+- Both `executive_summary` and `detailed_explanation` are stored on the
+  `milp_ai_output` row (`executive_summary`, `decision_explanation`); the
+  complete response, including `visualization_data`, is stored in
+  `raw_ai_json`.
 
 ## Task 64: LLM validation and automatic fallback
 

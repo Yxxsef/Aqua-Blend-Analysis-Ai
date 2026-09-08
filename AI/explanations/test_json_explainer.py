@@ -49,6 +49,7 @@ from json_explainer import (
     explain_sensitivity,
     explain_estimated_fields,
     explain_alternatives_and_sensitivity,
+    generate_executive_summary,
     generate_explanation,
     FULL_REPORT_STATUSES,
     PROTOTYPE_DISCLAIMER,
@@ -338,6 +339,20 @@ class TestReferenceJSON:
         assert "available capacity of Yarra River, Kew" in text
         assert "290 ML" in text
 
+    def test_capacity_wording_names_the_other_source_not_a_vague_clause(self):
+        """Regression for a real LLM rewrite that inverted 'any additional
+        water had to come from other sources' into 'no extra water could
+        come from other sources' - the opposite meaning. Naming the actual
+        other source removes that ambiguity."""
+        text = explain_binding_constraints(ref())
+        assert "reached its maximum available capacity" in text
+        assert (
+            "The remaining demand was supplied by the other selected "
+            "source, Silvan Reservoir." in text
+        )
+        assert "no extra water could come from other sources" not in text
+        assert "any additional water had to come from other sources" not in text
+
     def test_estimated_fields_lists_all_three_sources(self):
         text = explain_estimated_fields(ref())
         for fragment in ["silvan_reservoir", "yarra_kew", "groundwater_bore_1", "storage_capacity"]:
@@ -413,6 +428,27 @@ class TestReferenceJSON:
         assert "Yarra River, Kew" in text and "58.0%" in text
         assert "Groundwater Bore 1" in text
         assert "turbidity" in text
+
+    def test_headings_are_valid_markdown_not_bold_wrapped(self):
+        """Headings must be plain '## Title', never '**## Title**'."""
+        text = generate_explanation(ref())
+        assert "**##" not in text
+        assert "## Cost Summary" in text
+
+    def test_executive_summary_is_short_and_deterministic(self):
+        summary_a = generate_executive_summary(ref())
+        summary_b = generate_executive_summary(ref())
+        assert summary_a == summary_b
+        assert "scenario_2026_07_17_001" in summary_a
+        assert "OPTIMAL" in summary_a
+        assert "500 of 500 ML/day demand supplied" in summary_a
+        assert "Yarra River, Kew" in summary_a
+        assert len(summary_a) < len(generate_explanation(ref()))
+
+    def test_executive_summary_never_contains_the_full_report(self):
+        summary = generate_executive_summary(ref())
+        assert PROTOTYPE_DISCLAIMER not in summary
+        assert "## " not in summary
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +821,7 @@ class TestBindingConstraintsEdgeCases:
         data = ref()
         del data["sources"]["selected"][1]["volume_drawn_ml_per_day"]  # yarra_kew
         text = explain_binding_constraints(data)
-        assert "was drawn up to the most its capacity allows, so" in text
+        assert "reached its maximum available capacity." in text
         assert "None" not in text
 
     def test_missing_plant_fields_drops_clause(self):

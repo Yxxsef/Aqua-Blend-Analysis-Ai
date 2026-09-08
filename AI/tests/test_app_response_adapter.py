@@ -54,8 +54,10 @@ def test_success_response_has_required_structure() -> None:
         kpis=MOCK_KPIS,
         gate_result="PASS",
         confidence_flag="UNKNOWN",
-        llm_explanation="Validated explanation.",
-        llm_validated=True,
+        llm_summary="Validated summary.",
+        llm_summary_validated=True,
+        detailed_explanation="Full deterministic report text.",
+        visualization_data={"blend_ratios": []},
     )
 
     validate_app_response(response)
@@ -65,6 +67,10 @@ def test_success_response_has_required_structure() -> None:
     assert response["gate_result"] == "PASS"
     assert response["confidence_flag"] == "UNKNOWN"
     assert response["kpis"] == MOCK_KPIS
+    assert response["executive_summary"] == "Validated summary."
+    assert response["display_explanation"] == response["executive_summary"]
+    assert response["detailed_explanation"] == "Full deterministic report text."
+    assert response["visualization_data"] == {"blend_ratios": []}
     assert isinstance(response["warnings"], list)
 
 
@@ -75,11 +81,12 @@ def test_fallback_mode_is_used_when_llm_is_unavailable() -> None:
         kpis=MOCK_KPIS,
         gate_result="PASS",
         confidence_flag="UNKNOWN",
-        fallback_explanation="Deterministic fallback explanation.",
+        deterministic_summary="Deterministic fallback summary.",
     )
 
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
-    assert response["display_explanation"] == "Deterministic fallback explanation."
+    assert response["display_explanation"] == "Deterministic fallback summary."
+    assert response["executive_summary"] == "Deterministic fallback summary."
     assert any("template fallback" in warning.lower() for warning in response["warnings"])
 
 
@@ -151,27 +158,32 @@ def test_raw_milp_result_is_not_mutated() -> None:
     """Building a display response must not mutate upstream input data."""
     raw = deepcopy(SAMPLE_OPTIMAL_RESULT)
     before = deepcopy(raw)
+    caller_visualization = {"blend_ratios": [{"source": "A", "volume_ml_day": 1, "share_pct": 100}]}
 
     response = build_app_response(
         raw,
         kpis=MOCK_KPIS,
         gate_result="PASS",
         confidence_flag="UNKNOWN",
-        fallback_explanation="Fallback.",
+        deterministic_summary="Fallback.",
+        visualization_data=caller_visualization,
     )
 
     assert raw == before
 
-    # Returned nested values must not alias the caller's KPI object either.
+    # Returned nested values must not alias the caller's objects either.
     response["kpis"]["total_cost"] = 0
     assert MOCK_KPIS["total_cost"] == 184150.0
+
+    response["visualization_data"]["blend_ratios"].append({"source": "mutated"})
+    assert len(caller_visualization["blend_ratios"]) == 1
 
 
 def test_invalid_report_mode_is_rejected() -> None:
     """Structural validation should reject undocumented report modes."""
     response = build_app_response(
         SAMPLE_OPTIMAL_RESULT,
-        fallback_explanation="Fallback.",
+        deterministic_summary="Fallback.",
     )
     response["report_mode"] = "NOT_A_MODE"
 
