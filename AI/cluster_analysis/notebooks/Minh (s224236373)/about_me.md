@@ -14,7 +14,7 @@
 | Area | Path or section |
 |---|---|
 | <Code> | <`xxcluster/cluster/hierarchical/`> |
-| <Document> | <Sect. 7.2, hierarchical methods> |
+| <Document> | <Sect. 7.3, hierarchical methods> |
 | <Other> | <e.g. the shared evaluation protocol> |
 
 ## 2. What I am working on
@@ -32,7 +32,7 @@
 
 | Notebook | Exercises | Evidences |
 |---|---|---|
-| <`03-ward.ipynb`> | <`xxcluster/cluster/hierarchical/agglomerative/ward.py`> | <Sect. 7.2.1> |
+| <`03-ward.ipynb`> | <`xxcluster/cluster/hierarchical/agglomerative/ward.py`> | <Sect. 7.3.1> |
 
 <!-- ## 4. Background [Optional]
 

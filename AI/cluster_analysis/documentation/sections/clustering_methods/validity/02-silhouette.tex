@@ -1,0 +1,56 @@
+% ------------------------------------------------------------------
+%  Measure: Silhouette Coefficient (internal validity index).
+%  Written from template/measure_template.tex; the part order is fixed.
+%  Code counterpart: xxcluster/measures/validation/internal.py
+% ------------------------------------------------------------------
+\subsubsection{Silhouette Coefficient}
+\label{sec:measure:silhouette}
+
+\paragraph{Overview}
+\label{sec:measure:silhouette:overview}
+The Silhouette Coefficient (SC) is an internal validity index. It scores a partition from the data and labels alone, contrasting for each observation the closeness to its own cluster with that to the nearest other cluster \cite{ref_10, ref_11}.
+It applies to any method returning a crisp partition, making it the common ground of \textbf{Sect. \ref{sec:comparison}}, and the water–sector literature already uses it \cite{ref_17}.
+
+\paragraph{Definition}
+\label{sec:measure:silhouette:definition}
+For $\mathbf x \in \mathcal C_i$, let $a(\mathbf x)$ and $b(\mathbf x)$ be the mean dissimilarity to the rest of its own cluster and to the nearest other cluster,
+\begin{align}
+    a(\mathbf x) = \tfrac{1}{|\mathcal C_i| - 1} \textstyle\sum_{\mathbf y \in \mathcal C_i \setminus \{ \mathbf x \}} d(\mathbf x, \mathbf y),
+    \quad
+    b(\mathbf x) = \min_{j \neq i} ~ \tfrac{1}{|\mathcal C_j|} \textstyle\sum_{\mathbf y \in \mathcal C_j} d(\mathbf x, \mathbf y),
+    \quad
+    s(\mathbf x) = \tfrac{b(\mathbf x) - a(\mathbf x)}{\max \left\{ a(\mathbf x), b(\mathbf x) \right\}}
+\end{align}
+with $s(\mathbf x) = 0$ for a singleton $\mathcal C_i$. The SC of a partition is the mean of $s(\mathbf x)$ over all $m$ observations \cite{ref_10, ref_11, ref_24}.
+From the formulation, SC is unable to score predictions whose label is -1.
+
+\paragraph{Properties}
+\label{sec:measure:silhouette:properties}
+$s(\mathbf x) \in [-1, 1]$ and higher is better, near $1$ the observation lies far closer to its own cluster than to any other, near $0$ between two clusters, negative when it is arguably misassigned. It is not corrected for chance, is defined for $2 \le |\mathcal C| \le m - 1$, and needs only $d(\cdot, \cdot)$, so it holds for a dissimilarity that is no metric in the sense of \textbf{Def. \ref{def:math_metric}}.
+
+\paragraph{Applicability}
+\label{sec:measure:silhouette:applicability}
+It accepts any data type for which $d(\cdot, \cdot)$ is defined and serves every family of \textbf{Sect. \ref{sec:background:families}} returning a crisp partition, a soft partition must be defuzzified first.
+Observations labelled noise have no $a(\mathbf x)$, they must be excluded before computing SC, and thus, must be explicitly stated and uncomparable with other validity indices considering noise labels.
+% \placeholder{State the convention adopted wherever the index is reported.}
+
+\paragraph{Computation and complexity}
+\label{sec:measure:silhouette:complexity}
+Obtaining $a$ and $b$ for every observation requires every pairwise dissimilarity, i.e. $\mathcal O(m^2 n)$ time and $\mathcal O(m^2)$ memory where the matrix is held.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:silhouette:application}
+\placeholder{Which methods are scored under it, whether it also drives the choice of $|\mathcal C|$ in Section~\ref{sec:methodology:k}, and whether it is computed on the full dataset or a fixed sample.}
+
+\paragraph{Behaviour}
+\label{sec:measure:silhouette:behaviour}
+Since $a$ enters negatively and $b$ positively, the index rewards clusters compact and mutually distant under $d(\cdot, \cdot)$, which is the geometry a centroid–based method optimises. It therefore does not rank families neutrally, favouring the convex, comparably sized clusters of \textbf{Sect. \ref{sec:tech:kmeans}} over elongated or variable–density structure \cite{ref_10, ref_11}.
+% \todo{demonstrate on our data or a synthetic example}
+
+\paragraph{Limitations}
+\label{sec:measure:silhouette:limitations}
+Beyond that bias above, it is uninformative for degenerate partitions. Misleading where cluster sizes are unbalanced, the mean being dominated by the largest cluster. Suffering from Curse of Dimensionality, where the concentration of distances of \textbf{Sect. \ref{sec:dimensionality}} compresses $a$ and $b$ together and $s(\mathbf x)$ towards zero \cite{ref_9}.
+
+\paragraph{Summary}
+\label{sec:measure:silhouette:summary}
+The SC quantifies cohesiveness and separatability of clusters under $d(\cdot, \cdot)$.

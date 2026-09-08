@@ -1,25 +1,47 @@
 # Task 25 Evaluation Findings
 
-**AquaBlend | Analysis & AI | Sprint 2 | Task 25**
-**Covers:** `llm_evaluation.csv` (23 fixtures)
+**AquaBlend | Analysis & AI | Sprint 2-3 | Task 25 + Task 62**
+**Covers:** `llm_evaluation.csv` (26 rows: 23 Task 25 fixtures + 3 genuine Task 62 live runs),
+`llm_evaluation_full_rubric.csv` (24 rows: 23 Task 25 fixtures + 1 genuine Task 62 live run)
 
-## 1. What this evaluation actually covers, and what it doesn't
+## 1. What this evaluation covers, and how it's changed since Task 25
 
-This is the first controlled evaluation of `llm_validator.py`'s critical checks, run against the
-23 fixtures in `llm_evaluation.csv`. Every `critical_result`, `failed_rules`, and `warning_rules`
-value in that CSV is real - produced by actually calling `validate_llm_output()` on each fixture
-pair, not written by hand. `test_llm_validator.py` (38 tests, all passing) checks the same logic at
-finer grain.
+The original Task 25 pass below (sections 2-5) covered `llm_validator.py`'s critical checks against
+23 hand-built fixtures - every `critical_result`, `failed_rules`, and `warning_rules` value was real,
+produced by actually calling `validate_llm_output()`, but the "LLM output" side of every fixture was
+either genuine deterministic-report text or a hand-written stand-in, never a real model call. That
+gap is closed as of Task 62 - see section 1a.
 
-**What this evaluation is not:** a live-model run. No LLM endpoint was available to generate genuine
-`Qwen/Qwen3-4B-Instruct-2507` output for this pass, so the "LLM output" side of every fixture in
-`llm_evaluation.csv` is either Task 23's own genuine deterministic-report text (used as a stand-in
-correct case, or as the base for a deliberately-introduced single fault) or a hand-written faithful
-rewrite (`CORRECT_REWRITE` and its variants). This means:
+### 1a. Genuine live-model data (Task 62)
 
-- **`runtime_ms` is not available for any row.** No model call was timed. Once a live model is
-  actually connected and run per Task 24's `model_runner.py`, this column should be filled from
-  `RewriteResult.runtime_ms`, which the runner already records for exactly this purpose.
+Three real calls were made through the actual `model_runner.rewrite_report()` code path against a
+locally running `qwen3:4b-instruct-2507-q4_K_M` (Ollama build of the provisional Task 24 model), not
+mocked, not hand-written. Full detail in `LLM_Live_Run_Notes.md`; summarised here:
+
+| Row | What happened | `critical_result` |
+|---|---|---|
+| `LIVE_RUN_1` | First real call. Surfaced 13 failures, 11 of them real validator bugs (word-form percentages, reformatted identifier names, negation-blind phrase matching) - fixed, with regression tests using this exact captured text. Re-validated here against the final validator. | `PASS` |
+| `LIVE_RUN_2` | Second real call, same config. Recorded as observed against an intermediate validator state (percent/identifier fixes applied, negation and field-name-exemption fixes not yet) - the raw text was not preserved on disk before the timestamped-output fix, so it could not be re-validated against the final validator. Given an identical failure pattern to Runs 1 and 3, both of which resolved to PASS, this would very likely also now pass - noted as an inference in the CSV, not asserted as a re-run result. | `FAIL` (as observed at the time) |
+| `LIVE_RUN_3` | Third real call, run after all four fixes. First genuine PASS on a freshly-generated output not already used as a test fixture. | `PASS` |
+
+`LIVE_RUN_1` also has a full C1-C9/S1-S6 rubric entry in `llm_evaluation_full_rubric.csv`
+(`LiveRun1_GenuineModelOutput`) - genuinely checked against the actual JSON facts, not assumed. It's
+marked as a draft needing a second independent human reviewer, the same standing note as every other
+rubric row in that file.
+
+**Still not done:** `LIVE_RUN_2` and `LIVE_RUN_3` don't have full rubric entries yet (would need their
+complete text, not just the validator's summary), and no genuine second human reviewer has scored any
+of the three real runs. `reviewer_1_style_score`/`reviewer_2_style_score` remain `pending` for all
+three rows, honestly, not filled with invented numbers.
+
+### 1b. The original Task 25 fixtures (unchanged)
+
+Every other row in `llm_evaluation.csv` is either Task 23's own genuine deterministic-report text
+(used as a stand-in correct case, or as the base for a deliberately-introduced single fault) or a
+hand-written faithful rewrite (`CORRECT_REWRITE` and its variants). For these rows specifically:
+
+- **`runtime_ms` is not available.** No model call was timed for these - only the three `LIVE_RUN_*`
+  rows have a genuine value here, taken from `RewriteResult.runtime_ms`.
 - **`reviewer_1_style_score` and `reviewer_2_style_score` are marked "pending" for every row, not
   scored.** The task card requires at least two human reviewers scoring selected examples on
   non-critical style (1-5); that has not happened in this pass. These columns are left as explicit
@@ -81,21 +103,26 @@ including why the `$` prefix is not tracked the same way.
 
 ## 5. Recommendation
 
-**Continue** the pipeline as built, with the following before this can be called a complete Task 25
-evaluation rather than its first pass:
+**Continue** the pipeline as built. Item 1 from the original recommendation is now done - see
+section 1a. What's left before this can be called a complete evaluation:
 
-1. **Run a genuine model call** through `model_runner.py` against at least the `REFERENCE_REPORT`
-   fixture, capture the real `RewriteResult`, and validate that actual output - not a hand-written
-   stand-in - through `llm_validator.py`. This is the one thing this pass could not do without a
-   running local model endpoint.
-2. **Get two team members to style-score** a representative sample of real model output (once
-   available) on the 1-5 scale, and fill in `reviewer_1_style_score` / `reviewer_2_style_score` for
-   those rows. Yousef has already volunteered as one of the two reviewers during PR review.
+1. **~~Run a genuine model call~~ Done (Task 62)** - three real calls made, `LLM_Live_Run_Notes.md`
+   has the full writeup, and `LIVE_RUN_1`/`LIVE_RUN_3` show `critical_result: PASS` in
+   `llm_evaluation.csv`.
+2. **Get two team members to style-score** the three genuine `LIVE_RUN_*` rows (and ideally a couple
+   more real runs beyond these three) on the 1-5 scale, and fill in `reviewer_1_style_score` /
+   `reviewer_2_style_score`. Yousef has already volunteered as one of the two reviewers during PR
+   review; this now has real model output to actually score, not a hand-built stand-in.
 3. **Record the real fallback rate** once enough genuine model calls have been made to compute one
-   meaningfully.
-4. **Add the deferred non-optimal LLM-rewrite fixture family** (see Test_Pack_README.md section 5)
+   meaningfully - three calls (two fallback-triggered on purpose, one genuine model call each run)
+   isn't yet a large enough sample for a meaningful rate.
+4. **Add a full C1-C9/S1-S6 rubric entry for `LIVE_RUN_2` and `LIVE_RUN_3`** to
+   `llm_evaluation_full_rubric.csv`, matching what's already done for `LIVE_RUN_1` - needs their
+   complete text on hand, not just the validator's summary.
+5. **Add the deferred non-optimal LLM-rewrite fixture family** (see Test_Pack_README.md section 5)
    once real non-optimal output exists to build it from.
 
-Nothing found in this pass suggests `template-only` mode is currently necessary - the critical-check
-layer itself is working correctly against every failure pattern tested. The open question is
-entirely about real model behaviour, which this pass could not observe.
+Nothing found across either pass suggests `template-only` mode is necessary - the critical-check
+layer works correctly against every synthetic failure pattern tested, and the genuine live-model
+data now backs that up: real output either passes cleanly or fails for real, specific, fixed
+reasons, not for reasons that turned out to be validator noise once investigated.

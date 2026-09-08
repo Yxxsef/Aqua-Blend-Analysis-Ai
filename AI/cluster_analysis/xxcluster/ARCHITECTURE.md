@@ -191,7 +191,7 @@ The axis that matters most is **inductive vs transductive**. A linear map and a 
 
 `intrinsic_dim.py` answers Objective 4 of the introduction (is the manifold hypothesis supported?) and gives a principled `n_components` instead of "2, because that plots".
 
-### `measures/`: dissimilarity and validation (Sect. 7.1)
+### `measures/`: dissimilarity and validation (Sect. 7.1–7.2)
 
 | Path | Holds |
 |---|---|

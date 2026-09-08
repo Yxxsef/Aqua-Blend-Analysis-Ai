@@ -180,7 +180,7 @@ Until then, notebooks inline the rule by hand (`max(curve, key=curve.get)`), whi
 
 ## Write-up
 
-`template/measure_template.tex`, labels `sec:measure:<name>:*`. The paragraphs that carry a code counterpart:
+`template/measure_template.tex` into `documentation/sections/clustering_methods/validity/<nn>-<name>.tex`, labels `sec:measure:<name>:*`. The paragraphs that carry a code counterpart:
 
 | Paragraph | Code |
 |---|---|

@@ -35,7 +35,7 @@ Still blocked, and on what:
 - **`io/artifacts.py`** and `PersistableMixin`: a storage format decision.
 - **`io/loaders/supabase.py`**: the Data Engineering team publishing its view.
 
-Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. That is the first task on the current list.
+The suite is committed and runs with `python -m pytest` from `cluster_analysis/`. Each family base is driven through a native stand-in defined in its test file, because the one registered method is adapted and an adapted method bypasses every family hook.
 
 ## Layout
 
@@ -44,7 +44,7 @@ Nothing in `cluster/` is covered by a committed test: `tests/` is gitignored. Th
 | `core/` | The contract: base classes, mixins, protocols, tags, registry | n/a |
 | `cluster/` | Clustering methods, by family | Sect. 7 |
 | `dim_red/` | Dimensionality reduction, intrinsic dimension | Sect. 6 |
-| `measures/` | Dissimilarity measures and validity indices | Sect. 7.1 |
+| `measures/` | Dissimilarity measures and validity indices | Sect. 7.1–7.2 |
 | `pipeline/` | Preprocessing steps and composition | Sect. 3.3 |
 | `selection/` | Choosing \|C\|, stability analysis | Sect. 4.3 |
 | `evaluation/` | The shared protocol, the comparison tables | Sect. 4, 8 |

@@ -64,7 +64,7 @@ Three things adapters routinely need:
 _param_map = {"metric": None}    # sklearn's KMeans is Euclidean-only
 ```
 
-If you do this, **reject the value in `_fit` rather than ignoring it**. A silently discarded `metric="manhattan"` is a wrong result that looks fine.
+If you do this, **reject the value in `_validate_params` rather than ignoring it**. A silently discarded `metric="manhattan"` is a wrong result that looks fine.
 
 **For an attribute the backend does not report**, derive it:
 
