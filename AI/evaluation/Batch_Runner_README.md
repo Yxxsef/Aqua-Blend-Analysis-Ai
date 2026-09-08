@@ -14,6 +14,8 @@ output comes from the solver, a baseline, or the KPI calculator.
 | `batch_runner.py` | Runs scenarios, writes run output and the manifest |
 | `comparison_report.py` | Builds the comparison and writes it as JSON and CSV |
 | `build_fixture.py` | Builds the solved v1.0 fixture from the frozen contract |
+| `build_sprint3_run.py` | Regenerates the Sprint 3 deliverables |
+| `samples/sprint3/` | The Sprint 3 comparison report and run manifest |
 | `fixtures/` | Solved MILP v1.0 example, plus notes on how it was made |
 | `samples/` | A worked example from a real run |
 | `../tests/test_batch_runner.py` | Tests for both modules |
@@ -35,6 +37,52 @@ write_comparison(build_comparison(batch), run_dir)
 Run output goes to `runs/<timestamp>/`, which is gitignored. `raw/` holds the
 solver output exactly as it arrived; `processed/` holds everything calculated
 from it. The two are never mixed, so the original result is always recoverable.
+
+## Ingest mode
+
+The harness reads the output files the Optimisation team produces. It does not
+run the solver: the v1.0 contract exposes no execution hooks, and running it
+was confirmed out of scope. `mode="milp"` therefore raises and points here.
+
+```python
+from batch_runner import run_batch, INGEST
+
+batch = run_batch("AI/scenarios", INGEST, ingest_dir="path/to/milp_outputs")
+```
+
+Output files are matched to scenarios on `scenario_id`, not on filename.
+`<scenario_id>.json` is preferred if it exists; otherwise every file in the
+folder is opened and its own `scenario.scenario_id` is read. That way
+Optimisation can name files however they like.
+
+A scenario with no matching output raises rather than being skipped, because a
+silent skip produces a run that looks complete but compared nothing. The path
+each result came from is recorded in the manifest under `source`.
+
+**Open issue: the IDs do not currently line up.** Our scenarios use a mix of
+`scenario_2026_07_17_high_demand` and `toy_model_normal_year`, while the v1.0
+contract example uses `scenario_2026_07_17_001`. Until one convention is
+agreed, ingest will not match real files.
+
+## Sprint 3 deliverables
+
+`samples/sprint3/` holds the Task 59 outputs. Regenerate them with:
+
+```bash
+cd AI/evaluation
+python build_sprint3_run.py                        # solved fixture
+python build_sprint3_run.py --ingest-dir <folder>  # real output files
+```
+
+The committed version was produced from the solved fixture, since real output
+files were not available. The manifest records which fixture was used.
+
+**The optimiser rows in that comparison are empty.** `kpi_calculator.py`
+raises `AttributeError` on a v1.0 payload because it expects `plants` to be an
+object rather than a flat list. Re-pointing it is Task 58. The three baselines
+still report, and every empty optimiser row carries the error in its
+`scenario_reason` column, so the gap is visible rather than looking like a
+clean pass.
 
 ## Mock mode
 
