@@ -92,7 +92,8 @@ does trigger, it produces the correct output every time.
 - **Genuine live-model output surfaced failure modes no hand-built fixture pack found**: word-form
   percentages, reformatted identifier names, negation crossing a contrastive conjunction, swapped
   source figures, missing output-completeness detection, numbered-list markers misread as numbers,
-  and sentence-case field names invisible to identifier extraction.
+  sentence-case field names invisible to identifier extraction, and a disclaimer-section repetition
+  loop.
 
 ## 4. PR review finding: dropped percent sign (F23)
 
@@ -123,6 +124,13 @@ test using either the actual captured output or the exact example that surfaced 
 12-13. Sentence-case field-name renderings invisible to identifier extraction, fixed with a
    one-directional phrase fallback (Run 7)
 
+**One issue mitigated but not structurally closed:** the disclaimer-section repetition loop from Run 5
+did not recur in Run 6 or Run 7, which is one confirmation the `frequency_penalty` config change
+helped — not a guarantee across every future call, since there is still no dedicated validator
+check for this pattern specifically. A response that looped but happened to end cleanly within the
+token limit (rather than running out of tokens mid-loop, as Run 5 did) would currently pass every
+check.
+
 **One issue mitigated but not structurally closed:** the prompt-tag leak from Run 6 did not recur in
 Run 7, which is one confirmation the explicit prohibition helped — not a guarantee across every
 future call, since there is still no dedicated validator check for this pattern specifically.
@@ -149,9 +157,11 @@ What's resolved since the original Task 25 recommendation:
 
 What's still open:
 
-1. **The prompt-tag-leak pattern** has no dedicated check, only an incidental `NEW_IDENTIFIER`
+1. **The disclaimer-section repetition-loop pattern** has no dedicated check, distinct from the
+   completeness check that catches simple truncation.
+2. **The prompt-tag-leak pattern** has no dedicated check, only an incidental `NEW_IDENTIFIER`
    warning if the leaked tag doesn't match anything in the source.
-2. **The reviewer-score gap on Runs 1, 2, 3, and 5** (per-criterion averaging vs. treating a failed
+3. **The reviewer-score gap on Runs 1, 2, 3, and 5** (per-criterion averaging vs. treating a failed
    critical gate as dominant) is explained and given a recommendation in `Human_Reviewer_Notes.md`
    section 4 — a rubric design gap (no C-criterion for completeness), not an unresolved
    disagreement. The recommendation (automated validator result overrides rubric score, matching

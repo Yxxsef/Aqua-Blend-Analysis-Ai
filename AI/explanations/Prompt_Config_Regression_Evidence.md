@@ -60,8 +60,9 @@ green after each change is the evidence for the second half of that claim, not j
 targeted re-run.
 
 **Not confirmed, and not claimed here:** that the current prompt/config combination is failure-proof
-going forward. Run 7 is one clean run on one scenario. The open validator gap
-(`LLM_Evaluation_Findings.md` — prompt-tag-leak detection) means that if that failure mode recurred
-under different phrasing or a different scenario, nothing in the current pipeline is guaranteed to
-catch it structurally — the fixes made so far closed the specific instances observed, not the
-general failure category, and are documented as one occurrence of "no tag leak," not a proof.
+going forward. Run 7 is one clean run on one scenario. The two open validator gaps
+(`LLM_Evaluation_Findings.md` — repetition-loop detection, prompt-tag-leak detection) mean that if
+either failure mode recurred under different phrasing or a different scenario, nothing in the
+current pipeline is guaranteed to catch it structurally — the fixes made so far closed the specific
+instances observed, not the general failure category, and are documented as one occurrence of
+"no repetition loop" / "no tag leak," not a proof.
