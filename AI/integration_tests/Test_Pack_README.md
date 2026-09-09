@@ -17,10 +17,8 @@ network access required — every fixture is either real captured output or a se
 synthetic JSON file.
 
 **Dependency note:** the `fixtures/diagnostics/` tests import `diagnostics_adapter.py` from
-`AI/explanations/`. That module is currently on the still-open `task-71-infeasibility-diagnostics`
-branch, not yet merged into `master`. If this PR merges before Task 71 does, those two tests
-will fail on `ModuleNotFoundError` until Task 71 lands — this is a real, expected dependency,
-not a bug in this pack. Confirm Task 71 is merged (or rebase onto it) before merging this PR.
+`AI/explanations/`. That module is now merged into `master` (Task 71 landed), so this pack no
+longer depends on an open PR for that import to resolve.
 
 ## What "real" and "synthetic" mean here
 
@@ -63,9 +61,8 @@ anywhere in the codebase yet.
 
 ### `fixtures/diagnostics/` (2 files) — for the infeasibility diagnostics adapter (Task 71)
 
-Task 71 landed after this pack was first drafted (still an open PR, not yet merged into
-`master` as of this writing) — these two fixtures were added once it did, closing what was
-originally documented here as a gap.
+Task 71 landed after this pack was first drafted, and is now merged into `master` — these two
+fixtures were added once it opened, closing what was originally documented here as a gap.
 
 **Important caveat, carried over directly from `Infeasibility_AI_Interface.md`:** the payload
 *shape* (`likely_causes[].type` / `.severity` / `.details`) is explicitly **provisional, not
