@@ -25,6 +25,7 @@ Two families of tests:
 """
 
 import copy
+import re
 import sys
 from pathlib import Path
 
@@ -336,9 +337,9 @@ class TestReferenceJSON:
     def test_binding_constraints_demand_and_capacity(self):
         text = explain_binding_constraints(ref())
         assert "water demand for zone_1" in text
-        assert "500 ML needed by zone_1" in text
+        assert "500 ML/day needed by zone_1" in text
         assert "available capacity of Yarra River, Kew" in text
-        assert "290 ML" in text
+        assert "290 ML/day" in text
 
     def test_capacity_wording_names_the_other_source_not_a_vague_clause(self):
         """Regression for a real LLM rewrite that inverted 'any additional
@@ -782,6 +783,27 @@ class TestWaterQualityEdgeCases:
 
 class TestBindingConstraintsEdgeCases:
 
+    def test_all_four_constraint_categories_report_ml_per_day(self):
+        """demand_ml_per_day, volume_drawn_ml_per_day,
+        volume_processed_ml_per_day, and flow_ml_per_day are all daily flow
+        values - every binding-constraint sentence sourced from them must
+        say 'ML/day', never a bare 'ML'."""
+        data = ref()
+        data["bindingConstraintsSummary"] = [
+            "demand_satisfaction_zone_1",
+            "source_capacity_yarra_kew",
+            "plant_capacity_facility_1",
+            "link_capacity_silvan_reservoir_to_facility_1",
+        ]
+        text = explain_binding_constraints(data)
+
+        assert "500 ML/day needed by zone_1" in text
+        assert "290 ML/day, estimated" in text
+        assert "500 ML/day" in text  # plant_capacity_facility_1
+        assert "210 ML/day" in text  # link_capacity_..._to_facility_1
+        # No stray bare "ML" (not immediately followed by "/day").
+        assert not re.search(r"\bML\b(?!/day)", text)
+
     def test_empty_binding_list(self):
         data = ref()
         data["bindingConstraintsSummary"] = []
@@ -806,7 +828,7 @@ class TestBindingConstraintsEdgeCases:
         data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
         assert "batch" not in text.lower()
 
     def test_water_quality_range_binding(self):
@@ -823,7 +845,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Silvan Reservoir" in text
         assert "Treatment Facility 1" in text
-        assert "210 ML" in text
+        assert "210 ML/day" in text
         assert "no plain-language mapping available" not in text
 
     def test_link_capacity_plant_to_zone_binding(self):
@@ -832,7 +854,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
         assert "Zone 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
 
     def test_link_capacity_unknown_path_id_falls_back(self):
         data = ref()
@@ -851,7 +873,7 @@ class TestBindingConstraintsEdgeCases:
 
     def test_estimated_disclosure_reads_per_source_flag(self):
         text = explain_binding_constraints(ref())
-        assert "(290 ML, estimated)" in text
+        assert "(290 ML/day, estimated)" in text
 
     def test_missing_demand_ml_per_day_drops_clause_not_whole_sentence(self):
         data = ref()

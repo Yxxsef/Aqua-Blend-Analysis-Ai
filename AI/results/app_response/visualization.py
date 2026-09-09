@@ -97,22 +97,31 @@ def _quality_margins(water_quality: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _solution_costs(objective: Mapping[str, Any], results: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """A short chart label per solution, plus its full description kept
+    separately - the complete alternative description is often a long
+    sentence and makes an unreadable graph axis label."""
     costs = []
     optimal_cost = _num(objective.get("total_cost"))
     if optimal_cost is not None:
-        costs.append({"solution": "Optimal", "amount_aud": optimal_cost})
+        costs.append({"solution": "Optimal", "description": None, "amount_aud": optimal_cost})
 
     alternatives = results.get("alternative_feasible_solutions")
     if isinstance(alternatives, list):
+        alt_number = 0
         for alt in alternatives:
             if not isinstance(alt, Mapping):
                 continue
             amount = _num(alt.get("total_cost"))
             if amount is None:
                 continue
-            label = alt.get("description")
-            label = label if isinstance(label, str) and label.strip() else "Alternative"
-            costs.append({"solution": label, "amount_aud": amount})
+            alt_number += 1
+            description = alt.get("description")
+            description = description if isinstance(description, str) and description.strip() else None
+            costs.append({
+                "solution": f"Alternative {alt_number}",
+                "description": description,
+                "amount_aud": amount,
+            })
     return costs
 
 

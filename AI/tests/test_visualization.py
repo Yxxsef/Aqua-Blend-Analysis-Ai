@@ -86,7 +86,50 @@ def test_solution_costs_include_optimal_and_alternatives():
     data = build_visualization_data(RESULTS)
     solutions = {s["solution"]: s["amount_aud"] for s in data["solution_costs"]}
     assert solutions["Optimal"] == 184150.0
-    assert solutions["Reduce Yarra Kew share to 45%"] == 189400.0
+    assert solutions["Alternative 1"] == 189400.0
+
+
+def test_solution_costs_use_short_labels_not_the_full_description():
+    """The chart label must be short ('Alternative 1'), never the complete
+    alternative description - but the full description is still available
+    separately in the JSON for anything that wants to display it."""
+    data = build_visualization_data(RESULTS)
+    optimal, alternative = data["solution_costs"]
+
+    assert optimal["solution"] == "Optimal"
+    assert optimal["description"] is None
+
+    assert alternative["solution"] == "Alternative 1"
+    assert alternative["description"] == "Reduce Yarra Kew share to 45%"
+    assert alternative["solution"] != alternative["description"]
+
+
+def test_multiple_alternatives_are_numbered_in_order():
+    results = {
+        "objective": {"total_cost": 100.0},
+        "alternative_feasible_solutions": [
+            {"description": "First alternative", "total_cost": 110.0},
+            {"description": "Second alternative", "total_cost": 120.0},
+        ],
+    }
+    data = build_visualization_data(results)
+    solutions = {s["solution"]: s for s in data["solution_costs"]}
+
+    assert solutions["Alternative 1"]["description"] == "First alternative"
+    assert solutions["Alternative 1"]["amount_aud"] == 110.0
+    assert solutions["Alternative 2"]["description"] == "Second alternative"
+    assert solutions["Alternative 2"]["amount_aud"] == 120.0
+
+
+def test_alternative_without_a_description_still_gets_a_short_label():
+    results = {
+        "objective": {"total_cost": 100.0},
+        "alternative_feasible_solutions": [{"total_cost": 150.0}],
+    }
+    data = build_visualization_data(results)
+    alternative = data["solution_costs"][1]
+    assert alternative["solution"] == "Alternative 1"
+    assert alternative["description"] is None
 
 
 def test_unknown_values_are_omitted_or_null_never_zero():

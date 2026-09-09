@@ -490,7 +490,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by the water demand for {zone_id}: the full "
-            f"{vol} ML needed by {zone_id} had to be delivered, "
+            f"{vol} ML/day needed by {zone_id} had to be delivered, "
             "leaving no room to supply any less."
         )
 
@@ -538,7 +538,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         tag = ", estimated" if has_estimated else ""
         return (
             f"The solution was limited by {binding_label}: {source_name} "
-            f"reached its maximum available capacity ({vol} ML{tag}). "
+            f"reached its maximum available capacity ({vol} ML/day{tag}). "
             f"{other_clause}"
         )
 
@@ -557,7 +557,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by {binding_label}: {plant_name} was "
-            f"already treating as much as it can handle ({vol} ML), leaving no "
+            f"already treating as much as it can handle ({vol} ML/day), leaving no "
             "spare capacity."
         )
 
@@ -597,7 +597,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by {binding_label}: this link was carrying as "
-            f"much flow as it can handle ({vol} ML), so any additional water had to "
+            f"much flow as it can handle ({vol} ML/day), so any additional water had to "
             "route another way."
         )
 
