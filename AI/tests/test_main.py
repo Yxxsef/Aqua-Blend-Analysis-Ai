@@ -30,12 +30,22 @@ FIXTURE_PATH = (
     / "fixtures"
     / "model_output_example.json"
 )
+FLAT_ROW_FIXTURE_PATH = AI_DIR / "tests" / "fixtures" / "milp_model_output_row.json"
 PROTOTYPE_DISCLAIMER = "AquaBlend is a public-data decision-support proof-of-concept."
 
 
 @pytest.fixture
 def valid_results() -> dict:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def flat_output_row() -> dict:
+    """One realistic flat milp_model_output database row: loader/
+    preprocessing/solver status columns, sources/plants/demand_zones/flow
+    columns, quality, warnings, costs, database IDs, hashes, and a complete
+    raw_output_json - see AI/tests/fixtures/milp_model_output_row.json."""
+    return json.loads(FLAT_ROW_FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
 def test_optimal_result_uses_deterministic_fallback_without_model(
@@ -560,6 +570,77 @@ def test_flat_column_fallback_splits_selected_and_unused_sources(
     assert canonical["constraints"] == []
     assert canonical["diagnostics"] == {}
     assert canonical["data_flags"] == {"sources": [], "notes": []}
+
+
+# --- Task 86: flat milp_model_output row -> full pipeline -------------------
+
+
+def test_flat_row_end_to_end_through_the_full_pipeline(flat_output_row: dict) -> None:
+    """A realistic flat milp_model_output row (complete raw_output_json,
+    plus every flat column) must flow cleanly through
+    extract_canonical_output -> validate_results -> adapt_results ->
+    run_pipeline, exactly like a real Supabase read does."""
+    canonical, canonical_warnings = main.extract_canonical_output(flat_output_row)
+    assert canonical_warnings == []  # raw_output_json is complete: no fallback
+
+    main.validate_results(canonical)  # must not raise
+    adapted = main.adapt_results(canonical)
+    assert adapted["scenarioId"] == "scenario_2026_07_17_001"
+
+    response = main.run_pipeline(canonical)
+
+    assert response["scenario_id"] == "scenario_2026_07_17_001"
+    assert response["solver_status"] == "OPTIMAL"
+    assert response["report_mode"] in {"TEMPLATE_FALLBACK", "LLM_VALIDATED"}
+    assert response["kpis"] is not None
+    assert response["visualization_data"] is not None
+    assert response["detailed_explanation"] is not None
+    assert response["executive_summary"] is not None
+
+
+def test_flat_fallback_uses_solver_status_never_loader_or_preprocessing_status(
+    flat_output_row: dict,
+) -> None:
+    """loader_status/preprocessing_status describe earlier pipeline stages
+    (loading the scenario, preprocessing it) - only solver_status is the
+    MILP result status, and only it may become the canonical `status` that
+    drives run_pipeline. Forcing raw_output_json empty isolates this: the
+    flat-column fallback (normalize_output_columns) must map solver_status
+    alone, ignoring the other two entirely."""
+    row = copy.deepcopy(flat_output_row)
+    row["raw_output_json"] = {}
+    row["loader_status"] = "FAILED"
+    row["preprocessing_status"] = "SKIPPED"
+    row["solver_status"] = "OPTIMAL"
+
+    canonical, canonical_warnings = main.extract_canonical_output(row)
+
+    assert canonical["status"] == "OPTIMAL"
+    assert canonical["status"] != row["loader_status"]
+    assert canonical["status"] != row["preprocessing_status"]
+    assert any("flat columns" in w for w in canonical_warnings)
+
+    response = main.run_pipeline(canonical)
+    assert response["solver_status"] == "OPTIMAL"
+    assert response["report_mode"] != "INVALID_INPUT"
+
+
+def test_raw_output_json_path_also_ignores_loader_and_preprocessing_status(
+    flat_output_row: dict,
+) -> None:
+    """Even when raw_output_json is used as-is (the common case), a
+    mismatched loader_status/preprocessing_status on the same row must have
+    no bearing on the reported solver_status."""
+    row = copy.deepcopy(flat_output_row)
+    row["loader_status"] = "FAILED"
+    row["preprocessing_status"] = "SKIPPED"
+    # solver_status and raw_output_json["status"] already agree: "OPTIMAL".
+
+    canonical, canonical_warnings = main.extract_canonical_output(row)
+    response = main.run_pipeline(canonical)
+
+    assert canonical_warnings == []
+    assert response["solver_status"] == row["solver_status"] == "OPTIMAL"
 
 
 def test_run_from_source_rejects_a_row_that_is_not_results_json(

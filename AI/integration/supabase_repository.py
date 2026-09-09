@@ -354,6 +354,48 @@ def save_ai_output(
     ``scenario_id`` on the MILP row is the display string and must never be
     used here), ``output_hash`` -> ``milp_output_hash``.
 
+    Sprint 4 Task 86 - column coverage (every ``milp_ai_output`` column not
+    obviously populated above, classified so a later task knows exactly
+    what still needs wiring up, and never mistakes "not yet available" for
+    "forgotten"):
+
+    Populated now (see the ``row`` dict below): ``milp_output_id``,
+    ``scenario_id``, ``origin_run_id``, ``status``, ``ai_contract_version``,
+    ``milp_output_hash``, ``ai_output_hash``, ``ai_input_json``,
+    ``executive_summary``, ``decision_explanation``, ``raw_ai_json``,
+    ``warnings``, ``completed_at``, ``started_at`` (when given),
+    ``error_code``/``error_message`` (only on a failed analysis), ``ai_model``
+    /``prompt_version`` (only when a model actually ran).
+
+    Intentionally stored as the schema's own empty default - the pipeline
+    has no analysis to put here yet, and an empty list/object is what the
+    column already defaults to, so omitting the key vs. setting it
+    explicitly has the same effect. Listed explicitly anyway so it is clear
+    these are a deliberate "nothing to report" rather than an oversight:
+    ``key_findings`` ([]), ``anomalies`` ([]), ``recommendations`` ([]),
+    ``risk_assessment`` ({}), ``source_analysis`` ({}), ``plant_analysis``
+    ({}), ``quality_analysis`` ({}), ``limitations`` ([]).
+
+    Deferred - genuinely unavailable, left as SQL NULL (never set in
+    ``row``, never guessed):
+    - ``ai_provider``: no field anywhere carries "which vendor/host served
+      this" (``ModelConfig`` only has ``base_url``, which is a detail, not
+      a normalised provider name).
+    - ``ai_model_version``: ``ModelConfig.model_id`` is the only model
+      identifier available; there is no separate version string to read.
+    - ``analysis_version``: no concept of an analysis-logic version distinct
+      from ``ai_contract_version`` exists yet in this pipeline.
+    - ``ai_cache_key``: no cache-key derivation has been implemented.
+    - ``prompt_tokens``, ``completion_tokens``, ``total_tokens``:
+      ``model_runner.rewrite_report``/``RewriteResult`` do not parse the
+      OpenAI-compatible response's ``usage`` object, so no token counts are
+      available to record - inventing a number here would misreport real
+      model cost/usage.
+
+    Not part of this task's required list, but also left to the DB's own
+    default rather than being set here: ``cache_reusable`` (defaults
+    ``true``), ``forced_recompute`` (defaults ``false``).
+
     Raises:
         SupabaseError: the MILP row cannot key a milp_ai_output row, the
             scenario identifier is not an integer, or the insert failed.
