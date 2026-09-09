@@ -490,11 +490,16 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by the water demand for {zone_id}: the full "
-            f"{vol} ML needed by {zone_id} had to be delivered, "
+            f"{vol} ML/day needed by {zone_id} had to be delivered, "
             "leaving no room to supply any less."
         )
 
     if category == "source_capacity":
+        # Names the specific other selected source(s), rather than a vague
+        # "additional water had to come from other sources" clause - a real
+        # LLM rewrite inverted that wording into "no extra water could come
+        # from other sources" (the opposite meaning). Stating who supplied
+        # the remainder removes the ambiguity that inversion exploited.
         source_id = name[len("source_capacity_"):]
         s = selected.get(source_id)
         if not s:
@@ -502,18 +507,39 @@ def _render_constraint(category, name, selected, unused, demand_zones,
         source_name = s.get("source_name") or source_id
         vol = s.get("volume_drawn_ml_per_day")
         binding_label = f"the available capacity of {source_name}"
+
+        other_names = [
+            sel.get("source_name") or sid
+            for sid, sel in selected.items()
+            if sid != source_id
+        ]
+        if len(other_names) == 1:
+            other_clause = (
+                f"The remaining demand was supplied by the other selected "
+                f"source, {other_names[0]}."
+            )
+        elif len(other_names) > 1:
+            other_clause = (
+                "The remaining demand was supplied by the other selected "
+                "sources: " + ", ".join(other_names) + "."
+            )
+        else:
+            other_clause = (
+                "No other selected source was available to supply the "
+                "remaining demand."
+            )
+
         if vol is None:
             return (
-                f"The solution was limited by {binding_label}: {source_name} was "
-                "drawn up to the most its capacity allows, so any additional water "
-                "had to come from other sources."
+                f"The solution was limited by {binding_label}: {source_name} "
+                f"reached its maximum available capacity. {other_clause}"
             )
         has_estimated = bool(source_flags.get(source_id, {}).get("has_estimated_values"))
         tag = ", estimated" if has_estimated else ""
         return (
-            f"The solution was limited by {binding_label}: {source_name} was drawn "
-            f"up to the most its capacity allows ({vol} ML{tag}), so any additional "
-            "water had to come from other sources."
+            f"The solution was limited by {binding_label}: {source_name} "
+            f"reached its maximum available capacity ({vol} ML/day{tag}). "
+            f"{other_clause}"
         )
 
     if category == "plant_capacity":
@@ -531,7 +557,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by {binding_label}: {plant_name} was "
-            f"already treating as much as it can handle ({vol} ML), leaving no "
+            f"already treating as much as it can handle ({vol} ML/day), leaving no "
             "spare capacity."
         )
 
@@ -571,7 +597,7 @@ def _render_constraint(category, name, selected, unused, demand_zones,
             )
         return (
             f"The solution was limited by {binding_label}: this link was carrying as "
-            f"much flow as it can handle ({vol} ML), so any additional water had to "
+            f"much flow as it can handle ({vol} ML/day), so any additional water had to "
             "route another way."
         )
 
@@ -850,6 +876,211 @@ def explain_alternatives_and_sensitivity(data: dict):
     if not lines:
         return None
     return "\n\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Executive summary (AquaBlend final AI integration)
+#
+# A short, deterministic, operator-readable summary - distinct from the full
+# 12-section report generate_explanation() builds. This is the ONLY text an
+# LLM rewrite may ever touch; the full report is always deterministic. Never
+# invents a figure that isn't in `data`; a missing value is stated as
+# "not reported", never guessed or defaulted to zero. Written as short,
+# complete sentences (not one comma-chained line): a status word directly
+# followed by ", <number>" was found to false-positive-match
+# llm_validator's Title-Case identifier pattern (e.g. "OPTIMAL, 500" reads
+# as a two-word proper noun) - see Validation_Rules.md-style reasoning in
+# llm_validator.py's _TITLE_CASE_IDENTIFIER_PATTERN. Ending each fact with
+# a period rather than a comma avoids that class of false positive.
+# ---------------------------------------------------------------------------
+
+def _short_binding_constraint_label(data: dict, name: str) -> str | None:
+    """A brief, few-word mention of one binding constraint - NOT the full
+    sentence explain_binding_constraints() renders. Returns None when the
+    id encoded in `name` has no matching entry (the No-matching-entry case
+    also used by _render_constraint)."""
+    category = _classify_constraint(name)
+    selected = {
+        s.get("source_id"): s
+        for s in (data.get(F_SOURCES) or {}).get(F_SELECTED) or []
+    }
+    plants = {
+        p.get("plant_id"): p
+        for p in (data.get(F_PLANTS) or {}).get(F_ACTIVE) or []
+    }
+    demand_zones = {z.get("zone_id"): z for z in data.get(F_DEMAND_ZONES) or []}
+
+    if category == "demand":
+        zone_id = name[len("demand_satisfaction_"):]
+        zone = demand_zones.get(zone_id)
+        if not zone:
+            return None
+        return f"demand for {zone.get('zone_name') or zone_id}"
+    if category == "source_capacity":
+        source_id = name[len("source_capacity_"):]
+        s = selected.get(source_id)
+        if not s:
+            return None
+        return f"{s.get('source_name') or source_id}'s available capacity"
+    if category == "plant_capacity":
+        plant_id = name[len("plant_capacity_"):]
+        p = plants.get(plant_id)
+        if not p:
+            return None
+        return f"{p.get('plant_name') or plant_id}'s processing capacity"
+    if category == "link_capacity":
+        return "a source-to-plant or plant-to-zone connection"
+    if category == "water_quality":
+        parameter, plant_id = _split_quality_name(name)
+        if parameter is None:
+            return None
+        return f"the {parameter} limit at {plant_id}"
+    return None
+
+
+def _closest_quality_margin(data: dict) -> tuple[str, str, float] | None:
+    """(plant_id, parameter, safety_margin_percent) for the tightest
+    reported plant-inflow quality margin, or None when no numeric margin
+    was reported anywhere."""
+    by_plant = (data.get(F_WATER_QUALITY) or {}).get(F_BY_PLANT) or {}
+    tightest: tuple[str, str, float] | None = None
+    for plant_id, parameters in sorted(by_plant.items()):
+        for parameter, detail in (parameters or {}).items():
+            margin = (detail or {}).get("safety_margin_percent")
+            if not isinstance(margin, (int, float)):
+                continue
+            if tightest is None or margin < tightest[2]:
+                tightest = (plant_id, parameter, margin)
+    return tightest
+
+
+def generate_executive_summary(data: dict) -> str:
+    """Build a short, plain-language executive summary suitable for an LLM
+    to lightly reword (see AI/explanations/prompts.py). Requires the same
+    minimum fields as generate_explanation(): `status` and `scenarioId`.
+
+    For an OPTIMAL result this reports, only when the underlying data is
+    present (never guessed): the scenario id and solver status; whether
+    demand was fully met; total cost; each selected source's blend share;
+    the closest plant-inflow water-quality margin; one binding constraint;
+    a provisional/estimated-data note; and one alternative or sensitivity
+    finding. Targets roughly 80-150 words and never exceeds ~180."""
+    validate_input(data)
+
+    scenario_id = data.get(F_SCENARIO_ID)
+    status = data.get(F_STATUS)
+
+    if status not in FULL_REPORT_STATUSES:
+        return (
+            f"Scenario {scenario_id}: solver status {status}. No optimal "
+            "solution is available to summarise."
+        )
+
+    paragraphs: list[str] = []
+
+    # Scenario, status, demand, cost.
+    zones = data.get(F_DEMAND_ZONES) or []
+    demand = sum(z.get("demand_ml_per_day") or 0 for z in zones) or None
+    supplied = sum(z.get("volume_supplied_ml_per_day") or 0 for z in zones) or None
+    if demand is not None and supplied is not None:
+        demand_sentence = (
+            f"Demand was fully met: {supplied} ML/day supplied against "
+            f"{demand} ML/day required."
+            if supplied >= demand
+            else (
+                f"Demand was only partially met: {supplied} ML/day "
+                f"supplied against {demand} ML/day required."
+            )
+        )
+    else:
+        demand_sentence = "Demand satisfaction was not reported."
+
+    objective = data.get(F_OBJECTIVE) or {}
+    currency = objective.get(F_CURRENCY)
+    total_cost = objective.get("total_cost")
+    cost_sentence = (
+        f"Total cost was {_format_money(total_cost, currency)}."
+        if total_cost is not None
+        else "Total cost was not reported."
+    )
+
+    paragraphs.append(
+        f"Scenario {scenario_id} reached solver status {status}. "
+        f"{demand_sentence} {cost_sentence}"
+    )
+
+    # Selected sources and blend shares.
+    selected = (data.get(F_SOURCES) or {}).get(F_SELECTED) or []
+    ordered = sorted(selected, key=lambda s: s.get("percent_of_blend", 0), reverse=True)
+    if ordered:
+        parts = [
+            f"{s.get('source_name') or s.get('source_id')}"
+            + (f" at {s['percent_of_blend']}%" if s.get("percent_of_blend") is not None else "")
+            for s in ordered
+        ]
+        if len(parts) == 1:
+            source_clause = parts[0]
+        else:
+            source_clause = ", ".join(parts[:-1]) + f", and {parts[-1]}"
+        paragraphs.append(f"The blend was supplied by {source_clause} of the total.")
+    else:
+        paragraphs.append("No selected-source result was provided.")
+
+    # Closest plant-inflow water-quality margin, and one binding constraint.
+    fact_sentences: list[str] = []
+    margin = _closest_quality_margin(data)
+    if margin is not None:
+        plant_id, parameter, percent = margin
+        fact_sentences.append(
+            f"The closest water-quality safety margin was on {parameter} at "
+            f"{plant_id}, with {percent}% margin at plant inflow."
+        )
+
+    binding = data.get(F_BINDING_SUMMARY) or []
+    non_demand = [name for name in binding if _classify_constraint(name) != "demand"]
+    for name in non_demand + binding:
+        label = _short_binding_constraint_label(data, name)
+        if label is not None:
+            fact_sentences.append(f"A binding constraint was {label}.")
+            break
+    if fact_sentences:
+        paragraphs.append(" ".join(fact_sentences))
+
+    # Provisional / estimated-data note.
+    source_entries = (data.get(F_DATA_FLAGS) or {}).get(F_SOURCES) or []
+    if any(e.get("has_estimated_values") for e in source_entries):
+        paragraphs.append(
+            "Some source data is estimated, so this result is provisional."
+        )
+
+    # One alternative or sensitivity finding.
+    alternatives = data.get(F_ALTERNATIVES) or []
+    if alternatives:
+        alt = alternatives[0]
+        alt_cost = alt.get("total_cost")
+        alt_diff = alt.get("cost_difference_from_optimal")
+        if alt_cost is not None or alt_diff is not None:
+            sentence = "An alternative solution"
+            if alt_cost is not None:
+                sentence += f" would cost {_format_money(alt_cost, currency)}"
+            if alt_diff is not None:
+                sentence += (
+                    f", a difference of {_format_money(alt_diff, currency)} "
+                    "from the optimal result"
+                )
+            paragraphs.append(sentence + ".")
+    else:
+        sensitivity_items = [
+            item for item in (data.get(F_SENSITIVITY) or [])
+            if item.get("assumption") and item.get("impact")
+        ]
+        if sensitivity_items:
+            item = sensitivity_items[0]
+            paragraphs.append(
+                f"This result is sensitive to {item['assumption']}: {item['impact']}."
+            )
+
+    return " ".join(paragraphs)
 
 
 # ---------------------------------------------------------------------------

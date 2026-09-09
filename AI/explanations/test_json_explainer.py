@@ -25,6 +25,7 @@ Two families of tests:
 """
 
 import copy
+import re
 import sys
 from pathlib import Path
 
@@ -49,11 +50,13 @@ from json_explainer import (
     explain_sensitivity,
     explain_estimated_fields,
     explain_alternatives_and_sensitivity,
+    generate_executive_summary,
     generate_explanation,
     FULL_REPORT_STATUSES,
     PROTOTYPE_DISCLAIMER,
     WATER_QUALITY_STAGE_NOTE,
 )
+from llm_validator import _extract_identifiers, _strip_headings
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +337,23 @@ class TestReferenceJSON:
     def test_binding_constraints_demand_and_capacity(self):
         text = explain_binding_constraints(ref())
         assert "water demand for zone_1" in text
-        assert "500 ML needed by zone_1" in text
+        assert "500 ML/day needed by zone_1" in text
         assert "available capacity of Yarra River, Kew" in text
-        assert "290 ML" in text
+        assert "290 ML/day" in text
+
+    def test_capacity_wording_names_the_other_source_not_a_vague_clause(self):
+        """Regression for a real LLM rewrite that inverted 'any additional
+        water had to come from other sources' into 'no extra water could
+        come from other sources' - the opposite meaning. Naming the actual
+        other source removes that ambiguity."""
+        text = explain_binding_constraints(ref())
+        assert "reached its maximum available capacity" in text
+        assert (
+            "The remaining demand was supplied by the other selected "
+            "source, Silvan Reservoir." in text
+        )
+        assert "no extra water could come from other sources" not in text
+        assert "any additional water had to come from other sources" not in text
 
     def test_estimated_fields_lists_all_three_sources(self):
         text = explain_estimated_fields(ref())
@@ -413,6 +430,69 @@ class TestReferenceJSON:
         assert "Yarra River, Kew" in text and "58.0%" in text
         assert "Groundwater Bore 1" in text
         assert "turbidity" in text
+
+    def test_headings_are_valid_markdown_not_bold_wrapped(self):
+        """Headings must be plain '## Title', never '**## Title**'."""
+        text = generate_explanation(ref())
+        assert "**##" not in text
+        assert "## Cost Summary" in text
+
+    def test_executive_summary_is_short_and_deterministic(self):
+        summary_a = generate_executive_summary(ref())
+        summary_b = generate_executive_summary(ref())
+        assert summary_a == summary_b
+        assert "scenario_2026_07_17_001" in summary_a
+        assert "OPTIMAL" in summary_a
+        assert "500 ML/day" in summary_a
+        assert "Yarra River, Kew" in summary_a
+        assert len(summary_a) < len(generate_explanation(ref()))
+
+    def test_executive_summary_contains_every_required_fact(self):
+        """AquaBlend final AI integration: the executive summary must cover
+        scenario/status, demand satisfaction, cost, every selected source's
+        blend share, the closest plant-inflow quality margin, one binding
+        constraint, a provisional/estimated-data note, and one alternative
+        or sensitivity finding - using only values already in the fixture."""
+        summary = generate_executive_summary(ref())
+
+        assert "scenario_2026_07_17_001" in summary
+        assert "OPTIMAL" in summary
+        assert "500 ML/day" in summary
+        assert "184,150" in summary
+        assert "Yarra River, Kew" in summary and "58.0%" in summary
+        assert "Silvan Reservoir" in summary and "42.0%" in summary
+        assert "22.6%" in summary
+        assert "plant inflow" in summary
+        assert "Yarra River, Kew" in summary and "capacity" in summary
+        assert "provisional" in summary.lower()
+        assert "estimated" in summary.lower()
+        assert "189,400" in summary or "5,250" in summary
+
+    def test_executive_summary_word_count_is_bounded(self):
+        summary = generate_executive_summary(ref())
+        word_count = len(summary.split())
+        assert word_count <= 180
+        assert 60 <= word_count <= 160
+
+    def test_executive_summary_never_triggers_false_identifier_matches(self):
+        """Regression: a real live Qwen run rejected a rewrite because the
+        deterministic summary contained 'OPTIMAL, 500', which
+        llm_validator's Title-Case identifier pattern misread as a two-word
+        proper noun. Every extracted 'identifier' in the summary must be a
+        genuine source/plant/scenario name, never a status word or any
+        other capitalised word glued to a following number."""
+        summary = generate_executive_summary(ref())
+        identifiers = _extract_identifiers(_strip_headings(summary))
+        known = {
+            "Yarra River, Kew", "Silvan Reservoir", "Treatment Facility 1",
+            "scenario_2026_07_17_001", "facility_1",
+        }
+        assert identifiers <= known, identifiers - known
+
+    def test_executive_summary_never_contains_the_full_report(self):
+        summary = generate_executive_summary(ref())
+        assert PROTOTYPE_DISCLAIMER not in summary
+        assert "## " not in summary
 
 
 # ---------------------------------------------------------------------------
@@ -703,6 +783,27 @@ class TestWaterQualityEdgeCases:
 
 class TestBindingConstraintsEdgeCases:
 
+    def test_all_four_constraint_categories_report_ml_per_day(self):
+        """demand_ml_per_day, volume_drawn_ml_per_day,
+        volume_processed_ml_per_day, and flow_ml_per_day are all daily flow
+        values - every binding-constraint sentence sourced from them must
+        say 'ML/day', never a bare 'ML'."""
+        data = ref()
+        data["bindingConstraintsSummary"] = [
+            "demand_satisfaction_zone_1",
+            "source_capacity_yarra_kew",
+            "plant_capacity_facility_1",
+            "link_capacity_silvan_reservoir_to_facility_1",
+        ]
+        text = explain_binding_constraints(data)
+
+        assert "500 ML/day needed by zone_1" in text
+        assert "290 ML/day, estimated" in text
+        assert "500 ML/day" in text  # plant_capacity_facility_1
+        assert "210 ML/day" in text  # link_capacity_..._to_facility_1
+        # No stray bare "ML" (not immediately followed by "/day").
+        assert not re.search(r"\bML\b(?!/day)", text)
+
     def test_empty_binding_list(self):
         data = ref()
         data["bindingConstraintsSummary"] = []
@@ -727,7 +828,7 @@ class TestBindingConstraintsEdgeCases:
         data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
         assert "batch" not in text.lower()
 
     def test_water_quality_range_binding(self):
@@ -744,7 +845,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Silvan Reservoir" in text
         assert "Treatment Facility 1" in text
-        assert "210 ML" in text
+        assert "210 ML/day" in text
         assert "no plain-language mapping available" not in text
 
     def test_link_capacity_plant_to_zone_binding(self):
@@ -753,7 +854,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
         assert "Zone 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
 
     def test_link_capacity_unknown_path_id_falls_back(self):
         data = ref()
@@ -772,7 +873,7 @@ class TestBindingConstraintsEdgeCases:
 
     def test_estimated_disclosure_reads_per_source_flag(self):
         text = explain_binding_constraints(ref())
-        assert "(290 ML, estimated)" in text
+        assert "(290 ML/day, estimated)" in text
 
     def test_missing_demand_ml_per_day_drops_clause_not_whole_sentence(self):
         data = ref()
@@ -785,7 +886,7 @@ class TestBindingConstraintsEdgeCases:
         data = ref()
         del data["sources"]["selected"][1]["volume_drawn_ml_per_day"]  # yarra_kew
         text = explain_binding_constraints(data)
-        assert "was drawn up to the most its capacity allows, so" in text
+        assert "reached its maximum available capacity." in text
         assert "None" not in text
 
     def test_missing_plant_fields_drops_clause(self):
