@@ -1,0 +1,10 @@
+{
+  "report_text": "## Scenario and Solver Status\n\nScenario: scenario_2026_07_17_001  \nSolver status: INFEASIBLE  \nSolved at: 2026-07-17T10:32:00Z\n\n## Result Availability\n\nThe solver found no valid solution (INFEASIBLE). This result cannot be used to make a final decision.\n\n## Prototype Disclaimer\n\nAquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.",
+  "report_mode": "LLM_UNVALIDATED",
+  "model_id": "qwen3:4b-instruct-2507-q4_K_M",
+  "prompt_version": "aquablend-report-rewrite-v1.0",
+  "runtime_ms": 8641,
+  "fallback_used": false,
+  "failure_type": null,
+  "failure_message": null
+}

@@ -1,0 +1,13 @@
+## Scenario and Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: INFEASIBLE  
+Solved at: 2026-07-17T10:32:00Z
+
+## Result Availability
+
+The solver found no valid solution (INFEASIBLE). This result cannot be used to make a final decision.
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.
