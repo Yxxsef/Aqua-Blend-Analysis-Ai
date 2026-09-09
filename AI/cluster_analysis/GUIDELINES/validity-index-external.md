@@ -130,7 +130,7 @@ Three properties to check, in this order:
 
 ## Write-up and notebook
 
-`template/measure_template.tex` into `documentation/sections/clustering_methods/measures/<nn>-<name>.tex`. Labels `sec:measure:<name>:*`.
+`template/measure_template.tex` into `documentation/sections/clustering_methods/validity/<nn>-<name>.tex`. Labels `sec:measure:<name>:*`.
 
 For the notebook: an external index needs a dataset with known labels, so use `BenchmarkLoader("iris")` and report the index for a method whose published agreement you can cite. State in §2 Scope that this notebook validates the *index*, and that the method is the instrument rather than the subject.
 

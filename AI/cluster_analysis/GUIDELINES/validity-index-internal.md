@@ -161,7 +161,7 @@ Silhouette on iris at |C|=3 is `0.5528`. Asserting it is what turns "my implemen
 
 ## Step 4: Write-up
 
-`template/measure_template.tex` into `documentation/sections/clustering_methods/measures/<nn>-<name>.tex`. Labels `sec:measure:<name>:*`. Paragraph 3 is `higher_is_better`/`range_`, paragraph 4 is the applicability flags, paragraph 7 is `assumes_shape`.
+`template/measure_template.tex` into `documentation/sections/clustering_methods/validity/<nn>-<name>.tex`. Labels `sec:measure:<name>:*`. Paragraph 3 is `higher_is_better`/`range_`, paragraph 4 is the applicability flags, paragraph 7 is `assumes_shape`.
 
 Then [notebook.md](notebook.md). An index notebook needs a method to score, so in practice it pairs with one; say so explicitly in §2 Scope rather than leaving it implied.
 

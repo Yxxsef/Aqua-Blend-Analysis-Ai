@@ -7,17 +7,21 @@
 %      whether internal, external or relative.
 %  Delete the prompts in Parts 3 and 4 that do not apply to your kind.
 %
-%    cp template/measure_template.tex \
-%       documentation/sections/clustering_methods/measures/NN-<name>.tex
+%    a dissimilarity measure --->
+%      cp template/measure_template.tex \
+%         documentation/sections/clustering_methods/measures/NN-<name>.tex
+%    a validity index --->
+%      cp template/measure_template.tex \
+%         documentation/sections/clustering_methods/validity/NN-<name>.tex
 %
 %  Then: replace <NAME>, replace the label suffix `template' with the
-%  measure's short name, and add one \input line under Section 7.1 in
-%  cluster_main.tex.
+%  measure's short name, and add one \input line in cluster_main.tex ---
+%  under Section 7.1 for a dissimilarity, Section 7.2 for an index.
 %
 %  This file is NOT included in the build.
 %
-%  Levels: a measure is a \subsubsection under Section 7.1, so the parts
-%  below are \paragraph.  Keep their order unchanged in every copy.
+%  Levels: a measure is a \subsubsection under Section 7.1 or 7.2, so the
+%  parts below are \paragraph.  Keep their order unchanged in every copy.
 %
 %  Code counterpart:
 %    xxcluster/measures/dissimilarity/<name>.py, or

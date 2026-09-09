@@ -128,7 +128,7 @@ Print your own rather than trusting this one: `python -c "from ... import X; pri
 
 `InductiveMixin` is **not** added by hand; `BasePrototypeClusterer` already carries it, because the family is inductive by construction.
 
-**`_param_map = {"metric": None}`** drops the parameter. `BasePrototypeClusterer` exposes `metric`, but scikit-learn's K-Means is Euclidean-only. Mapping to `None` keeps it from reaching the backend. *Still outstanding: `_fit` should reject a non-Euclidean value rather than ignoring it; a silently discarded `metric="manhattan"` is a wrong result that looks fine.*
+**`_param_map = {"metric": None}`** drops the parameter. `BasePrototypeClusterer` exposes `metric`, but scikit-learn's K-Means is Euclidean-only. Mapping to `None` keeps it from reaching the backend, and `_validate_params` refuses any other value: a silently discarded `metric="manhattan"` is a wrong result that looks fine.
 
 **`_attr_map = {"criterion_": "inertia_"}`**: one backend attribute feeding two contract names. `_collect_fitted` looks up each required attribute through the map, defaulting to the same name, so `criterion_` redirects to the backend's SSE while `inertia_` resolves to itself.
 
@@ -257,7 +257,7 @@ cp template/method_template.tex \
    documentation/sections/clustering_methods/partitional/sse_based/01-kmeans.tex
 
 cp template/measure_template.tex \
-   documentation/sections/clustering_methods/measures/02-silhouette.tex
+   documentation/sections/clustering_methods/validity/02-silhouette.tex
 ```
 
 The `sse_based/` directory did not exist, so you create it, mirroring the code tree the way `partitional/density_based/` already does.
@@ -274,7 +274,7 @@ Listed so the §10 caveats are accurate, and because a real contribution ends wi
 
 | Outstanding | Needs |
 |---|---|
-| `references=()` on `KMeans` | the `literature.bib` keys Sect. 7.3 actually cites, left empty rather than guessed |
+| `references=()` on `KMeans` | the `literature.bib` keys Sect. 7.4 actually cites, left empty rather than guessed |
 | `sec:tech:kmeans` | the section does not exist yet; `doc_label` is a forward reference |
 | `metric="manhattan"` silently dropped | reject it in `_fit` |
 | `selection/n_clusters.py` | `_evaluate_candidate` + a concrete `BaseRelativeCriterion` |

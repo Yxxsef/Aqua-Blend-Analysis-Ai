@@ -32,9 +32,9 @@ Branch naming, commits and pull requests follow [`AI/README.md`](../README.md): 
 
 | Template | For | Document section | Code counterpart |
 |---|---|---|---|
-| `method_template` | A clustering method | Sect. 7.2–7.4 | `xxcluster/cluster/…` |
+| `method_template` | A clustering method | Sect. 7.3–7.5 | `xxcluster/cluster/…` |
 | `dimreduction_template` | A dimensionality reduction technique | Sect. 6.3–6.4 | `xxcluster/dim_red/…` |
-| `measure_template` | A dissimilarity measure or validity index | Sect. 7.1 | `xxcluster/measures/…` |
+| `measure_template` | A dissimilarity measure or validity index | Sect. 7.1 / 7.2 | `xxcluster/measures/…` |
 
 Each exists as `.tex` and `.docx`. Write in whichever you prefer; both feed `documentation/main.pdf`.
 
@@ -147,10 +147,10 @@ Then [`GUIDELINES/00-the-contract.md`](GUIDELINES/00-the-contract.md), which is 
 
 | You are adding | Code goes in | Subclass | Document section | Template | Notebook | Guide |
 |---|---|---|---|---|---|---|
-| A clustering method | `xxcluster/cluster/<family>/<subfamily>/<name>.py` | that subfamily's base | Sect. 7.2–7.4 | `method_template` | required | [clustering-method](GUIDELINES/clustering-method.md) |
+| A clustering method | `xxcluster/cluster/<family>/<subfamily>/<name>.py` | that subfamily's base | Sect. 7.3–7.5 | `method_template` | required | [clustering-method](GUIDELINES/clustering-method.md) |
 | A dim. reduction technique | `xxcluster/dim_red/<linear\|nonlinear>/<name>.py` | `BaseLinearReducer`, or `BaseManifoldReducer` / `BaseKernelReducer`; see [2.4](#24-adding-a-dimensionality-reduction-technique) | Sect. 6.2–6.4 | `dimreduction_template` | required | [dim-reduction](GUIDELINES/dim-reduction.md) |
 | A dissimilarity measure | `xxcluster/measures/dissimilarity/<name>.py` | `BaseDissimilarity` | Sect. 7.1 | `measure_template` | required | [dissimilarity-measure](GUIDELINES/dissimilarity-measure.md) |
-| A validity index | `xxcluster/measures/validation/{internal,external,relative}.py` | the matching base | Sect. 7.1 | `measure_template` | required | [internal](GUIDELINES/validity-index-internal.md) / [external](GUIDELINES/validity-index-external.md) / [relative](GUIDELINES/validity-index-relative.md) |
+| A validity index | `xxcluster/measures/validation/{internal,external,relative}.py` | the matching base | Sect. 7.2 | `measure_template` | required | [internal](GUIDELINES/validity-index-internal.md) / [external](GUIDELINES/validity-index-external.md) / [relative](GUIDELINES/validity-index-relative.md) |
 | A preprocessing step | `xxcluster/pipeline/preprocess.py` | `BasePreprocessor` | Sect. 3.3 | n/a (add to that section) | recommended | [preprocessing-step](GUIDELINES/preprocessing-step.md) |
 | A selector or perturbation | `xxcluster/selection/` | `BaseSelector`, `BasePerturbation` | Sect. 4.3 | n/a | recommended | [selector](GUIDELINES/selection-selector.md) / [perturbation](GUIDELINES/selection-perturbation.md) |
 | A figure type | `xxcluster/viz/<module>.py` | n/a (plain function) | n/a | n/a | recommended | [visualisation](GUIDELINES/visualisation.md) |
@@ -270,6 +270,24 @@ check_estimator(YourMethod(n_clusters=3))
 ```
 
 Some checks will not apply: precomputed metrics, transductive transforms, parameters with no sensible default. Record the exclusions rather than loosening the contract, and treat every other failure as a real bug.
+
+Record them as `expected_failed_checks`, which runs every other check and reports if an expected failure starts passing. Skipping the estimator instead leaves it unchecked:
+
+```python
+check_estimator(YourMethod(), expected_failed_checks={"check_name": "why it is expected"})
+```
+
+### 2.7.1 Running the tests
+
+One command, from `cluster_analysis/`:
+
+```bash
+python -m pytest
+```
+
+Nothing beyond `requirements.txt` is needed; `conftest.py` puts the package on `sys.path`. Run it before opening a pull request and after every commit that touches `xxcluster/`.
+
+The family base classes are covered by `tests/test_*_base.py`, each driving its base through a **native stand-in defined in the test file, not in the package**. That matters: the only registered method, K-Means, is adapted, and an adapted method bypasses every family hook. A base exercised only through it is not exercised at all.
 
 ## 2.8 When things change
 
