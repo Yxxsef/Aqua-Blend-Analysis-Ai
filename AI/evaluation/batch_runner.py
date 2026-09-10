@@ -273,6 +273,16 @@ def run_scenario(
             "data_flags.sources, which v1.0 does not carry "
             "(Task 56 note 1; Task 57 pending)"
         )
+        # The KPI layer still reads toy fields. Two KPIs raise and are caught
+        # per run; the other two return N/A, which is indistinguishable from a
+        # real N/A unless it is said plainly here.
+        unsupported.append(
+            f"{schema}: KPI layer not mapped to the v1.0 contract — "
+            "feasibility, demand satisfaction, minimum safety margin and "
+            "quality violations all read toy fields, so their results are "
+            "unmapped rather than measured. The margin and cost mappings are "
+            "undefined in v1.0 (Task 56 notes 5 and 8)."
+        )
     else:
         adapted = None
         confidence = determine_confidence(
@@ -360,6 +370,23 @@ def run_batch(
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _portable(path: Any) -> Any:
+    """Record a path relative to the repo root so manifests are machine independent.
+
+    A path outside the repo is left absolute rather than turned into a chain of
+    parent hops — better an honest absolute path than a misleading relative one.
+    """
+    if path is None:
+        return None
+    try:
+        return str(Path(path).resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _run_folder(output_root: Path) -> Path:
     """Create a timestamped folder for this run, with raw and processed inside."""
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -399,11 +426,11 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         scenarios.append(
             {
                 "scenario_id": scenario_id,
-                "scenario_path": result["scenario_path"],
+                "scenario_path": _portable(result["scenario_path"]),
                 "status": "ok",
                 "runtime_seconds": result["runtime_seconds"],
                 "schema": result.get("schema"),
-                "source": result.get("optimiser_source"),
+                "source": _portable(result.get("optimiser_source")),
                 "unsupported": result.get("unsupported", []),
                 "raw_output": str(raw_path.relative_to(run_dir)),
                 "processed_output": str(processed_path.relative_to(run_dir)),
@@ -414,7 +441,7 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         scenarios.append(
             {
                 "scenario_id": None,
-                "scenario_path": failure["scenario_path"],
+                "scenario_path": _portable(failure["scenario_path"]),
                 "status": "failed",
                 "error_type": failure["error_type"],
                 "error": failure["error"],
@@ -425,8 +452,8 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         "run_id": run_dir.name,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": batch["mode"],
-        "mock_fixture": batch.get("fixture_path") if batch["mode"] == MOCK else None,
-        "ingest_dir": batch.get("ingest_dir") if batch["mode"] == INGEST else None,
+        "mock_fixture": _portable(batch.get("fixture_path")) if batch["mode"] == MOCK else None,
+        "ingest_dir": _portable(batch.get("ingest_dir")) if batch["mode"] == INGEST else None,
         "mock_warning": (
             "Mock mode returns the same stored optimiser result for every "
             "scenario. Optimiser values are not scenario-specific."

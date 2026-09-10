@@ -269,6 +269,15 @@ def test_v1_path_validates_and_adapts_and_records_the_missing_flagger():
     )
 
 
+def test_v1_records_that_the_kpi_layer_is_unmapped():
+    """An N/A from an unmapped KPI must not read as a measured N/A."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert any(
+        "KPI layer not mapped" in entry
+        for entry in result["unsupported"]
+    )
+
+
 # --- scenario context ------------------------------------------------------
 
 def test_scenario_context_carries_the_capacities_v1_dropped():
