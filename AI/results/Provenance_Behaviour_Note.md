@@ -48,6 +48,22 @@ The implementation uses solved `withdrawal_ml_per_day` as the strongest contribu
 
 Unused or excluded sources do not reduce confidence even if their input data contains estimates.
 
+Duplicate `ScenarioData` source IDs are only treated as uncertainty when the duplicated source actually contributed to the MILP result. A duplicate record for an unused source does not reduce confidence.
+
+
+## Integration usage
+
+The confidence flagger should be called using the real `ScenarioData` sources and the MILP v1 source list:
+
+```python
+determine_confidence(
+    scenario_data.sources,
+    milp_output["sources"],
+)
+```
+
+The `source_id` field is used to join the two structures.
+
 ## Provenance source
 
 The flagger reads provenance from `ScenarioData.sources` / `SourceInput`, not from the MILP Output JSON.
@@ -60,7 +76,9 @@ The flagger reads provenance from `ScenarioData.sources` / `SourceInput`, not fr
 - `maximum_withdrawal`
 - `cost`
 
-It also adds `quality.<parameter_id>` entries for the configured quality parameters. The flagger does not hard-code the quality parameter names; it checks the quality provenance entries supplied by the loader.
+It also adds `quality.<parameter_id>` entries for the configured quality parameters. These field names were taken from the current `data_loader.py` provenance construction. The quality parameter names are not hard-coded; the flagger checks the `quality.*` entries supplied by the loader.
+
+If the loader provenance contract changes in the future, the confidence flagger and its tests should be updated at the same time. A mismatch is intentionally handled safely as `UNKNOWN` rather than incorrectly reporting `MEASURED`.
 
 ## Confidence decision rules
 
@@ -93,8 +111,14 @@ The updated tests cover:
 - the current Task 56 unsolved/PENDING v1 source shape returning `UNKNOWN` without failure;
 - source contribution based on solved withdrawal;
 - backwards compatibility with the Sprint 2 selected-source shape;
+- duplicate unused sources not affecting confidence;
+- duplicate contributing sources returning `UNKNOWN`;
 - clear errors only for invalid top-level containers.
 
 ## Current integration status
 
-Task 57 was implemented against the latest available MILP Output JSON Contract v1.0 and the current `ScenarioData` provenance structure. The available Task 56 v1 fixture represents an unsolved run (`NOT_SOLVED` with `PENDING` sources), rather than a genuine solved MILP result. Because of this, the implementation has been tested against the confirmed v1 structure and representative source decisions, but final integration should be rechecked once a genuine solved MILP v1 output is available. Until then, unresolved contribution or provenance correctly produces `UNKNOWN` confidence.
+Task 57 was implemented against the latest available MILP Output JSON Contract v1.0 and the current `ScenarioData` provenance structure.
+
+The Task 56 fixture still represents an unsolved run (`NOT_SOLVED` with `PENDING` sources), which correctly returns `UNKNOWN`. A reviewer also ran the flagger against the solved v1 example on the `task-59-milp-v1-fixture` branch (`AI/evaluation/fixtures/milp_v1_solved_example.json`) and confirmed that all three confidence states behaved correctly, including excluding the groundwater source from `estimated_sources` when its withdrawal was 0 ML/day.
+
+Once the Task 59 fixture is merged, a direct regression test against that fixture should be added to the Task 57 test suite.

@@ -240,6 +240,50 @@ def test_legacy_task21_selected_source_shape_remains_supported():
     }
 
 
+# checks that a duplicated source with 0 ML/day does not affect confidence
+def test_duplicate_unused_source_does_not_reduce_confidence():
+    scenario_sources = [
+        scenario_source(CASE_SOURCE_1),
+        scenario_source(CASE_SOURCE_3),
+        scenario_source(CASE_SOURCE_3),
+    ]
+
+    milp_sources = [
+        milp_source(CASE_SOURCE_1, withdrawal=100.0),
+        milp_source(
+            CASE_SOURCE_3,
+            selection_status="UNUSED",
+            activated=False,
+            withdrawal=0.0,
+        ),
+    ]
+
+    result = determine_confidence(scenario_sources, milp_sources)
+
+    assert result == {
+        "confidence": "MEASURED",
+        "estimated_sources": [],
+    }
+
+# checks that a duplicated source that actually supplied water returns UKNOWN
+def test_duplicate_contributing_source_returns_unknown():
+    scenario_sources = [
+        scenario_source(CASE_SOURCE_1),
+        scenario_source(CASE_SOURCE_1),
+    ]
+
+    milp_sources = [
+        milp_source(CASE_SOURCE_1, withdrawal=100.0),
+    ]
+
+    result = determine_confidence(scenario_sources, milp_sources)
+
+    assert result == {
+        "confidence": "UNKNOWN",
+        "estimated_sources": [],
+    }
+
+
 def test_invalid_top_level_container_raises_clear_error():
     with pytest.raises(ConfidenceError):
         determine_confidence("not-a-source-sequence", [])

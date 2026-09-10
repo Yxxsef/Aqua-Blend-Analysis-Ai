@@ -35,9 +35,9 @@ class ConfidenceError(Exception):
 _MISSING = object()
 
 
-# Main provenance fields currently created by data_loader.py.
-# Quality provenance is handled separately because the configured quality
-# parameters may change in future versions.
+# These field names mirror the provenance dictionary currently built by
+# data_loader.py. Quality fields are added separately as quality.<parameter_id>,
+# so the quality parameter names do not need to be hard-coded here.
 REQUIRED_BASE_PROVENANCE_FIELDS = {
     "storage_capacity",
     "reference_flow",
@@ -193,6 +193,12 @@ def determine_confidence(
 
     Returns:
         A dictionary containing the confidence state and any estimated sources.
+
+    Typical usage:
+        determine_confidence(
+            scenario_data.sources,
+            milp_output["sources"],
+        )
     """
 
     # Validate the ScenarioData source collection.
@@ -213,7 +219,7 @@ def determine_confidence(
 
     # Build a lookup so MILP source IDs can be matched to ScenarioData records.
     scenario_by_id: dict[str, Any] = {}
-    duplicate_scenario_id = False
+    duplicate_scenario_ids: set[str] = set()
 
     for source in scenario_sources:
         source_id = _valid_source_id(
@@ -225,7 +231,7 @@ def determine_confidence(
             continue
 
         if source_id in scenario_by_id:
-            duplicate_scenario_id = True
+            duplicate_scenario_ids.add(source_id)
 
         scenario_by_id[source_id] = source
 
@@ -259,9 +265,14 @@ def determine_confidence(
 
     estimated_sources: list[str] = []
 
-    # Any duplicate source IDs or unclear contribution decisions introduce uncertainty into the final confidence result.
+    # A duplicate ID only matters when that source actually contributed.
+    # Duplicate records for unused sources should not reduce confidence.
+    duplicate_contributing_source = bool(
+        contributing_ids.intersection(duplicate_scenario_ids)
+    )
+
     provenance_unknown = (
-        duplicate_scenario_id or contribution_unknown
+        duplicate_contributing_source or contribution_unknown
     )
 
     # Check provenance only for the sources that contributed to the result.
