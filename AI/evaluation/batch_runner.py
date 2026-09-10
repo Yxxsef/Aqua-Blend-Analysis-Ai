@@ -261,23 +261,27 @@ def run_scenario(
     schema = detect_schema(raw_results)
     unsupported: list[str] = []
 
-    if schema == SCHEMA_TOY:
+    # Task 56 moved the validator and adapter to v1.0; the confidence flagger
+    # still reads the toy provenance fields (Task 57, PR #54, not merged). So
+    # the components are chosen one at a time rather than as a schema pair.
+    if schema == SCHEMA_V1:
         validate_results(raw_results)
         adapted = adapt_results(raw_results)
+        confidence = None
+        unsupported.append(
+            f"{schema}: confidence flagger skipped — it reads "
+            "data_flags.sources, which v1.0 does not carry "
+            "(Task 56 note 1; Task 57 pending)"
+        )
+    else:
+        adapted = None
         confidence = determine_confidence(
             raw_results.get("data_flags", {}).get("sources", []),
             raw_results.get("sources", {}).get("selected", []),
         )
-    else:
-        # The validator, adapter and confidence flagger on master are written
-        # against the toy schema. Re-pointing them at v1.0 is Task 56 and
-        # Task 57, not Task 59, so the harness records the gap instead of
-        # patching around it.
-        adapted = None
-        confidence = None
         unsupported.append(
-            f"{schema}: validator, adapter and confidence flagger skipped "
-            "(they target the toy schema; see Tasks 56 and 57)"
+            f"{schema}: validator and adapter skipped — Task 56 moved both "
+            "to the v1.0 contract and no toy path remains"
         )
 
     evaluations: dict[str, Any] = {}

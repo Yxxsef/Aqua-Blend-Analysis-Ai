@@ -241,13 +241,32 @@ def test_v1_failure_is_recorded_not_swallowed():
     assert any("56" in note for note in result["unsupported"])
 
 
-def test_toy_path_still_validates_and_adapts():
-    """The toy schema keeps its full pipeline — nothing was skipped for it."""
+def test_toy_path_keeps_the_flagger_and_records_what_it_lost():
+    """Task 56 moved the validator and adapter to v1.0, so toy no longer has them.
+
+    The flagger is the one component still reading toy provenance, so it still
+    runs. What is missing is recorded rather than silently dropped.
+    """
     result = run_scenario(NORMAL, MOCK)
     assert result["schema"] == SCHEMA_TOY
-    assert result["adapted_optimiser_result"] is not None
     assert result["confidence"] is not None
-    assert result["unsupported"] == []
+    assert result["adapted_optimiser_result"] is None
+    assert any(
+        "validator and adapter skipped" in entry
+        for entry in result["unsupported"]
+    )
+
+
+def test_v1_path_validates_and_adapts_and_records_the_missing_flagger():
+    """The mirror of the toy case: v1.0 has the validator and adapter, not the flagger."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["schema"] == SCHEMA_V1
+    assert result["adapted_optimiser_result"] is not None
+    assert result["confidence"] is None
+    assert any(
+        "confidence flagger skipped" in entry
+        for entry in result["unsupported"]
+    )
 
 
 # --- scenario context ------------------------------------------------------
