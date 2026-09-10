@@ -170,21 +170,21 @@ def test_valid_dry_year_records_all_approved_changes(
     }
 
     assert (
-        "network.source_to_plant_links["
+        "source_to_plant_links["
         "source_id=silvan_reservoir,plant_id=facility_1"
         "].maximum_flow_ml_per_day"
         in changed_paths
     )
 
     assert (
-        "network.source_to_plant_links["
+        "source_to_plant_links["
         "source_id=yarra_kew,plant_id=facility_1"
         "].maximum_flow_ml_per_day"
         in changed_paths
     )
 
     assert (
-        "network.source_to_plant_links["
+        "source_to_plant_links["
         "source_id=groundwater_bore_1,plant_id=facility_1"
         "].maximum_flow_ml_per_day"
         in changed_paths
@@ -293,7 +293,7 @@ def test_unknown_nested_field_is_rejected(
 ):
     scenario = deepcopy(normal)
 
-    scenario["network"]["plants"][0]["unexpected"] = True
+    scenario["plants"][0]["unexpected"] = True
 
     report = validator.validate(
         scenario,
@@ -315,7 +315,7 @@ def test_missing_required_field_is_rejected(
 ):
     scenario = deepcopy(normal)
 
-    del scenario["network"]
+    del scenario["plants"]
 
     report = validator.validate(
         scenario,
@@ -326,7 +326,7 @@ def test_missing_required_field_is_rejected(
     assert report.valid is False
 
     assert any(
-        "network" in error
+        "plants" in error
         for error in report.errors
     )
 
@@ -337,7 +337,7 @@ def test_wrong_type_is_rejected(
 ):
     scenario = deepcopy(normal)
 
-    scenario["network"]["demand_zones"][0][
+    scenario["demand_zones"][0][
         "demand_ml_per_day"
     ] = "500"
 
@@ -385,7 +385,7 @@ def test_unknown_link_source_is_rejected(
 ):
     scenario = deepcopy(normal)
 
-    scenario["network"]["source_to_plant_links"][0][
+    scenario["source_to_plant_links"][0][
         "source_id"
     ] = "unknown_source"
 
@@ -442,7 +442,7 @@ def test_dry_year_unapproved_demand_change_is_rejected(
 ):
     scenario = deepcopy(dry)
 
-    scenario["network"]["demand_zones"][0][
+    scenario["demand_zones"][0][
         "demand_ml_per_day"
     ] = 510
 
@@ -467,7 +467,7 @@ def test_high_demand_wrong_value_is_rejected(
 ):
     scenario = deepcopy(high)
 
-    scenario["network"]["demand_zones"][0][
+    scenario["demand_zones"][0][
         "demand_ml_per_day"
     ] = 590
 
@@ -492,7 +492,7 @@ def test_plant_outage_extra_change_is_rejected(
 ):
     scenario = deepcopy(outage)
 
-    scenario["network"]["plants"][0][
+    scenario["plants"][0][
         "maximum_processing_capacity_ml_per_day"
     ] = 0
 
@@ -520,7 +520,7 @@ def test_capacity_shortfall_is_warning_not_fake_solver_status(
 ):
     scenario = deepcopy(high)
 
-    scenario["network"]["demand_zones"][0][
+    scenario["demand_zones"][0][
         "demand_ml_per_day"
     ] = 650
 
@@ -549,7 +549,7 @@ def test_current_minimum_processing_capacity_field_is_accepted(
 ):
     scenario = deepcopy(normal)
 
-    plant = scenario["network"]["plants"][0]
+    plant = scenario["plants"][0]
 
     # Replace the legacy field with the current MILP input-contract field.
     plant["minimum_processing_capacity_ml_per_day"] = plant.pop(
@@ -572,7 +572,7 @@ def test_legacy_minimum_plant_field_is_accepted_with_warning(
 ):
     scenario = deepcopy(normal)
 
-    plant = scenario["network"]["plants"][0]
+    plant = scenario["plants"][0]
 
     # Ensure the legacy field exists so compatibility behaviour is tested.
     if "minimum_operating_flow_ml_per_day" not in plant:
@@ -656,9 +656,9 @@ def test_dry_year_link_order_does_not_affect_validation(
     scenario = deepcopy(dry)
 
     # Reorder links without changing their IDs or values.
-    scenario["network"]["source_to_plant_links"] = list(
+    scenario["source_to_plant_links"] = list(
         reversed(
-            scenario["network"]["source_to_plant_links"]
+            scenario["source_to_plant_links"]
         )
     )
 
