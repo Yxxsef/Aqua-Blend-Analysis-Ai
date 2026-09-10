@@ -42,9 +42,10 @@ OUTAGE = SCENARIO_DIR / "high-demand-outage" / "scenario_plant_outage.json"
 # --- the optimiser seam ---------------------------------------------------
 
 def test_mock_mode_returns_a_results_json():
-    result = get_optimiser_result({}, MOCK)
+    result, source = get_optimiser_result({}, MOCK)
     assert result["scenario_id"]
     assert result["status"]
+    assert source is None
 
 
 def test_milp_mode_is_not_wired_up_yet():
@@ -193,18 +194,18 @@ def test_csv_row_width_matches_header_when_not_comparable(tmp_path):
 # --- schema detection -----------------------------------------------------
 
 def test_v1_fixture_is_detected_as_milp_v1():
-    result = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    result, _ = get_optimiser_result({}, MOCK, V1_FIXTURE)
     assert detect_schema(result) == SCHEMA_V1
 
 
 def test_toy_fixture_is_detected_as_toy():
-    result = get_optimiser_result({}, MOCK)
+    result, _ = get_optimiser_result({}, MOCK)
     assert detect_schema(result) == SCHEMA_TOY
 
 
 def test_v1_fixture_is_a_solved_run():
     """The v1 fixture must be solved, or it cannot test value-level behaviour."""
-    result = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    result, _ = get_optimiser_result({}, MOCK, V1_FIXTURE)
     assert result["solver"]["status"] == "OPTIMAL"
     assert result["solver"]["objective_value"] is not None
 
@@ -276,6 +277,36 @@ def _drop_output(directory, scenario_id, filename="milp_run_output.json"):
     return target
 
 
+def test_a_correctly_named_file_with_the_wrong_id_is_not_used(tmp_path):
+    """The filename is a hint. A file that declares another scenario is not ours."""
+    _drop_output(
+        tmp_path,
+        "some_other_scenario",
+        filename="toy_model_normal_year.json",
+    )
+
+    with pytest.raises(OptimiserError) as excinfo:
+        find_output_file("toy_model_normal_year", tmp_path)
+
+    assert "some_other_scenario" in str(excinfo.value)
+
+
+def test_the_right_id_wins_over_the_matching_filename(tmp_path):
+    """A misnamed file holding our scenario is preferred over a misleading name."""
+    _drop_output(
+        tmp_path,
+        "some_other_scenario",
+        filename="toy_model_normal_year.json",
+    )
+    correct = _drop_output(
+        tmp_path,
+        "toy_model_normal_year",
+        filename="milp_run_output.json",
+    )
+
+    assert find_output_file("toy_model_normal_year", tmp_path) == correct
+
+
 def test_ingest_reads_the_real_output_file(tmp_path):
     _drop_output(tmp_path, "toy_model_normal_year")
     result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
@@ -289,7 +320,8 @@ def test_ingest_records_which_file_it_read(tmp_path):
     dropped = _drop_output(tmp_path, "toy_model_normal_year")
     result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
 
-    assert result["raw_optimiser_result"]["_ingested_from"] == str(dropped)
+    assert result["optimiser_source"] == str(dropped)
+    assert "_ingested_from" not in result["raw_optimiser_result"]
 
 
 def test_ingest_matches_on_scenario_id_not_filename(tmp_path):

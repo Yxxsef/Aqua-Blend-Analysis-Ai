@@ -62,32 +62,56 @@ def detect_schema(results: dict[str, Any]) -> str:
     return SCHEMA_TOY
 
 
+def _read_json_or_none(path: Path) -> Any:
+    """Read a JSON file, returning None if it cannot be read or parsed."""
+    try:
+        with path.open(encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _declared_scenario_id(payload: Any) -> Any:
+    """Return the scenario_id a Results payload declares about itself."""
+    if not isinstance(payload, dict):
+        return None
+    scenario = payload.get("scenario")
+    if not isinstance(scenario, dict):
+        return None
+    return scenario.get("scenario_id")
+
+
 def find_output_file(scenario_id: str, ingest_dir: Path) -> Path:
     """Find the real MILP output file for one scenario.
 
-    Prefers <scenario_id>.json. Falls back to reading each file's own
-    scenario.scenario_id, so a differently named file still matches rather
-    than being silently skipped.
+    The filename is a hint, never the decision. A file is accepted only when
+    its own scenario.scenario_id matches, so an output saved under the wrong
+    name is not silently attached to the wrong scenario. <scenario_id>.json is
+    checked first because it is the common case, then every other file.
     """
     directory = Path(ingest_dir)
     if not directory.is_dir():
         raise OptimiserError(f"Ingest directory not found: {directory}")
 
+    rejected: list[str] = []
+
     direct = directory / f"{scenario_id}.json"
     if direct.is_file():
-        return direct
+        declared = _declared_scenario_id(_read_json_or_none(direct))
+        if declared == scenario_id:
+            return direct
+        rejected.append(f"{direct.name} declares scenario_id {declared!r}")
 
     for candidate in sorted(directory.glob("*.json")):
-        try:
-            with candidate.open(encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except (OSError, json.JSONDecodeError):
+        if candidate == direct:
             continue
-        if payload.get("scenario", {}).get("scenario_id") == scenario_id:
+        if _declared_scenario_id(_read_json_or_none(candidate)) == scenario_id:
             return candidate
 
+    detail = f" ({'; '.join(rejected)})" if rejected else ""
     raise OptimiserError(
         f"No MILP output found for scenario {scenario_id!r} in {directory}"
+        + detail
     )
 
 
@@ -113,7 +137,7 @@ def get_optimiser_result(
         if not path.is_file():
             raise OptimiserError(f"Mock fixture not found: {path}")
         with path.open(encoding="utf-8") as handle:
-            return json.load(handle)
+            return json.load(handle), None
 
     if mode == INGEST:
         scenario_id = scenario.get("scenario_id")
@@ -122,8 +146,9 @@ def get_optimiser_result(
         path = find_output_file(scenario_id, ingest_dir)
         with path.open(encoding="utf-8") as handle:
             payload = json.load(handle)
-        payload["_ingested_from"] = str(path)
-        return payload
+        # The payload is returned exactly as written by Optimisation. The
+        # source path travels beside it so raw/ stays an untouched copy.
+        return payload, str(path)
 
     if mode == MILP:
         raise NotImplementedError(
@@ -230,7 +255,9 @@ def run_scenario(
 
     baseline_output = run_all_baselines(scenario)
 
-    raw_results = get_optimiser_result(scenario, mode, fixture_path, ingest_dir)
+    raw_results, optimiser_source = get_optimiser_result(
+        scenario, mode, fixture_path, ingest_dir
+    )
     schema = detect_schema(raw_results)
     unsupported: list[str] = []
 
@@ -268,6 +295,9 @@ def run_scenario(
         "scenario_validation": validation,
         "scenario_context": context,
         "raw_optimiser_result": raw_results,
+        # Where the raw result came from, held beside the payload rather than
+        # inside it. None for modes that do not read a per-scenario file.
+        "optimiser_source": optimiser_source,
         "adapted_optimiser_result": adapted,
         "confidence": confidence,
         "baseline_output": baseline_output,
@@ -369,7 +399,7 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
                 "status": "ok",
                 "runtime_seconds": result["runtime_seconds"],
                 "schema": result.get("schema"),
-                "source": result["raw_optimiser_result"].get("_ingested_from"),
+                "source": result.get("optimiser_source"),
                 "unsupported": result.get("unsupported", []),
                 "raw_output": str(raw_path.relative_to(run_dir)),
                 "processed_output": str(processed_path.relative_to(run_dir)),
