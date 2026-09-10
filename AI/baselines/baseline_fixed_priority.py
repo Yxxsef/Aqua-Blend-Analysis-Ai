@@ -170,7 +170,7 @@ def _plant_minimum(plant: dict) -> float:
 
 
 def _select_zone(scenario: dict, zone_id: str | None) -> dict:
-    zones = (scenario.get("network") or {}).get("demand_zones") or []
+    zones = scenario.get("demand_zones") or []
     if not zones:
         raise BaselineInputError("The scenario contains no demand zones.")
     if zone_id is None:
@@ -188,15 +188,14 @@ def _select_zone(scenario: dict, zone_id: str | None) -> dict:
 
 def _plants_serving(scenario: dict, zone_id: str) -> list[dict]:
     """Enabled plants with an enabled link into this zone."""
-    network = scenario.get("network") or {}
     enabled = {
         plant["plant_id"]: plant
-        for plant in network.get("plants") or []
+        for plant in scenario.get("plants") or []
         if _as_bool(plant.get("enabled"), "plants[].enabled", default=True)
     }
     serving_ids = {
         link["plant_id"]
-        for link in network.get("plant_to_zone_links") or []
+        for link in scenario.get("plant_to_zone_links") or []
         if link.get("zone_id") == zone_id
         and link.get("plant_id") in enabled
         and _as_bool(link.get("enabled"), "plant_to_zone_links[].enabled", default=True)
@@ -216,7 +215,6 @@ def _resolve_sources(
     """Split the scenario's sources into those usable for this zone and those
     excluded, each with the reason it was left out."""
     rows = _source_rows(scenario)
-    network = scenario.get("network") or {}
     serving_plant_ids = {
         plant["plant_id"] for plant in _plants_serving(scenario, zone_id)
     }
@@ -261,7 +259,7 @@ def _resolve_sources(
 
         link_limit = 0.0
         connected = False
-        for link in network.get("source_to_plant_links") or []:
+        for link in scenario.get("source_to_plant_links") or []:
             if (
                 link.get("source_id") != source_id
                 or link.get("plant_id") not in serving_plant_ids
