@@ -61,21 +61,29 @@ def compare_scenario(result: dict[str, Any]) -> dict[str, Any]:
             "rows": [],
         }
 
-    quality_stage = (
-        result.get("raw_optimiser_result", {})
-        .get("water_quality", {})
-        .get(QUALITY_STAGE_KEY)
-    )
+    raw = result.get("raw_optimiser_result", {})
+    quality_stage = raw.get("water_quality", {}).get(QUALITY_STAGE_KEY)
+    if quality_stage is None and raw.get("quality", {}).get("plant_inflow"):
+        # v1.0 restructured this: quality is reported per plant inflow, which
+        # is the same stage the toy schema named. Water before treatment, not
+        # final drinking water.
+        quality_stage = "blend_at_plant_inflow"
 
     rows = []
     for name, evaluation in evaluations.items():
-        kpis = evaluation.get("kpis", {})
+        # A run the KPI layer could not read carries an error instead of KPIs
+        # and a gate. It still gets a row: an omitted row reads as a run that
+        # was never attempted, which is a different thing entirely.
+        kpis = evaluation.get("kpis") or {}
+        gate = evaluation.get("gate") or {}
         is_baseline = name != "optimiser"
         row = {
             "run": name,
             "is_baseline": is_baseline,
-            "gate": evaluation.get("gate", {}).get("overall_status"),
+            "gate": gate.get("overall_status"),
         }
+        if evaluation.get("error"):
+            row["error"] = evaluation["error"]
         for measure in MEASURES:
             row[measure] = _measure(kpis, measure, is_baseline)
         rows.append(row)
@@ -125,7 +133,9 @@ def write_comparison(comparison: dict[str, Any], run_dir: str | Path) -> dict[st
                 for measure in MEASURES:
                     cells.append(row[measure]["value"])
                     cells.append(row[measure].get("reason", ""))
-                cells.append("")
+                # A blank row reads as a run that passed. If it could not be
+                # evaluated, the CSV has to say so too, not just the JSON.
+                cells.append(row.get("error", ""))
                 writer.writerow(cells)
 
     return {"json": json_path, "csv": csv_path}

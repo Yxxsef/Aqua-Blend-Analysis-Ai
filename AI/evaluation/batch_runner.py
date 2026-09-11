@@ -33,10 +33,86 @@ from kpi_gate import evaluate  # noqa: E402
 
 MOCK = "mock"
 MILP = "milp"
+INGEST = "ingest"
+
+# Where the Optimisation team's real v1.0 output files are read from. The
+# harness ingests those files; it does not run the solver, because the v1.0
+# contract exposes no execution hooks. Confirmed with Yousef, 07/09/26.
+DEFAULT_INGEST_DIR = Path(__file__).resolve().parent / "milp_outputs"
 
 DEFAULT_FIXTURE = (
     AI_ROOT / "explanations" / "llm_reporting" / "fixtures" / "model_output_example.json"
 )
+
+V1_FIXTURE = AI_ROOT / "evaluation" / "fixtures" / "milp_v1_solved_example.json"
+
+SCHEMA_TOY = "toy"
+SCHEMA_V1 = "milp_v1"
+
+
+def detect_schema(results: dict[str, Any]) -> str:
+    """Return which Results JSON schema this payload uses.
+
+    The harness cannot assume a shape: once real MILP output arrives it will
+    receive whatever the optimiser sends. v1.0 is identified by its own
+    schema_version marker rather than by where the file came from.
+    """
+    if "schema_version" in results:
+        return SCHEMA_V1
+    return SCHEMA_TOY
+
+
+def _read_json_or_none(path: Path) -> Any:
+    """Read a JSON file, returning None if it cannot be read or parsed."""
+    try:
+        with path.open(encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _declared_scenario_id(payload: Any) -> Any:
+    """Return the scenario_id a Results payload declares about itself."""
+    if not isinstance(payload, dict):
+        return None
+    scenario = payload.get("scenario")
+    if not isinstance(scenario, dict):
+        return None
+    return scenario.get("scenario_id")
+
+
+def find_output_file(scenario_id: str, ingest_dir: Path) -> Path:
+    """Find the real MILP output file for one scenario.
+
+    The filename is a hint, never the decision. A file is accepted only when
+    its own scenario.scenario_id matches, so an output saved under the wrong
+    name is not silently attached to the wrong scenario. <scenario_id>.json is
+    checked first because it is the common case, then every other file.
+    """
+    directory = Path(ingest_dir)
+    if not directory.is_dir():
+        raise OptimiserError(f"Ingest directory not found: {directory}")
+
+    rejected: list[str] = []
+
+    direct = directory / f"{scenario_id}.json"
+    if direct.is_file():
+        declared = _declared_scenario_id(_read_json_or_none(direct))
+        if declared == scenario_id:
+            return direct
+        rejected.append(f"{direct.name} declares scenario_id {declared!r}")
+
+    for candidate in sorted(directory.glob("*.json")):
+        if candidate == direct:
+            continue
+        if _declared_scenario_id(_read_json_or_none(candidate)) == scenario_id:
+            return candidate
+
+    detail = f" ({'; '.join(rejected)})" if rejected else ""
+    raise OptimiserError(
+        f"No MILP output found for scenario {scenario_id!r} in {directory}"
+        + detail
+    )
 
 
 class OptimiserError(Exception):
@@ -47,26 +123,42 @@ def get_optimiser_result(
     scenario: dict[str, Any],
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Return a raw Results JSON for one scenario.
 
-    Mock mode reads a stored fixture so the pipeline runs before MILP v1
-    exists. MILP mode will call the solver. Both return the same shape, so
-    nothing downstream changes when v1 lands.
+    Ingest mode reads the real output file the Optimisation team produced for
+    this scenario. Mock mode reads a stored fixture and stays available as a
+    testing fallback. Both return whatever shape the file holds — the caller
+    detects the schema rather than assuming one.
     """
     if mode == MOCK:
         path = Path(fixture_path)
         if not path.is_file():
             raise OptimiserError(f"Mock fixture not found: {path}")
         with path.open(encoding="utf-8") as handle:
-            return json.load(handle)
+            return json.load(handle), None
+
+    if mode == INGEST:
+        scenario_id = scenario.get("scenario_id")
+        if not scenario_id:
+            raise OptimiserError("Cannot ingest: scenario has no scenario_id.")
+        path = find_output_file(scenario_id, ingest_dir)
+        with path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+        # The payload is returned exactly as written by Optimisation. The
+        # source path travels beside it so raw/ stays an untouched copy.
+        return payload, str(path)
 
     if mode == MILP:
         raise NotImplementedError(
-            "MILP v1 is not available yet. Use mode='mock' until it is wired up."
+            "The harness does not run the solver. v1.0 has no execution hooks, "
+            "so use mode='ingest' to read Optimisation's output files."
         )
 
-    raise OptimiserError(f"Unknown mode: {mode!r}. Use {MOCK!r} or {MILP!r}.")
+    raise OptimiserError(
+        f"Unknown mode: {mode!r}. Use {MOCK!r}, {INGEST!r} or {MILP!r}."
+    )
 
 
 def _gate_as_dict(gate: Any) -> dict[str, Any]:
@@ -76,10 +168,79 @@ def _gate_as_dict(gate: Any) -> dict[str, Any]:
     return dict(vars(gate))
 
 
+def build_scenario_context(scenario: dict[str, Any]) -> dict[str, Any]:
+    """Collect the scenario inputs that Results JSON v1.0 no longer echoes.
+
+    v1.0 deliberately dropped bounds, capacities and cost rates from the output
+    (see its section 5): they are inputs, and echoing them created two sources
+    of truth. That is defensible, but it means a consumer holding only a results
+    file cannot check utilisation, verify a bound, or compute a margin. The
+    harness therefore carries the scenario side alongside the result.
+
+    Nothing here is calculated. Every value is copied from the scenario file,
+    keyed so it can be joined back to a result by ID. Arc keys are written as
+    "source->plant" strings rather than tuples so the context stays JSON
+    serialisable for the run manifest.
+    """
+    network = scenario.get("network", {})
+
+    unavailable = [
+        "source withdrawal bounds — held in the Supabase source view, not the "
+        "scenario file",
+        "source cost_per_ml — same",
+    ]
+
+    return {
+        "scenario_id": scenario.get("scenario_id"),
+        "source_to_plant_capacity": {
+            f"{link.get('source_id')}->{link.get('plant_id')}": link.get("maximum_flow_ml_per_day")
+            for link in network.get("source_to_plant_links", [])
+        },
+        "plant_to_zone_capacity": {
+            f"{link.get('plant_id')}->{link.get('zone_id')}": link.get("maximum_flow_ml_per_day")
+            for link in network.get("plant_to_zone_links", [])
+        },
+        "plants": {
+            plant.get("plant_id"): {
+                "minimum_operating_flow_ml_per_day": plant.get("minimum_operating_flow_ml_per_day"),
+                "maximum_processing_capacity_ml_per_day": plant.get("maximum_processing_capacity_ml_per_day"),
+                "fixed_activation_cost": plant.get("fixed_activation_cost"),
+                "treatment_cost_per_ml": plant.get("treatment_cost_per_ml"),
+            }
+            for plant in network.get("plants", [])
+        },
+        "demand": {
+            zone.get("zone_id"): zone.get("demand_ml_per_day")
+            for zone in network.get("demand_zones", [])
+        },
+        "quality_limits": scenario.get("quality_limits", {}),
+        "unavailable": unavailable,
+    }
+
+
+def _evaluate_one(result: dict[str, Any]) -> dict[str, Any]:
+    """Run the KPIs and gate for one result, recording failure rather than raising.
+
+    Each run is isolated so a schema the KPI layer cannot read yet costs one
+    entry, not the whole scenario. The baselines stay comparable even when the
+    optimiser result cannot be evaluated.
+    """
+    try:
+        report, gate = evaluate(result)
+    except Exception as error:
+        return {
+            "kpis": None,
+            "gate": None,
+            "error": f"{type(error).__name__}: {error}",
+        }
+    return {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
+
+
 def run_scenario(
     scenario_path: str | Path,
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Run one scenario through the optimiser, the baselines, and the gate.
 
@@ -90,37 +251,72 @@ def run_scenario(
 
     scenario = load_scenario(scenario_path)
     validation = validate_scenario(scenario)
+    context = build_scenario_context(scenario)
 
     baseline_output = run_all_baselines(scenario)
 
-    raw_results = get_optimiser_result(scenario, mode, fixture_path)
-    validate_results(raw_results)
-    adapted = adapt_results(raw_results)
-
-    confidence = determine_confidence(
-        raw_results.get("data_flags", {}).get("sources", []),
-        raw_results.get("sources", {}).get("selected", []),
+    raw_results, optimiser_source = get_optimiser_result(
+        scenario, mode, fixture_path, ingest_dir
     )
+    schema = detect_schema(raw_results)
+    unsupported: list[str] = []
+
+    # Task 56 moved the validator and adapter to v1.0; the confidence flagger
+    # still reads the toy provenance fields (Task 57, PR #54, not merged). So
+    # the components are chosen one at a time rather than as a schema pair.
+    if schema == SCHEMA_V1:
+        validate_results(raw_results)
+        adapted = adapt_results(raw_results)
+        confidence = None
+        unsupported.append(
+            f"{schema}: confidence flagger skipped — it reads "
+            "data_flags.sources, which v1.0 does not carry "
+            "(Task 56 note 1; Task 57 pending)"
+        )
+        # The KPI layer still reads toy fields. Two KPIs raise and are caught
+        # per run; the other two return N/A, which is indistinguishable from a
+        # real N/A unless it is said plainly here.
+        unsupported.append(
+            f"{schema}: KPI layer not mapped to the v1.0 contract — "
+            "feasibility, demand satisfaction, minimum safety margin and "
+            "quality violations all read toy fields, so their results are "
+            "unmapped rather than measured. The margin and cost mappings are "
+            "undefined in v1.0 (Task 56 notes 5 and 8)."
+        )
+    else:
+        adapted = None
+        confidence = determine_confidence(
+            raw_results.get("data_flags", {}).get("sources", []),
+            raw_results.get("sources", {}).get("selected", []),
+        )
+        unsupported.append(
+            f"{schema}: validator and adapter skipped — Task 56 moved both "
+            "to the v1.0 contract and no toy path remains"
+        )
 
     evaluations: dict[str, Any] = {}
 
-    report, gate = evaluate(raw_results)
-    evaluations["optimiser"] = {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
-
-    for name, result in baseline_output["baselines"].items():
-        report, gate = evaluate(result)
-        evaluations[name] = {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
+    for name, result in [("optimiser", raw_results), *baseline_output["baselines"].items()]:
+        evaluations[name] = _evaluate_one(result)
+        if "error" in evaluations[name]:
+            unsupported.append(f"{name}: {evaluations[name]['error']}")
 
     return {
         "scenario_path": str(scenario_path),
         "scenario_id": scenario.get("scenario_id"),
         "mode": mode,
+        "schema": schema,
         "scenario_validation": validation,
+        "scenario_context": context,
         "raw_optimiser_result": raw_results,
+        # Where the raw result came from, held beside the payload rather than
+        # inside it. None for modes that do not read a per-scenario file.
+        "optimiser_source": optimiser_source,
         "adapted_optimiser_result": adapted,
         "confidence": confidence,
         "baseline_output": baseline_output,
         "evaluations": evaluations,
+        "unsupported": unsupported,
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
 
@@ -128,6 +324,7 @@ def run_batch(
     path: str | Path,
     mode: str = MOCK,
     fixture_path: Path = DEFAULT_FIXTURE,
+    ingest_dir: Path = DEFAULT_INGEST_DIR,
 ) -> dict[str, Any]:
     """Run one scenario file, or every scenario in a folder.
 
@@ -147,7 +344,9 @@ def run_batch(
 
     for scenario_file in scenario_files:
         try:
-            results.append(run_scenario(scenario_file, mode, fixture_path))
+            results.append(
+                run_scenario(scenario_file, mode, fixture_path, ingest_dir)
+            )
         except Exception as error:
             failures.append(
                 {
@@ -164,8 +363,29 @@ def run_batch(
         "failed": len(failures),
         "results": results,
         "failures": failures,
+        # What this run actually read, so the manifest can record it rather
+        # than assuming the default.
+        "fixture_path": str(fixture_path),
+        "ingest_dir": str(ingest_dir),
         "runtime_seconds": round(time.perf_counter() - started, 3),
     }
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _portable(path: Any) -> Any:
+    """Record a path relative to the repo root so manifests are machine independent.
+
+    A path outside the repo is left absolute rather than turned into a chain of
+    parent hops — better an honest absolute path than a misleading relative one.
+    """
+    if path is None:
+        return None
+    try:
+        return str(Path(path).resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
 
 def _run_folder(output_root: Path) -> Path:
     """Create a timestamped folder for this run, with raw and processed inside."""
@@ -206,9 +426,12 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         scenarios.append(
             {
                 "scenario_id": scenario_id,
-                "scenario_path": result["scenario_path"],
+                "scenario_path": _portable(result["scenario_path"]),
                 "status": "ok",
                 "runtime_seconds": result["runtime_seconds"],
+                "schema": result.get("schema"),
+                "source": _portable(result.get("optimiser_source")),
+                "unsupported": result.get("unsupported", []),
                 "raw_output": str(raw_path.relative_to(run_dir)),
                 "processed_output": str(processed_path.relative_to(run_dir)),
             }
@@ -218,7 +441,7 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         scenarios.append(
             {
                 "scenario_id": None,
-                "scenario_path": failure["scenario_path"],
+                "scenario_path": _portable(failure["scenario_path"]),
                 "status": "failed",
                 "error_type": failure["error_type"],
                 "error": failure["error"],
@@ -229,11 +452,8 @@ def write_run(batch: dict[str, Any], output_root: str | Path = "runs") -> Path:
         "run_id": run_dir.name,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": batch["mode"],
-        "mock_fixture": (
-            str(DEFAULT_FIXTURE.relative_to(AI_ROOT.parent))
-            if batch["mode"] == MOCK
-            else None
-        ),
+        "mock_fixture": _portable(batch.get("fixture_path")) if batch["mode"] == MOCK else None,
+        "ingest_dir": _portable(batch.get("ingest_dir")) if batch["mode"] == INGEST else None,
         "mock_warning": (
             "Mock mode returns the same stored optimiser result for every "
             "scenario. Optimiser values are not scenario-specific."
