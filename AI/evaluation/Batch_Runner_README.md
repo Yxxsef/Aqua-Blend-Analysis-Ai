@@ -117,14 +117,27 @@ comparable. It is not a real solve. See `MILP_V1_Fixture_Notes.md`.
 from, because once real output arrives the harness receives whatever the
 optimiser sends. v1.0 is identified by its `schema_version` key.
 
-The toy schema runs the full pipeline: validator, adapter, confidence flagger,
-KPIs, gate.
+No schema has the full pipeline. Task 56 moved the validator and adapter to
+the v1.0 contract, while the confidence flagger still reads toy provenance
+(Task 57, not merged). Each component is therefore chosen on its own, not as
+a schema pair.
 
-A v1.0 payload currently skips the validator, adapter and confidence flagger.
-Those modules target the toy schema, and re-pointing them is Task 56 and
-Task 57, not this one. The harness records the gap in `unsupported` instead of
-patching around it, and `adapted_optimiser_result` and `confidence` come back
-as `None`.
+A v1.0 payload is validated and adapted, and skips the confidence flagger:
+it reads `data_flags.sources`, which v1.0 does not carry (Task 56 note 1).
+`confidence` comes back as `None`.
+
+A toy payload runs the confidence flagger, and skips the validator and
+adapter: no toy path remains in either. `adapted_optimiser_result` comes
+back as `None`.
+
+The KPI layer reads toy fields on both paths. On a v1.0 payload, minimum
+safety margin and quality violations raise and are caught per run, while
+feasibility and demand satisfaction return `UNKNOWN` and `N/A` — which look
+like measured results but are not. Every v1.0 run therefore records this in
+`unsupported`. Mapping the KPIs to v1.0 is follow-up work, and two of them
+are blocked on undefined contract mappings (Task 56 notes 5 and 8).
+
+Whatever is skipped is recorded in `unsupported` rather than patched around.
 
 ## Scenario context
 
@@ -223,5 +236,6 @@ missing-optimiser case, and the written output.
 
 Sprint 3 adds: schema detection for both fixtures, a v1.0 run surviving an
 optimiser the KPI layer cannot evaluate, failures being recorded rather than
-swallowed, the toy path keeping its full pipeline, and the scenario context
+swallowed, each component being chosen per schema, an ingested file being
+rejected when its own `scenario_id` does not match, and the scenario context
 carrying the values v1.0 dropped.
