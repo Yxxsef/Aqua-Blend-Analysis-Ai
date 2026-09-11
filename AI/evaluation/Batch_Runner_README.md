@@ -134,8 +134,8 @@ The KPI layer reads toy fields on both paths. On a v1.0 payload, minimum
 safety margin and quality violations raise and are caught per run, while
 feasibility and demand satisfaction return `UNKNOWN` and `N/A` — which look
 like measured results but are not. Every v1.0 run therefore records this in
-`unsupported`. Mapping the KPIs to v1.0 is follow-up work, and two of them
-are blocked on undefined contract mappings (Task 56 notes 5 and 8).
+`unsupported`. Mapping the KPIs to v1.0 is Task 58, and two of them are
+blocked on undefined contract mappings (Task 56 notes 5 and 8).
 
 Whatever is skipped is recorded in `unsupported` rather than patched around.
 
