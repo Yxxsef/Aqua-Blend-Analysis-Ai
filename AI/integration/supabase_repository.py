@@ -17,11 +17,14 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 import httpx
 from postgrest.exceptions import APIError
 from supabase import create_client
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only, never imported at runtime
+    from model_runner import ModelConfig
 
 _AI_DIR = Path(__file__).resolve().parents[1]
 for _module_dir in (_AI_DIR, _AI_DIR / "results" / "app_response"):
@@ -216,6 +219,17 @@ def _split_flat_sources(sources: Any) -> tuple[list, list]:
     return selected, unused
 
 
+def _normalize_status(value: Any) -> Any:
+    """Uppercase a solver-status string (the live column stores lowercase,
+    e.g. "optimal") to match ``results_validator.VALID_STATUS``.
+
+    ``None`` and any non-string value are returned unchanged - validation is
+    ``results_validator``'s job, not this normalization step's; guessing a
+    status for a missing/malformed value would hide a real data problem
+    instead of letting the validator reject it as intended."""
+    return value.upper() if isinstance(value, str) else value
+
+
 def normalize_output_columns(row: Mapping[str, Any]) -> Dict[str, Any]:
     """Best-effort canonical Results JSON built from ``milp_model_output``'s
     flat columns, documented here since the flat schema does not define a
@@ -235,8 +249,10 @@ def normalize_output_columns(row: Mapping[str, Any]) -> Dict[str, Any]:
       ``by_plant`` key; otherwise it is assumed to already be a per-plant
       mapping and is nested under ``by_plant`` with ``applies_to`` left
       unset (unknown, rather than guessed).
-    - ``solver_status`` maps to ``status``; ``total_cost`` (falling back to
-      ``solver_objective_value``) maps to ``objective.total_cost``.
+    - ``solver_status`` maps to ``status`` (uppercased, e.g. "optimal" ->
+      "OPTIMAL", to match ``results_validator.VALID_STATUS``); ``total_cost``
+      (falling back to ``solver_objective_value``) maps to
+      ``objective.total_cost``.
     - There is no flat-column equivalent of ``constraints`` or
       ``diagnostics``, so both are empty - the canonical contract only
       requires them to be a list/object, and downstream binding-constraint
@@ -275,7 +291,7 @@ def normalize_output_columns(row: Mapping[str, Any]) -> Dict[str, Any]:
 
     return {
         "scenario_id": row.get("scenario_id"),
-        "status": row.get("solver_status"),
+        "status": _normalize_status(row.get("solver_status")),
         "objective": {"total_cost": total_cost},
         "demand_zones": row.get("demand_zones") or [],
         "sources": {"selected": selected, "unused": unused},
@@ -340,7 +356,7 @@ def load_input_provenance(output_row: Mapping[str, Any]) -> tuple[Dict[str, Any]
 def save_ai_output(
     response: Mapping[str, Any],
     milp_row: Mapping[str, Any],
-    model_config: "ModelConfig | None" = None,
+    model_config: ModelConfig | None = None,
     prompt_version: str | None = None,
     latency_ms: float | None = None,
     started_at: Any = None,

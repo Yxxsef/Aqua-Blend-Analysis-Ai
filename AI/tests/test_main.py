@@ -562,6 +562,42 @@ def test_flat_column_fallback_splits_selected_and_unused_sources(
     assert canonical["data_flags"] == {"sources": [], "notes": []}
 
 
+def test_flat_column_fallback_uppercases_solver_status() -> None:
+    """The live column stores a lowercase solver_status (e.g. "optimal");
+    results_validator.VALID_STATUS is uppercase only, so normalize_output_columns
+    must uppercase it rather than let a valid row fail validation."""
+    row = {
+        "solver_status": "optimal",
+        "scenario_id": "SCN-FLAT",
+        "total_cost": 100.0,
+        "sources": [
+            {"source_id": "a", "source_name": "A", "selected": True, "volume_drawn_ml_per_day": 100},
+        ],
+        "demand_zones": [
+            {"zone_id": "z1", "zone_name": "Zone 1", "demand_ml_per_day": 100, "volume_supplied_ml_per_day": 100},
+        ],
+    }
+
+    canonical = supabase_repository.normalize_output_columns(row)
+
+    assert canonical["status"] == "OPTIMAL"
+    main.validate_results(canonical)  # must not raise
+
+
+@pytest.mark.parametrize("value", [None, 123, ["OPTIMAL"]])
+def test_flat_column_fallback_preserves_non_string_solver_status(value: object) -> None:
+    """None and unexpected non-string values must pass through unchanged, so
+    results_validator can reject them normally instead of the normalization
+    step silently swallowing bad data."""
+    row = {"solver_status": value}
+
+    canonical = supabase_repository.normalize_output_columns(row)
+
+    assert canonical["status"] == value
+    with pytest.raises(main.ValidationError):
+        main.validate_results(canonical)
+
+
 def test_run_from_source_rejects_a_row_that_is_not_results_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
