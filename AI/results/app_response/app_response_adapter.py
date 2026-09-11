@@ -209,6 +209,23 @@ def build_app_response(
     if milp_copy is None:
         raise ValueError("milp_result is required when input_valid=True")
 
+    # Defensive guard: a raw milp_model_output row (flat DB columns) has a
+    # `solver_status` key but no `status` key - the canonical shape this
+    # function actually expects. Catching that mix-up here, with a message
+    # naming the real mistake, is far more useful than the generic
+    # "undocumented solver status: None" this would otherwise raise below.
+    # Raw rows must go through supabase_repository.normalize_output_columns()
+    # (or already contain a complete raw_output_json) before reaching here -
+    # see AI/README.md's pipeline order and test_app_response_adapter_real_schema.py.
+    if "status" not in milp_copy and "solver_status" in milp_copy:
+        raise ValueError(
+            "milp_result looks like a raw milp_model_output row (it has "
+            "'solver_status' but no 'status'). Pass it through "
+            "supabase_repository.normalize_output_columns() first, or use "
+            "its complete raw_output_json - build_app_response() expects "
+            "the canonical Results JSON shape, not raw database columns."
+        )
+
     solver_status = _non_empty_text(milp_copy.get("status"))
     if solver_status not in SOLVER_STATUSES:
         raise ValueError(
