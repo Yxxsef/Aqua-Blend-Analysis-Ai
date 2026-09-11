@@ -1,17 +1,12 @@
 """AquaBlend Analysis & AI pipeline entry point."""
 
 import argparse
-import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import time
 from typing import Any, Mapping, Dict
-
-import httpx
-from postgrest.exceptions import APIError
-from supabase import create_client
 
 
 # Existing Task modules are intentionally usable as standalone scripts and
@@ -24,6 +19,7 @@ for _module_dir in (
     _AI_DIR / "evaluation",
     _AI_DIR / "explanations",
     _AI_DIR / "results" / "app_response",
+    _AI_DIR / "integration",
 ):
     module_dir_text = str(_module_dir)
     if module_dir_text not in sys.path:
@@ -32,31 +28,32 @@ for _module_dir in (
 from app_response_adapter import (
     SOLVER_STATUSES,
     build_app_response,
-    validate_app_response,
     write_response_json,
 )
 from confidence_flagger import ConfidenceError, determine_confidence
-from json_explainer import ExplainerInputError, generate_explanation
+from json_explainer import (
+    ExplainerInputError,
+    generate_executive_summary,
+    generate_explanation,
+)
 from kpi_gate import evaluate
 from llm_validator import ValidatorInputError, validate_llm_output
 from model_runner import ModelConfig, load_model_config, rewrite_report
 from prompts import PROMPT_VERSION
 from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
-from env import DB_URL, DB_KEY
+from visualization import build_visualization_data
+from supabase_repository import (
+    SupabaseError,
+    extract_canonical_output,
+    load_input_provenance,
+    load_milp_output,
+    save_ai_output as _supabase_save_ai_output,
+)
 
 # Prefix used when a push fails, so main() can set a non-zero exit status
 # without re-inspecting the exception.
 PUSH_FAILURE_PREFIX = "Supabase write failed: "
-
-
-class SupabaseError(RuntimeError):
-    """A Supabase read or write could not be completed."""
-
-
-def _client():
-    """Create a Supabase client for the AquaBlend project."""
-    return create_client(supabase_url = DB_URL, supabase_key = DB_KEY)
 
 
 def load_results(path: str | Path) -> Any:
@@ -67,154 +64,9 @@ def load_results(path: str | Path) -> Any:
         return json.load(file)
 
 
-def load_milp_output(
-    run_id: int | None = None,
-    scenario_db_id: int | None = None,
-    scenario: str | None = None,
-) -> Dict:
-    """Load one row from the MILP output table in Supabase.
-
-    With no selector the newest row by ``created_at`` is returned. Each
-    selector names the real column it filters: ``origin_run_id``,
-    ``scenario_db_id`` (both nullable integers) and ``scenario_id`` (the
-    varchar display string, for example "SCN-008").
-
-    Raises:
-        SupabaseError: the table could not be reached, or no row matched.
-    """
-    # limit(1) rather than single(): single() raises on an empty result, which
-    # is a normal state to report rather than a transport failure.
-    try:
-        query = _client().table("milp_model_output").select("*")
-
-        if run_id is not None:
-            query = query.eq("origin_run_id", run_id)
-        if scenario_db_id is not None:
-            query = query.eq("scenario_db_id", scenario_db_id)
-        if scenario is not None:
-            query = query.eq("scenario_id", scenario)
-
-        rows = (
-            query
-            .order("created_at", desc = True)
-            .limit(1)
-            .execute()
-            .data
-        )
-    except APIError as exc:
-        raise SupabaseError(f"milp_model_output query rejected: {exc}") from exc
-    except httpx.HTTPError as exc:
-        raise SupabaseError(f"Could not reach Supabase: {exc}") from exc
-    except Exception as exc:  # Safe boundary around the client runtime.
-        raise SupabaseError(f"Unexpected Supabase failure: {exc}") from exc
-
-    if not rows:
-        selectors = {
-            "origin_run_id": run_id,
-            "scenario_db_id": scenario_db_id,
-            "scenario_id": scenario,
-        }
-        asked = ", ".join(
-            f"{name}={value!r}"
-            for name, value in selectors.items()
-            if value is not None
-        )
-        raise SupabaseError(
-            f"No milp_model_output row matched {asked}."
-            if asked
-            else "milp_model_output contains no rows to analyse."
-        )
-
-    # Returns a json dictionary
-    return rows[0]
-
-
-def _sha256_json(payload: Any) -> str:
-    """Stable SHA-256 digest of a JSON payload."""
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def save_ai_output(
-    response: Mapping[str, Any],
-    milp_row: Mapping[str, Any],
-    model_config: ModelConfig | None = None,
-    latency_ms: float | None = None,
-    started_at: datetime | None = None,
-) -> Dict:
-    """Insert one App response into milp_ai_output and return the inserted row.
-
-    The row is keyed to the MILP output it was computed from, so the foreign
-    keys are read from that row rather than from the response. The MILP row
-    carries two scenario identifiers: ``scenario_id`` is the display string
-    ("SCN-005") and ``scenario_db_id`` is the integer that milp_ai_output's
-    foreign key into Scenarios("Id") requires.
-
-    Raises:
-        SupabaseError: the MILP row cannot key a milp_ai_output row, or the
-            insert failed.
-    """
-    validate_app_response(response)
-
-    if not isinstance(milp_row, Mapping):
-        raise SupabaseError(
-            "An App response can only be saved against a MILP output row."
-        )
-
-    missing = [key for key in ("id", "scenario_db_id") if milp_row.get(key) is None]
-    if missing:
-        raise SupabaseError(
-            "MILP output row is missing key(s) required by milp_ai_output: "
-            + ", ".join(missing)
-        )
-
-    failed = response["report_mode"] == "INVALID_INPUT"
-
-    row: dict[str, Any] = {
-        "milp_output_id": milp_row["id"],
-        "scenario_id": milp_row["scenario_db_id"],
-        "origin_run_id": milp_row.get("origin_run_id"),
-        "status": "failed" if failed else "completed",
-        "ai_contract_version": response["contract_version"],
-        # MILP publishes its own digest; both tables are indexed on their
-        # hashes so an AI row can be matched back to the output it analysed.
-        # Fall back to our own only when the column is null.
-        "milp_output_hash": milp_row.get("output_hash") or _sha256_json(milp_row),
-        "ai_output_hash": _sha256_json(response),
-        "ai_input_json": dict(milp_row),
-        "raw_ai_json": dict(response),
-        "decision_explanation": response["display_explanation"],
-        "warnings": list(response["warnings"]),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    if started_at is not None:
-        row["started_at"] = started_at.isoformat()
-
-    # A failure belongs in the dedicated columns, not only in the warnings
-    # payload, so it can be queried without unpacking jsonb.
-    if failed:
-        row["error_code"] = response["report_mode"]
-        row["error_message"] = next(iter(response["warnings"]), None)
-
-    # Only a model-backed run can describe which model produced the report.
-    if model_config is not None:
-        row["ai_model"] = model_config.model_id
-        row["prompt_version"] = PROMPT_VERSION
-    if latency_ms is not None:
-        row["latency_ms"] = latency_ms
-
-    try:
-        return _client().table("milp_ai_output").insert(row).execute().data
-    except APIError as exc:
-        raise SupabaseError(f"milp_ai_output insert rejected: {exc}") from exc
-    except httpx.HTTPError as exc:
-        raise SupabaseError(f"Could not reach Supabase: {exc}") from exc
-    except Exception as exc:  # Safe boundary around the client runtime.
-        raise SupabaseError(f"Unexpected Supabase failure: {exc}") from exc
-
-
-def _invalid_input_response(results: Dict, reason: str) -> dict[str, Any]:
+def _invalid_input_response(
+    results: Dict, reason: str, extra_warnings: list[str] | None = None
+) -> dict[str, Any]:
     """Build the standard App response for unprocessable input."""
     scenario_id = (
         results.get("scenario_id")
@@ -225,31 +77,53 @@ def _invalid_input_response(results: Dict, reason: str) -> dict[str, Any]:
         None,
         scenario_id=scenario_id,
         input_valid=False,
-        upstream_warnings=[reason],
+        upstream_warnings=[reason, *(extra_warnings or [])],
     )
+
+
+def _summarise_llm_failures(failures: list) -> str:
+    """One safe-for-logs line naming each rejected validation rule and its
+    detail: newlines/repeated whitespace collapsed and each detail capped in
+    length, so a warning can never inject unbounded or multi-line text."""
+    parts = []
+    for failure in failures:
+        detail = " ".join(str(failure.detail).split())
+        if len(detail) > 200:
+            detail = detail[:197] + "..."
+        parts.append(f"{failure.rule} ({detail})")
+    return "; ".join(parts)
 
 
 def run_pipeline(
     results: Dict,
     model_config: ModelConfig | None = None,
     comparison: Mapping[str, Any] | None = None,
+    extra_warnings: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Validate and present one MILP result without mutating its input."""
+    """Validate and present one MILP result without mutating its input.
+
+    ``extra_warnings`` carries context gathered before this call (for
+    example, a Supabase provenance lookup that could not be completed) so it
+    is deduplicated and surfaced alongside every other warning in one place.
+    """
     try:
         validate_results(results)
         adapted_results = adapt_results(results)
     except (ValidationError, AdapterError) as exc:
-        return _invalid_input_response(results, f"Results validation failed: {exc}")
+        return _invalid_input_response(
+            results, f"Results validation failed: {exc}", extra_warnings
+        )
 
     status = results["status"]
     if status not in SOLVER_STATUSES:
         return _invalid_input_response(
             results,
             f"Solver status {status!r} is not supported by the App response contract.",
+            extra_warnings,
         )
 
     kpi_report, gate = evaluate(results)
-    warnings: list[str] = []
+    warnings: list[str] = list(extra_warnings or [])
 
     try:
         confidence = determine_confidence(
@@ -262,23 +136,28 @@ def run_pipeline(
         warnings.append(f"Confidence could not be determined: {exc}")
 
     try:
-        deterministic_explanation = generate_explanation(adapted_results)
+        detailed_explanation = generate_explanation(adapted_results)
+        deterministic_summary = generate_executive_summary(adapted_results)
     except ExplainerInputError as exc:
-        return _invalid_input_response(results, f"Explanation input failed: {exc}")
+        return _invalid_input_response(
+            results, f"Explanation input failed: {exc}", extra_warnings
+        )
 
-    llm_explanation: str | None = None
-    llm_validated = False
+    llm_summary: str | None = None
+    llm_summary_validated = False
+    # Only the short executive summary is ever sent to the LLM. The full
+    # deterministic report above (detailed_explanation) is never rewritten.
     if status == "OPTIMAL" and model_config is not None:
-        rewrite = rewrite_report(deterministic_explanation, model_config)
+        rewrite = rewrite_report(deterministic_summary, model_config)
         if rewrite.fallback_used:
             warnings.append(
-                "Model rewrite fell back to the deterministic explanation: "
+                "Model rewrite fell back to the deterministic summary: "
                 f"{rewrite.failure_type}: {rewrite.failure_message}"
             )
         else:
             try:
                 llm_validation = validate_llm_output(
-                    deterministic_explanation, rewrite.report_text
+                    deterministic_summary, rewrite.report_text
                 )
             except ValidatorInputError as exc:
                 warnings.append(f"LLM output could not be validated: {exc}")
@@ -288,16 +167,20 @@ def run_pipeline(
                     for warning in llm_validation.warnings
                 )
                 if llm_validation.critical_result == "PASS":
-                    llm_explanation = rewrite.report_text
-                    llm_validated = True
+                    llm_summary = rewrite.report_text
+                    llm_summary_validated = True
                 else:
-                    failures = ", ".join(
-                        failure.rule for failure in llm_validation.critical_failures
+                    failures = _summarise_llm_failures(
+                        llm_validation.critical_failures
                     )
                     warnings.append(
                         "LLM rewrite was rejected by validation"
                         + (f": {failures}" if failures else ".")
                     )
+
+    visualization_data = (
+        build_visualization_data(results) if status == "OPTIMAL" else None
+    )
 
     return build_app_response(
         results,
@@ -305,9 +188,11 @@ def run_pipeline(
         gate_result=gate.overall_status,
         confidence_flag=confidence_flag,
         comparison=comparison,
-        llm_explanation=llm_explanation,
-        llm_validated=llm_validated,
-        fallback_explanation=deterministic_explanation,
+        llm_summary=llm_summary,
+        llm_summary_validated=llm_summary_validated,
+        deterministic_summary=deterministic_summary,
+        detailed_explanation=detailed_explanation,
+        visualization_data=visualization_data,
         upstream_warnings=warnings,
     )
 
@@ -328,16 +213,45 @@ def run_from_source(
     response contract as unprocessable input. A failed write is recorded as a
     warning on an otherwise complete response, so a computed result is never
     lost just because it could not be stored.
+
+    When reading from Supabase, ``raw_output_json`` is used as the canonical
+    analysis payload when it is complete; otherwise a documented, best-effort
+    normalization of the flat ``milp_model_output`` columns is used instead
+    (see ``supabase_repository.normalize_output_columns``). The linked
+    ``milp_model_input`` row is fetched too, but is NOT YET mapped into the
+    confidence/provenance calculation - see the KNOWN INTEGRATION BLOCKER
+    note below. If either fetch is incomplete, a warning is added rather
+    than failing the analysis.
     """
+    output_row: Dict[str, Any] | None = None
+    extra_warnings: list[str] = []
+
     try:
         if path is not None:
             results = load_results(path)
         else:
-            results = load_milp_output(
+            output_row = load_milp_output(
                 run_id=run_id,
                 scenario_db_id=scenario_db_id,
                 scenario=scenario,
             )
+            results, canonical_warnings = extract_canonical_output(output_row)
+            extra_warnings.extend(canonical_warnings)
+
+            # KNOWN INTEGRATION BLOCKER: milp_model_input's provenance fields
+            # (scenario_data_json, source_data_snapshot_json, ...) are fetched
+            # here but deliberately NOT mapped into `results["data_flags"]` or
+            # otherwise used to influence confidence. No real
+            # milp_model_input row has been seen yet, so the JSON shape of
+            # those fields is unknown; inventing a mapping now would risk
+            # silently fabricating a confidence signal. Until a real row is
+            # available to confirm the shape, confidence is derived only
+            # from whatever `data_flags.sources` the canonical/normalized
+            # payload itself already carries (empty in the flat-column
+            # fallback, which correctly yields UNKNOWN - see
+            # confidence_flagger.determine_confidence).
+            _, provenance_warnings = load_input_provenance(output_row)
+            extra_warnings.extend(provenance_warnings)
     except SupabaseError as exc:
         return _invalid_input_response(None, f"Supabase read failed: {exc}")
     except (OSError, json.JSONDecodeError) as exc:
@@ -345,15 +259,21 @@ def run_from_source(
 
     started_at = datetime.now(timezone.utc)
     started_counter = time.perf_counter()
-    response = run_pipeline(results, model_config=model_config, comparison=comparison)
+    response = run_pipeline(
+        results,
+        model_config=model_config,
+        comparison=comparison,
+        extra_warnings=extra_warnings,
+    )
     latency_ms = (time.perf_counter() - started_counter) * 1000
 
     if push:
         try:
-            save_ai_output(
+            _supabase_save_ai_output(
                 response,
-                results,
+                output_row if output_row is not None else results,
                 model_config=model_config,
+                prompt_version=PROMPT_VERSION if model_config is not None else None,
                 latency_ms=latency_ms,
                 started_at=started_at,
             )

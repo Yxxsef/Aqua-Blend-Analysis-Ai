@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
-CONTRACT_VERSION = "0.1-draft"
+# Bumped for the executive_summary/detailed_explanation/visualization_data
+# fields (AquaBlend final AI integration): the response shape gained new
+# required fields, so this is not a purely additive change to 0.1-draft.
+CONTRACT_VERSION = "0.2-draft"
 
 SOLVER_STATUSES = {
     "OPTIMAL",
@@ -48,6 +51,9 @@ _REQUIRED_RESPONSE_FIELDS = {
     "confidence_flag",
     "comparison",
     "report_mode",
+    "executive_summary",
+    "detailed_explanation",
+    "visualization_data",
     "display_explanation",
     "warnings",
 }
@@ -138,9 +144,11 @@ def build_app_response(
     gate_result: str | None = None,
     confidence_flag: str | None = None,
     comparison: Mapping[str, Any] | None = None,
-    llm_explanation: str | None = None,
-    llm_validated: bool = False,
-    fallback_explanation: str | None = None,
+    llm_summary: str | None = None,
+    llm_summary_validated: bool = False,
+    deterministic_summary: str | None = None,
+    detailed_explanation: str | None = None,
+    visualization_data: Mapping[str, Any] | None = None,
     upstream_warnings: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Return the App & Delivery response shape defined by the current draft contract.
@@ -153,6 +161,13 @@ def build_app_response(
     ``scenario_id`` is primarily useful for INVALID_INPUT responses, where a
     solver output may not exist. Otherwise the value is read from the MILP
     result.
+
+    Only ``deterministic_summary`` (a short, operator-readable summary) may be
+    replaced by a validated LLM rewrite (``llm_summary``/``llm_summary_validated``).
+    ``detailed_explanation`` is always the complete deterministic technical
+    report and is never rewritten by an LLM. ``executive_summary`` (and
+    ``display_explanation``, kept for backward compatibility) reflect whichever
+    summary source was actually used.
     """
     milp_copy: dict[str, Any] | None = (
         deepcopy(dict(milp_result)) if milp_result is not None else None
@@ -172,6 +187,7 @@ def build_app_response(
             "Scenario input validation failed; the solver result is not "
             "available for display."
         )
+        summary = "The scenario could not be processed because the input was invalid."
         response = {
             "contract_version": CONTRACT_VERSION,
             "scenario_id": response_scenario_id,
@@ -181,9 +197,10 @@ def build_app_response(
             "confidence_flag": None,
             "comparison": None,
             "report_mode": "INVALID_INPUT",
-            "display_explanation": (
-                "The scenario could not be processed because the input was invalid."
-            ),
+            "executive_summary": summary,
+            "detailed_explanation": None,
+            "visualization_data": None,
+            "display_explanation": summary,
             "warnings": _dedupe(warnings),
         }
         validate_app_response(response)
@@ -200,6 +217,7 @@ def build_app_response(
         )
 
     warnings.extend(_contract_warnings(milp_copy))
+    detailed_text = _non_empty_text(detailed_explanation)
 
     # The MILP output contract states that solution blocks are not meaningful
     # unless the solver status is OPTIMAL. Do not forward KPIs/comparisons in
@@ -208,6 +226,10 @@ def build_app_response(
         warnings.append(
             f"Solver status is {solver_status}; optimal-solution metrics and "
             "comparisons are not displayed."
+        )
+        summary = (
+            f"The solver returned {solver_status}. No optimal solution is "
+            "available for display."
         )
         response = {
             "contract_version": CONTRACT_VERSION,
@@ -218,31 +240,31 @@ def build_app_response(
             "confidence_flag": _non_empty_text(confidence_flag),
             "comparison": None,
             "report_mode": "STATUS_ONLY",
-            "display_explanation": (
-                f"The solver returned {solver_status}. No optimal solution is "
-                "available for display."
-            ),
+            "executive_summary": summary,
+            "detailed_explanation": detailed_text,
+            "visualization_data": None,
+            "display_explanation": summary,
             "warnings": _dedupe(warnings),
         }
         validate_app_response(response)
         return response
 
-    llm_text = _non_empty_text(llm_explanation)
-    fallback_text = _non_empty_text(fallback_explanation)
+    llm_text = _non_empty_text(llm_summary)
+    fallback_text = _non_empty_text(deterministic_summary)
 
-    if llm_validated and llm_text:
+    if llm_summary_validated and llm_text:
         report_mode = "LLM_VALIDATED"
-        explanation = llm_text
+        summary = llm_text
     elif fallback_text:
         report_mode = "TEMPLATE_FALLBACK"
-        explanation = fallback_text
+        summary = fallback_text
         warnings.append(
             "Validated LLM explanation was unavailable; a deterministic "
             "template fallback is being displayed."
         )
     else:
         report_mode = "STATUS_ONLY"
-        explanation = (
+        summary = (
             "An optimal solution was found, but no validated display "
             "explanation is currently available."
         )
@@ -262,7 +284,12 @@ def build_app_response(
             deepcopy(dict(comparison)) if comparison is not None else None
         ),
         "report_mode": report_mode,
-        "display_explanation": explanation,
+        "executive_summary": summary,
+        "detailed_explanation": detailed_text,
+        "visualization_data": (
+            deepcopy(dict(visualization_data)) if visualization_data is not None else None
+        ),
+        "display_explanation": summary,
         "warnings": _dedupe(warnings),
     }
 
@@ -310,9 +337,28 @@ def validate_app_response(response: Mapping[str, Any]) -> None:
     ):
         raise ValueError("comparison must be an object or null")
 
+    executive_summary = response["executive_summary"]
+    if not _non_empty_text(executive_summary):
+        raise ValueError("executive_summary must be a non-empty string")
+
     explanation = response["display_explanation"]
     if not _non_empty_text(explanation):
         raise ValueError("display_explanation must be a non-empty string")
+
+    if explanation != executive_summary:
+        raise ValueError(
+            "display_explanation must equal executive_summary (kept only for "
+            "backward compatibility)"
+        )
+
+    detailed_explanation = response["detailed_explanation"]
+    if detailed_explanation is not None and not _non_empty_text(detailed_explanation):
+        raise ValueError("detailed_explanation must be a non-empty string or null")
+
+    if response["visualization_data"] is not None and not isinstance(
+        response["visualization_data"], Mapping
+    ):
+        raise ValueError("visualization_data must be an object or null")
 
     warnings = response["warnings"]
     if not isinstance(warnings, list) or not all(
@@ -327,6 +373,11 @@ def validate_app_response(response: Mapping[str, Any]) -> None:
         if response["kpis"] is not None or response["comparison"] is not None:
             raise ValueError(
                 "INVALID_INPUT responses must not expose solution KPIs/comparison"
+            )
+        if detailed_explanation is not None or response["visualization_data"] is not None:
+            raise ValueError(
+                "INVALID_INPUT responses must not expose a detailed explanation or "
+                "visualization data"
             )
 
     if solver_status is not None and solver_status != "OPTIMAL":
