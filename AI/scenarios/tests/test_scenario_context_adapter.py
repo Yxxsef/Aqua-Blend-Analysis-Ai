@@ -197,3 +197,53 @@ def test_build_context_prefers_explicit_run_id_argument():
     assert payload["scenario_id"] == "scenario_004"
     assert payload["run_id"] == "explicit_run_id"
     assert payload["scenario_name"] == "Run ID Override Test"
+
+def test_build_context_preserves_disabled_source_and_unavailable_plant():
+    """
+   Regression test for Task 70.
+
+    Ensure disabled sources and unavailable plants are preserved in the
+    AI context rather than being dropped or modified.
+    """ 
+    scenario = {
+        "scenario_id": "scenario_005",
+        "scenario_name": "Disabled Entity Test",
+        "sources": [
+            {
+                "source_id": "SRC_100",
+                "name": "Disabled Source",
+                "enabled": False,
+                "forced_inactive": True,
+                "availability_status": "unavailable",
+                "minimum_withdrawal_ml_per_day": 0,
+                "maximum_withdrawal_ml_per_day": 0,
+            }
+        ],
+        "plants": [
+            {
+                "plant_id": "PLANT_100",
+                "name": "Unavailable Plant",
+                "enabled": False,
+                "availability_status": "unavailable",
+                "minimum_processing_capacity_ml_per_day": 0,
+                "maximum_processing_capacity_ml_per_day": 0,
+            }
+        ],
+    }
+
+    adapter = ScenarioContextAdapter()
+    context = adapter.build(scenario)
+    payload = context.to_dict()
+
+    # Disabled source is preserved
+    assert len(payload["sources"]) == 1
+    assert payload["sources"][0]["source_id"] == "SRC_100"
+    assert payload["sources"][0]["enabled"] is False
+    assert payload["sources"][0]["forced_inactive"] is True
+    assert payload["sources"][0]["availability_status"] == "unavailable"
+
+    # Unavailable plant is preserved
+    assert len(payload["plants"]) == 1
+    assert payload["plants"][0]["plant_id"] == "PLANT_100"
+    assert payload["plants"][0]["enabled"] is False
+    assert payload["plants"][0]["availability_status"] == "unavailable"
