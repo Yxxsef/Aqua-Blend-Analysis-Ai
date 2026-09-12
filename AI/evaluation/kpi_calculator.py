@@ -24,7 +24,19 @@ from typing import Any, Optional
 
 
 # KPI_Set.md §4, KPI 1: interpretation rule.
-FEASIBLE_STATUSES = {"OPTIMAL", "FEASIBLE"}
+#
+# Sprint 4 finding (Task 87): KPI_Set.md itself always hedged this - "FEASIBLE:
+# feasible, if this status is officially supported by the MILP contract." That
+# condition is now resolved, and the answer is no. AI/results/Results_JSON_
+# Field_Map.md (the actual confirmed contract doc) states explicitly:
+# "FEASIBLE must not be used unless it exists in the confirmed contract" - and
+# it does not appear anywhere in the confirmed status enumeration. This module
+# previously included "FEASIBLE" here anyway; that was a bug now fixed to
+# match the confirmed contract exactly. See also: results_validator.py's
+# VALID_STATUS still includes "FEASIBLE" and "SUCCESS", which contradicts this
+# same confirmed doc - flagged separately to the team, not fixed here, since
+# that file isn't in this module's scope.
+FEASIBLE_STATUSES = {"OPTIMAL"}
 INVALID_STATUSES = {"UNBOUNDED", "ERROR"}
 # INFEASIBLE and TIME_LIMIT are handled explicitly, not via a set membership
 # check, because they each need their own message (see calculate_feasibility).
@@ -116,7 +128,7 @@ def calculate_feasibility(results: dict) -> KPIResult:
     if status in FEASIBLE_STATUSES:
         return KPIResult(
             "feasibility", "OK", status, "status",
-            "Feasible" + (" and optimal" if status == "OPTIMAL" else ""),
+            "Feasible and optimal",
         )
 
     if status == "INFEASIBLE":
