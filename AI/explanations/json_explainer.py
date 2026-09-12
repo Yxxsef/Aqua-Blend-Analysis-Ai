@@ -141,6 +141,148 @@ F_DATA_FLAGS = "dataFlags"
 # (here, an ExplainerInputError) if either of these is missing.
 REQUIRED_TOP_LEVEL_FIELDS = [F_STATUS, F_SCENARIO_ID]
 
+# ---------------------------------------------------------------------------
+# Task 91: bridge the real, current results_adapter.py output (which nests
+# scenario_id under scenario.scenario_id and the solver status under
+# solver.status) onto the flat scenarioId/status shape every function below
+# was written against. This mirrors the same normalization pattern already
+# used in supabase_repository.normalize_output_columns() for exactly this
+# class of problem: old code, real nested shape, minimal-surface-area fix.
+#
+# "status" here has always unambiguously meant the SOLVER status
+# (FULL_REPORT_STATUSES = {"OPTIMAL"}) -- never the scenario lifecycle
+# status (draft/ready/solved) -- so solver.status is read, not scenario.status.
+#
+# A dict that already has top-level scenarioId/status (the old, pre-v1 shape
+# still used by some existing fixtures/tests) is left untouched, so this is
+# purely additive and does not break anything already passing.
+# ---------------------------------------------------------------------------
+def _normalize_v1_adapted_results(data: dict) -> dict:
+    """Return a shallow copy of ``data`` with the real, current
+    results_adapter.py output shape bridged onto the flat shape every
+    function below was written against -- see the module note above this
+    function's definition for why this normalization pattern was chosen.
+
+    Confirmed against: (1) results_adapter.py (master) run on the real
+    output_contract_v1.json fixture, and (2) real solved rows pulled
+    directly from Supabase's milp_model_output table. A dict that already
+    has the old flat fields is left untouched wherever those fields are
+    already present, so this stays purely additive.
+    """
+    if not isinstance(data, dict):
+        return data
+
+    normalized = dict(data)
+
+    # --- scenarioId / status -------------------------------------------
+    if F_SCENARIO_ID not in normalized:
+        scenario = data.get("scenario")
+        if isinstance(scenario, dict) and "scenario_id" in scenario:
+            normalized[F_SCENARIO_ID] = scenario["scenario_id"]
+
+    if F_STATUS not in normalized:
+        solver = data.get("solver")
+        if isinstance(solver, dict) and "status" in solver:
+            normalized[F_STATUS] = solver["status"]
+
+    # --- objective (real: summary.costs, no currency field exists) ------
+    if F_OBJECTIVE not in normalized:
+        summary = data.get("summary")
+        if isinstance(summary, dict) and isinstance(summary.get("costs"), dict):
+            costs = summary["costs"]
+            normalized[F_OBJECTIVE] = {
+                "total_cost": costs.get("total_cost"),
+                F_CURRENCY: None,  # confirmed: no currency field in real output
+            }
+
+    # --- sources.selected/unused (real: one flat list + selection_status)
+    if F_SOURCES in normalized and isinstance(normalized[F_SOURCES], list):
+        selected, unused = [], []
+        for s in normalized[F_SOURCES]:
+            if not isinstance(s, dict):
+                continue
+            remapped = dict(s)
+            # Real per-source field names -> old field names this file reads.
+            remapped.setdefault("percent_of_blend", s.get("utilisation_percent"))
+            remapped.setdefault("volume_drawn_ml_per_day", s.get("withdrawal_ml_per_day"))
+            remapped.setdefault("draw_cost", s.get("total_source_cost"))
+            # source_name never exists in real output; every read site
+            # already falls back to source_id via `or s.get("source_id")`.
+            if s.get("selection_status") == "SELECTED":
+                selected.append(remapped)
+            else:
+                unused.append(remapped)
+        normalized[F_SOURCES] = {F_SELECTED: selected, F_UNUSED: unused}
+
+    # --- plants.active/inactive (real: one flat list + activated bool) --
+    if F_PLANTS in normalized and isinstance(normalized[F_PLANTS], list):
+        active, inactive = [], []
+        for p in normalized[F_PLANTS]:
+            if not isinstance(p, dict):
+                continue
+            remapped = dict(p)
+            remapped.setdefault("volume_processed_ml_per_day", p.get("throughput_ml_per_day"))
+            remapped.setdefault("treatment_cost", p.get("total_plant_cost"))
+            remapped.setdefault("treatment_cost_per_ml", None)  # not in real output
+            if p.get("activated"):
+                active.append(remapped)
+            else:
+                inactive.append(remapped)
+        normalized[F_PLANTS] = {F_ACTIVE: active, "inactive": inactive}
+
+    # --- transferPaths (real: flows.source_to_plant / .plant_to_zone) ---
+    if F_TRANSFER_PATHS not in normalized:
+        flows = data.get("flows")
+        if isinstance(flows, dict):
+            def _with_active(paths):
+                out = []
+                for p in paths or []:
+                    p = dict(p)
+                    p.setdefault("active", p.get("flow_ml_per_day", 0) not in (0, 0.0, None))
+                    out.append(p)
+                return out
+
+            normalized[F_TRANSFER_PATHS] = {
+                F_SOURCE_TO_PLANT: _with_active(flows.get(F_SOURCE_TO_PLANT)),
+                F_PLANT_TO_ZONE: _with_active(flows.get(F_PLANT_TO_ZONE)),
+            }
+
+    # --- waterQuality (real: quality.plant_inflow, a LIST of plants each
+    # with a "parameters" LIST) -> by_plant, a DICT keyed by plant_id of
+    # DICTs keyed by parameter name, the shape every read site expects. ---
+    if F_WATER_QUALITY not in normalized:
+        quality = data.get("quality")
+        if isinstance(quality, dict) and isinstance(quality.get("plant_inflow"), list):
+            by_plant = {}
+            for plant_entry in quality["plant_inflow"]:
+                if not isinstance(plant_entry, dict):
+                    continue
+                plant_id = plant_entry.get("plant_id")
+                params = {}
+                for param in plant_entry.get("parameters") or []:
+                    if not isinstance(param, dict) or not param.get("parameter_id"):
+                        continue
+                    params[param["parameter_id"]] = {
+                        "value": param.get("reported_value"),
+                        "unit": param.get("reported_unit"),
+                        "constraint_min": param.get("model_min"),
+                        "constraint_max": param.get("model_max"),
+                        "safety_margin_percent": param.get("safety_margin_percent"),
+                        "status": (
+                            "PASS" if param.get("within_limits") is True
+                            else "FAIL" if param.get("within_limits") is False
+                            else None
+                        ),
+                    }
+                if plant_id:
+                    by_plant[plant_id] = params
+            normalized[F_WATER_QUALITY] = {
+                F_APPLIES_TO: quality.get("applies_to"),
+                F_BY_PLANT: by_plant,
+            }
+
+    return normalized
+
 # Report_Structure.md section 2 / Results_JSON_Field_Map.md "Non-optimal
 # runs": only OPTIMAL currently permits the full 12-section report.
 FULL_REPORT_STATUSES = {"OPTIMAL"}
@@ -965,6 +1107,7 @@ def generate_executive_summary(data: dict) -> str:
     the closest plant-inflow water-quality margin; one binding constraint;
     a provisional/estimated-data note; and one alternative or sensitivity
     finding. Targets roughly 80-150 words and never exceeds ~180."""
+    data = _normalize_v1_adapted_results(data)
     validate_input(data)
 
     scenario_id = data.get(F_SCENARIO_ID)
@@ -1091,6 +1234,7 @@ def generate_explanation(data: dict) -> str:
     """Build the complete deterministic report, per Report_Structure.md's
     fixed 12-section order. Accepts a Python dict already parsed from JSON.
     See generate_explanation_from_file for reading directly from a file."""
+    data = _normalize_v1_adapted_results(data)
     validate_input(data)
     status = data.get(F_STATUS)
 
