@@ -9,20 +9,20 @@ supabase_repository.normalize_output_columns(), the same function
 AI/main.py calls (via extract_canonical_output) before results ever
 reach kpi_gate.evaluate().
 
-No real captured `milp_model_output` row exists anywhere in this repo as
-of Sprint 4 (checked master and every relevant branch). Every row here is
-a synthetic dict built strictly from milp_model_output.sql's real column
-names, not invented field names. Values reuse the same reference scenario
-(scenario_2026_07_17_001) used throughout Sprint 1-3 for continuity and
-easy cross-checking against reference_output.json's already-verified
-numbers ($184,150 total cost, 42%/58% blend split).
+Dependency note: as of this writing, AI/integration/supabase_repository.py
+lives on the still-unmerged ai-final-integration-polish / task-61 /
+task-86 branches, not on master yet. This whole module is skipped (not
+failed) via pytest.importorskip if that module isn't importable in the
+current checkout - a real, expected cross-task dependency, the same
+category as Task 72's dependency on Task 71 before it merged. Once any
+of those branches lands on master, these tests will start actually
+running instead of skipping. kpi_calculator.py's own fixes (FEASIBLE
+removal, demand_zones and quality field-name handling) do not depend on
+this and are fully covered by test_kpi_calculator.py regardless.
 
-Known limitation, documented rather than hidden: because no real row
-exists, this cannot catch a case where a live column's actual JSON
-sub-shape differs from what's assumed here (e.g. if `quality` in
-production never has a `by_plant` key at all, or `sources` entries use a
-different volume field name than `volume_drawn_ml_per_day`). Re-run this
-suite against a real captured row the moment one is available.
+Includes the actual real captured milp_model_output row provided by the
+team (tests/fixtures/milp_model_output_example.json), not just synthetic
+rows built from the schema's column names.
 """
 import json
 import os
@@ -30,7 +30,26 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# supabase_repository.py lives at AI/integration/ in the real repo, a
+# sibling of AI/evaluation/ (where this test file lives, under tests/).
+_REPO_AI_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+)
+_INTEGRATION_PATH = os.path.join(_REPO_AI_ROOT, "integration")
+_EVALUATION_PATH = os.path.join(_REPO_AI_ROOT, "evaluation")
+for _path in (_INTEGRATION_PATH, _EVALUATION_PATH):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+pytest.importorskip(
+    "supabase_repository",
+    reason=(
+        "supabase_repository.py is not on this branch yet - it lives on "
+        "ai-final-integration-polish / task-61 / task-86, not merged into "
+        "master as of this test run. This is a real, expected cross-task "
+        "dependency (see module docstring), not a failure."
+    ),
+)
 
 from supabase_repository import normalize_output_columns
 from kpi_calculator import calculate_kpis

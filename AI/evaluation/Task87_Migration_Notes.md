@@ -130,3 +130,11 @@ assigned to fix it. Raising this with the team rather than editing that file dir
 - The two `supabase_repository.py` bugs (Findings 4 and 5) are still unresolved by the team; this
   module is defensively correct regardless, but the shared function itself should still be fixed
   so other consumers of it aren't affected the same way.
+- **`supabase_repository.py` itself is not on `master` yet.** It lives on the still-unmerged
+  `ai-final-integration-polish` / `task-61-ai-main-pipeline` / `task-86-main-output-contract`
+  branches. `test_kpi_supabase_integration.py` uses `pytest.importorskip` to skip gracefully
+  (not fail) when that module isn't importable in the current checkout, the same pattern Task 72
+  used for its dependency on Task 71 before that merged. `kpi_calculator.py`'s actual fixes are
+  fully covered by `test_kpi_calculator.py` independently of this, so this PR isn't blocked on
+  waiting for that other branch, but the Supabase-integration tests will only really execute
+  (rather than skip) once one of those branches lands.
