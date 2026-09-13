@@ -195,6 +195,22 @@ def _normalize_v1_adapted_results(data: dict) -> dict:
                 F_CURRENCY: None,  # confirmed: no currency field in real output
             }
 
+    # --- demandZones (real: delivered_ml_per_day/unmet_demand_ml_per_day,
+    # no demand_ml_per_day or volume_supplied_ml_per_day field exists) -----
+    if F_DEMAND_ZONES in normalized and isinstance(normalized[F_DEMAND_ZONES], list):
+        remapped_zones = []
+        for z in normalized[F_DEMAND_ZONES]:
+            if not isinstance(z, dict):
+                continue
+            remapped = dict(z)
+            delivered = z.get("delivered_ml_per_day")
+            unmet = z.get("unmet_demand_ml_per_day")
+            remapped.setdefault("volume_supplied_ml_per_day", delivered)
+            if "demand_ml_per_day" not in remapped and delivered is not None and unmet is not None:
+                remapped["demand_ml_per_day"] = delivered + unmet
+            remapped_zones.append(remapped)
+        normalized[F_DEMAND_ZONES] = remapped_zones
+
     # --- sources.selected/unused (real: one flat list + selection_status)
     if F_SOURCES in normalized and isinstance(normalized[F_SOURCES], list):
         selected, unused = [], []

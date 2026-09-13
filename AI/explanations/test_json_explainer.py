@@ -1231,6 +1231,31 @@ class TestRealAdapterShapeCompatibility:
         assert "AUD" not in report
         assert "USD" not in report
 
+    def test_real_demand_zone_fields_are_bridged_not_left_unreported(self):
+        """Regression: demandZones entries never carry demand_ml_per_day or
+        volume_supplied_ml_per_day in real output (confirmed against four
+        independent real solved Supabase rows) -- only zone_id,
+        demand_satisfied, demand_must_be_met, surplus_ml_per_day,
+        delivered_ml_per_day, unmet_demand_ml_per_day. Before this was
+        bridged, every real report said "required demand not reported,
+        supplied volume not reported" on every real run, even though the
+        real numbers were sitting right there under different names."""
+        data = copy.deepcopy(REAL_SOLVED_ADAPTED_RESULTS)
+        data["demandZones"] = [
+            {
+                "zone_id": "ZONE_001",
+                "demand_satisfied": True,
+                "demand_must_be_met": True,
+                "surplus_ml_per_day": 8.49,
+                "delivered_ml_per_day": 8.8,
+                "unmet_demand_ml_per_day": 0.0,
+            },
+        ]
+        report = generate_explanation(data)
+        assert "required demand not reported" not in report
+        assert "supplied volume not reported" not in report
+        assert "ZONE_001: required demand 8.8 ML/day, supplied volume 8.8 ML/day." in report
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
