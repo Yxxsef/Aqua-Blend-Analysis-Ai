@@ -306,18 +306,12 @@ def adapt_milp_output_for_ai(payload: Mapping[str, Any]) -> dict:
 
     output["water_quality"] = deepcopy(quality)
 
-    # The current MILP output stores binding constraints as an array.
-    # Wrap them in an object for the AI Results contract.
-    if isinstance(binding_constraints, dict):
-        output["constraints"] = deepcopy(binding_constraints)
-    else:
-        output["constraints"] = {
-            "binding_constraints": deepcopy(
-                binding_constraints
-                if isinstance(binding_constraints, list)
-                else []
-            )
-        }
+    # AI Results contract expects constraints to remain a list.
+    output["constraints"] = (
+        deepcopy(binding_constraints)
+        if isinstance(binding_constraints, list)
+        else []
+    )
 
     output["diagnostics"] = deepcopy(validation)
 
