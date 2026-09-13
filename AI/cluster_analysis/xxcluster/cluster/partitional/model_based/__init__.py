@@ -17,3 +17,12 @@ belongs here.
 """
 
 from __future__ import annotations
+
+# Imported for its registration side effect. `@register` runs when the
+# module is imported, so a name is resolvable only once that has happened.
+# Doing it here is what lets `REGISTRY.get("gaussian_mixture")` work from
+# a bare `import xxcluster`, and what lets a sweep over this subfamily
+# see every method in it rather than only those the caller happened to
+# import. One line per method module; nothing else changes when one is
+# added.
+from . import gmm  # noqa: F401
