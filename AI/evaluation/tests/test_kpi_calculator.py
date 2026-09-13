@@ -95,9 +95,32 @@ class TestFeasibility:
         r = calculate_feasibility({"status": "OPTIMAL"})
         assert r.status == "OK" and r.value == "OPTIMAL"
 
-    def test_feasible(self):
+    def test_feasible_status_is_rejected_not_confirmed_valid(self):
+        # Sprint 4 (Task 87): this used to assert FEASIBLE was accepted as a
+        # valid feasible status. That was wrong - Results_JSON_Field_Map.md
+        # (the confirmed contract doc) states "FEASIBLE must not be used
+        # unless it exists in the confirmed contract", and it does not.
+        # KPI_Set.md itself only ever conditionally allowed FEASIBLE ("if
+        # this status is officially supported") - it is not. A FEASIBLE
+        # status must now be treated as unrecognised, same as any other
+        # unconfirmed value.
         r = calculate_feasibility({"status": "FEASIBLE"})
-        assert r.status == "OK" and r.value == "FEASIBLE"
+        assert r.status == "UNKNOWN"
+        assert r.value == "FEASIBLE"
+
+    def test_success_status_is_rejected_not_silently_treated_as_optimal(self):
+        # Sprint 4 (Task 87): results_validator.py's VALID_STATUS still
+        # includes "SUCCESS" (and "FEASIBLE"), but llm_validator.py's own
+        # comment identifies both as "placeholder values from an earlier
+        # draft schema, not the confirmed model_output_contract.json set" -
+        # confirmed against Results_JSON_Field_Map.md directly, which never
+        # lists SUCCESS anywhere in the confirmed status enumeration.
+        # results_validator.py disagreeing with the confirmed doc is a
+        # separate, flagged issue (not fixed here); this module must not
+        # propagate the same mistake by treating SUCCESS as valid.
+        r = calculate_feasibility({"status": "SUCCESS"})
+        assert r.status == "UNKNOWN"
+        assert r.value == "SUCCESS"
 
     def test_infeasible(self):
         r = calculate_feasibility({"status": "INFEASIBLE"})

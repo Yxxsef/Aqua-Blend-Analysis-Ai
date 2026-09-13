@@ -24,7 +24,7 @@ All calculations must use values from the approved MILP Results JSON. Feasibilit
 
 | KPI | JSON path or formula | Unit | Better direction | Required target |
 |---|---|---:|---|---|
-| Feasibility | `$.status` | Status | Feasible is required | `OPTIMAL` or another explicitly verified feasible status |
+| Feasibility | `$.status` | Status | Feasible is required | `OPTIMAL`, or `TIME_LIMIT` with a verified feasible incumbent |
 | Demand satisfaction | `SUM($.demand_zones[*].volume_supplied_ml_per_day) / SUM($.demand_zones[*].demand_ml_per_day) * 100` | % | Higher | 100% |
 | Total cost | `$.objective.total_cost` | `$.objective.currency`, currently AUD | Lower | Lowest among otherwise valid results |
 | Minimum safety margin | Minimum of `$.water_quality.by_plant.*.*.safety_margin_percent` | % | Higher | At least 0%; positive margin preferred |
@@ -47,10 +47,13 @@ No numerical formula. Read the solver result status directly.
 **Interpretation rule**
 
 - `OPTIMAL`: feasible and optimal.
-- `FEASIBLE`: feasible, if this status is officially supported by the MILP contract.
 - `INFEASIBLE`: no feasible solution was found.
 - `UNBOUNDED` or `ERROR`: not a valid result for KPI comparison.
 - `TIME_LIMIT`: feasibility is not confirmed unless the MILP output explicitly verifies a feasible incumbent solution. The current reference JSON has no separate incumbent-feasibility field.
+
+**Sprint 4 update (Task 87):** the `FEASIBLE` line above was removed. It previously read *"feasible, if this status is officially supported by the MILP contract"* — that condition is now resolved. `AI/results/Results_JSON_Field_Map.md` (the confirmed contract doc) states explicitly: *"FEASIBLE must not be used unless it exists in the confirmed contract"*, and it does not appear anywhere in the confirmed status enumeration. `kpi_calculator.py` previously accepted `FEASIBLE` as a valid feasible status anyway; that was a bug, now fixed to match the confirmed contract exactly (a `FEASIBLE` status is treated as unrecognised, reported `UNKNOWN`).
+
+**Separate, flagged issue (not this module's mismatch, but relevant here):** `results_validator.py`'s `VALID_STATUS` still includes both `SUCCESS` and `FEASIBLE`, contradicting the same confirmed contract doc. `llm_validator.py`'s own code comment independently reaches the same conclusion this document does — both are described there as *"placeholder values from an earlier draft schema, not the confirmed `model_output_contract.json` set."* `kpi_calculator.py` does not and will not accept `SUCCESS` either, for the same reason. Raised with the team since `results_validator.py` isn't explicitly owned by any Sprint 4 task.
 
 **Unit**  
 Status category.
@@ -59,7 +62,7 @@ Status category.
 A verified feasible result is required. `OPTIMAL` is preferred when comparing solver completion.
 
 **Required target**  
-`OPTIMAL` or another explicitly verified feasible status.
+`OPTIMAL`, or a `TIME_LIMIT` result with an explicitly verified feasible incumbent.
 
 **If data is missing**  
 Report `UNKNOWN`. Treat the result as incomplete and do not mark the evaluation as successful.
