@@ -24,6 +24,7 @@ production never has a `by_plant` key at all, or `sources` entries use a
 different volume field name than `volume_drawn_ml_per_day`). Re-run this
 suite against a real captured row the moment one is available.
 """
+import json
 import os
 import sys
 
@@ -211,3 +212,63 @@ class TestQualityColumnMissingByPlantKey:
         report = calculate_kpis(canonical)
         assert report.minimum_safety_margin.status == "OK"
         assert report.minimum_safety_margin.value == 22.6
+
+
+class TestRealCapturedRowFromMilpTeam:
+    """Sprint 4 (Task 87): the actual real captured milp_model_output row,
+    provided by the team, not synthetic. This is what exposed two real
+    bugs in normalize_output_columns() (not this module's file, flagged
+    to the team - see Task87_Migration_Notes.md) and confirmed the real
+    field names for demand_zones and quality that this module now
+    handles: delivered_ml_per_day/unmet_demand_ml_per_day (not
+    demand_ml_per_day/volume_supplied_ml_per_day), and
+    quality.plant_inflow[].parameters[] with model_value/model_min/
+    model_max/within_limits (not by_plant/safety_margin_percent).
+    """
+
+    @staticmethod
+    def _load_real_row():
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "fixtures", "milp_model_output_example.json"
+        )
+        with open(path) as f:
+            return json.load(f)
+
+    def test_real_row_produces_a_full_pass(self):
+        canonical = normalize_output_columns(self._load_real_row())
+        report = calculate_kpis(canonical)
+        gate = evaluate_gate(report)
+
+        assert report.feasibility.value == "OPTIMAL"
+        assert report.demand_satisfaction.status == "OK"
+        assert report.demand_satisfaction.value == 100.0
+        assert report.total_cost.status == "OK"
+        assert report.total_cost.value == 9300.0
+        assert report.minimum_safety_margin.status == "OK"
+        assert report.quality_violations.status == "OK"
+        assert report.quality_violations.value == 0
+        assert gate.overall_status == "PASS"
+
+    def test_ph_margin_is_computed_in_model_units_not_reported_units(self):
+        # The real row's pH entry: reported_value=7.5 (pH units), but
+        # model_value=31.6227766... (hydrogen-ion nmol/L, via the
+        # ph_to_hydrogen_ion transform). Confirms margin is computed in
+        # model space: min(31.62-3.16, 316.23-31.62)/(316.23-3.16)*100 = 9.1,
+        # not whatever the equivalent reported-pH-space margin would be.
+        canonical = normalize_output_columns(self._load_real_row())
+        report = calculate_kpis(canonical)
+        assert report.minimum_safety_margin.value == 9.1
+
+    def test_inactive_plant_is_correctly_excluded_despite_the_shared_bug(self):
+        # Real row: PLANT_002 has activated=false. normalize_output_columns()
+        # incorrectly puts it in plants.active anyway (Sprint 4 finding,
+        # flagged to the team). This module must not be fooled by that -
+        # PLANT_002 must not be required to have complete quality data.
+        canonical = normalize_output_columns(self._load_real_row())
+        # If PLANT_002 were incorrectly treated as active and required to
+        # have quality data, this would come back INCOMPLETE instead of OK,
+        # since PLANT_002 has no quality.plant_inflow entry of its own
+        # beyond what PLANT_001 already supplies.
+        report = calculate_kpis(canonical)
+        assert report.minimum_safety_margin.status == "OK"
+        assert report.quality_violations.status == "OK"

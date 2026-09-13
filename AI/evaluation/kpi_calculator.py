@@ -185,13 +185,32 @@ def calculate_demand_satisfaction(results: dict) -> KPIResult:
     total_required = 0.0
     total_supplied = 0.0
     for zone in zones:
-        required = zone.get("demand_ml_per_day")
-        supplied = zone.get("volume_supplied_ml_per_day")
+        # Sprint 4 (Task 87): the real milp_model_output.demand_zones jsonb
+        # (confirmed against an actual captured row) does not use
+        # demand_ml_per_day/volume_supplied_ml_per_day at all. It reports
+        # delivered_ml_per_day and unmet_demand_ml_per_day instead, with no
+        # direct "required" field. Required demand is derived as
+        # delivered + unmet, which is exactly what "required" means. Both
+        # field-name sets are supported so this still works against the
+        # older toy-model reference data used throughout Sprint 1-3.
+        if "demand_ml_per_day" in zone or "volume_supplied_ml_per_day" in zone:
+            required = zone.get("demand_ml_per_day")
+            supplied = zone.get("volume_supplied_ml_per_day")
+        else:
+            delivered = zone.get("delivered_ml_per_day")
+            unmet = zone.get("unmet_demand_ml_per_day")
+            supplied = delivered
+            required = (
+                delivered + unmet
+                if _is_number(delivered) and _is_number(unmet)
+                else None
+            )
+
         if not _is_number(required) or not _is_number(supplied):
             return KPIResult(
                 "demand_satisfaction", "N/A", None, "%",
-                f"Zone '{zone.get('zone_id', '?')}' is missing "
-                "demand_ml_per_day or volume_supplied_ml_per_day. "
+                f"Zone '{zone.get('zone_id', '?')}' is missing the fields "
+                "needed to determine required and supplied demand. "
                 "Not assuming a missing value is zero.",
             )
         total_required += required
@@ -239,40 +258,146 @@ def calculate_total_cost(results: dict, feasibility: KPIResult) -> KPIResult:
 
 
 # ---------------------------------------------------------------------------
-# Shared helper for KPI 4 and KPI 5 — both read water_quality.by_plant.
+# Shared helper for KPI 4 and KPI 5 — both read water-quality data.
 # ---------------------------------------------------------------------------
+def _margin_percent(value, lo, hi):
+    """KPI_Set.md's margin formula: min(value-min, max-value)/(max-min)*100."""
+    if not (_is_number(value) and _is_number(lo) and _is_number(hi)) or hi == lo:
+        return None
+    return round(min(value - lo, hi - value) / (hi - lo) * 100, 1)
+
+
+def _active_plant_ids(results: dict):
+    """Returns the set of active plant IDs, handling both plant shapes.
+
+    Old canonical shape: plants = {"active": [...], "inactive": [...]}.
+    Real v1 shape (confirmed against a captured milp_model_output row,
+    Sprint 4 / Task 87): plants is a flat list, each entry has an
+    "activated" boolean rather than being split into two arrays.
+
+    Sprint 4 finding (Task 87): normalize_output_columns() has a second bug
+    alongside the quality double-wrap - it puts every plant into "active"
+    regardless of its real "activated" value (confirmed against a captured
+    row: a plant with activated=false still ended up in the "active" list,
+    with "inactive" always empty). Flagged to the team, not fixed in that
+    shared file. Re-checking each entry's own "activated" field here even
+    when it arrives pre-split, so this module isn't silently wrong because
+    of it.
+    """
+    plants = results.get("plants")
+    if isinstance(plants, dict):
+        candidates = plants.get("active", [])
+    elif isinstance(plants, list):
+        candidates = plants
+    else:
+        return set()
+
+    return {
+        p.get("plant_id") for p in candidates
+        if isinstance(p, dict) and p.get("activated", True) is not False
+    }
+
+
 def _collect_quality_entries(results: dict):
     """Returns (entries, incomplete_flag).
 
     entries: list of (plant_id, parameter, entry_dict) for every
-    plant/parameter pair actually present.
-    incomplete_flag: True if any *active* plant is missing from
-    water_quality.by_plant entirely, or is missing one of
-    EXPECTED_QUALITY_PARAMETERS.
+    plant/parameter pair actually present. entry_dict is always normalised
+    to this module's internal shape — {"status": "PASS"/"FAIL"/None,
+    "safety_margin_percent": float or None} — regardless of which real
+    shape the data came from.
+    incomplete_flag: True if any *active* plant is missing entirely, or is
+    missing one of EXPECTED_QUALITY_PARAMETERS.
     """
-    wq = results.get("water_quality", {})
-    by_plant = wq.get("by_plant", {}) if isinstance(wq, dict) else {}
-
+    quality = results.get("water_quality", {})
     entries = []
-    for plant_id, params in by_plant.items():
-        if not isinstance(params, dict):
-            continue
-        for param_name, entry in params.items():
-            if isinstance(entry, dict):
-                entries.append((plant_id, param_name, entry))
+    plants_seen = {}
 
-    # Incompleteness check against active plants (model_output_specification.md
-    # §3.7: "A plant with zero inflow has no defined blend and is omitted" —
-    # so we only expect entries for plants actually reported as active).
-    active_plants = results.get("plants", {}).get("active", [])
+    if isinstance(quality, dict) and isinstance(quality.get("by_plant"), dict):
+        by_plant = quality["by_plant"]
+        # Old canonical shape: by_plant = {plant_id: {param_name: {...}}}.
+        # Guard against the case where "by_plant" itself isn't really a
+        # per-plant mapping (e.g. it was accidentally given the real v1
+        # quality blob directly, which also happens to have top-level keys
+        # like "applies_to"/"plant_inflow" - those are not plant IDs).
+        if "plant_inflow" not in by_plant:
+            for plant_id, params in by_plant.items():
+                if not isinstance(params, dict):
+                    continue
+                plants_seen[plant_id] = set(params.keys())
+                for param_name, entry in params.items():
+                    if isinstance(entry, dict):
+                        entries.append((plant_id, param_name, entry))
+
+    plant_inflow = None
+    if isinstance(quality, dict) and isinstance(quality.get("plant_inflow"), list):
+        plant_inflow = quality["plant_inflow"]
+    elif (
+        isinstance(quality, dict)
+        and isinstance(quality.get("by_plant"), dict)
+        and isinstance(quality["by_plant"].get("plant_inflow"), list)
+    ):
+        # normalize_output_columns() double-wraps the real quality blob
+        # under an extra "by_plant" key rather than replacing it (Sprint 4
+        # finding, Task 87 - flagged to the team as a bug in that shared
+        # function, not fixed here since it isn't this module's file).
+        # Recovering the real structure from underneath that wrapping
+        # rather than failing, since the actual data is still right there.
+        plant_inflow = quality["by_plant"]["plant_inflow"]
+
+    if plant_inflow is not None:
+        # Real v1 shape (confirmed against a captured milp_model_output
+        # row): quality.plant_inflow[] = [{plant_id, parameters: [{
+        # parameter_id, model_value, model_min, model_max, within_limits,
+        # binding_lower, binding_upper, reported_value, reported_unit,
+        # ...}]}]. No safety_margin_percent or PASS/FAIL status field
+        # exists directly - both are derived here.
+        #
+        # Margin is computed in "model" units (model_value/model_min/
+        # model_max), not "reported" units, because that is the space the
+        # constraint is actually enforced in - confirmed against the real
+        # pH entry, where reported_value is pH but model_value is the
+        # transformed hydrogen-ion concentration the solver linearises on.
+        # For an identity-transform parameter (e.g. turbidity, alkalinity)
+        # model and reported units coincide, so this makes no difference.
+        # Flagging this choice for team confirmation since KPI_Set.md's
+        # margin formula predates this model/reported distinction.
+        for plant in plant_inflow:
+            if not isinstance(plant, dict):
+                continue
+            plant_id = plant.get("plant_id")
+            params = plant.get("parameters", [])
+            if not isinstance(params, list):
+                continue
+            seen_params = set()
+            for param in params:
+                if not isinstance(param, dict):
+                    continue
+                param_id = param.get("parameter_id")
+                seen_params.add(param_id)
+                within_limits = param.get("within_limits")
+                status = (
+                    "PASS" if within_limits is True
+                    else "FAIL" if within_limits is False
+                    else None
+                )
+                margin = _margin_percent(
+                    param.get("model_value"), param.get("model_min"), param.get("model_max")
+                )
+                entries.append((plant_id, param_id, {
+                    "status": status,
+                    "safety_margin_percent": margin,
+                }))
+            plants_seen[plant_id] = seen_params
+
+    active_plant_ids = _active_plant_ids(results)
     incomplete = False
-    for plant in active_plants:
-        plant_id = plant.get("plant_id")
-        plant_params = by_plant.get(plant_id)
-        if not isinstance(plant_params, dict):
+    for plant_id in active_plant_ids:
+        seen_params = plants_seen.get(plant_id)
+        if seen_params is None:
             incomplete = True
             continue
-        if not EXPECTED_QUALITY_PARAMETERS.issubset(plant_params.keys()):
+        if not EXPECTED_QUALITY_PARAMETERS.issubset(seen_params):
             incomplete = True
 
     return entries, incomplete
