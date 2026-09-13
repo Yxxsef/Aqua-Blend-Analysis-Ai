@@ -276,9 +276,11 @@ def adapt_milp_output_for_ai(payload: Mapping[str, Any]) -> dict:
         "plant_id",
     )
 
-    output["demand_zones"] = _index_records(
-        demand_zone_records,
-        "zone_id",
+    # AI contract expects demand_zones to remain a list.
+    output["demand_zones"] = (
+        deepcopy(demand_zone_records)
+        if isinstance(demand_zone_records, list)
+        else []
     )
 
     # ------------------------------------------------------------------
