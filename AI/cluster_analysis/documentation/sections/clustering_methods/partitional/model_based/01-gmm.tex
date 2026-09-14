@@ -1,0 +1,64 @@
+% ------------------------------------------------------------------
+%  Clustering method: Gaussian Mixture.
+%  Written from template/method_template.tex; the part order is fixed.
+%  Code counterpart: xxcluster/cluster/partitional/model_based/gmm.py
+% ------------------------------------------------------------------
+\subsubsection{Gaussian Mixture}
+\label{sec:tech:gmm}
+
+\paragraph{Overview}
+\label{sec:tech:gmm:overview}
+The Gaussian Mixture Model (GMM) is a model-based partitional method: rather than assigning by nearest prototype, it models the data as a weighted sum of $|\mathcal C|$ Gaussian components and assigns each observation a posterior probability of membership in each \cite{ref_5}. It is the method on this path that produces a distribution rather than only a partition, which is what makes it the natural source for the sampled scenario generation of \textbf{Sect. \ref{sec:tasks:scenarios}}, as opposed to the representative-point generation a prototype method supports.
+
+\paragraph{Assumptions and applicability}
+\label{sec:tech:gmm:assumptions}
+Each component is assumed Gaussian, so the method recovers elliptical clusters whose shape is set by \texttt{covariance\_type} rather than fixed to spherical, unlike \textbf{Sect. \ref{sec:tech:kmeans}}. It requires $|\mathcal C|$ known in advance, assigns no noise label, and needs no dissimilarity: the model is fit directly to the feature space by maximum likelihood.
+
+\paragraph{Formulation}
+\label{sec:tech:gmm:formulation}
+For fixed $|\mathcal C|$, the model assumes each observation is drawn from
+\begin{align}
+    p(\mathbf x) = \sum_{i = 1}^{|\mathcal C|} \pi_i \, \mathcal N(\mathbf x \mid \boldsymbol \mu_i, \boldsymbol \Sigma_i),
+    \qquad \text{where} \qquad
+    \sum_{i = 1}^{|\mathcal C|} \pi_i = 1,
+\end{align}
+and fitting maximises the data log-likelihood via Expectation-Maximisation: the E-step computes the posterior responsibility of each component for each observation, the M-step updates $\pi_i$, $\boldsymbol \mu_i$, $\boldsymbol \Sigma_i$ from those responsibilities, and neither step decreases the log-likelihood, so the algorithm converges to a local maximum only \cite{ref_5}. The crisp partition reported as $\phi_d$ is the argmax of the posterior, a defuzzification of the model's real output rather than the quantity it optimises.
+
+\paragraph{Hyperparameters and tuning}
+\label{sec:tech:gmm:hyperparameters}
+Four: $|\mathcal C|$, fixed by the shared procedure of \textbf{Sect. \ref{sec:methodology:k}}; \texttt{covariance\_type}, which trades cluster-shape flexibility against the number of free parameters a component must estimate; the initialisation and the number of restarts, for the same non-convexity reason as \textbf{Sect. \ref{sec:tech:kmeans}}.
+
+\paragraph{Complexity}
+\label{sec:tech:gmm:complexity}
+One EM iteration costs $O(m \, |\mathcal C| \, n^2)$ time for a full covariance structure, dominated by the per-component covariance estimate in the M-step, and $O(|\mathcal C| \, n^2)$ space to hold those covariance matrices; a diagonal or spherical covariance reduces both to $O(m \, |\mathcal C| \, n)$ and $O(|\mathcal C| \, n)$ respectively, at the cost of the shape flexibility \texttt{covariance\_type="full"} provides.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:tech:gmm:application}
+\placeholder{Library and version, seed, restarts, the \texttt{covariance\_type} chosen and the evidence for it, and any deviation from the pipeline of Section~\ref{sec:data:preprocessing}.}
+
+\paragraph{Results}
+\label{sec:tech:gmm:results}
+\placeholder{Every index of Section~\ref{sec:methodology:metrics}, BIC and AIC alongside the internal indices as a second opinion on $|\mathcal C|$, the fraction of observations whose maximum posterior falls below a stated threshold, and the cluster profiles.}
+% \todo{export from the benchmark notebook}
+
+\paragraph{Limitations}
+\label{sec:tech:gmm:limitations}
+Local convergence, so the fitted mixture depends on initialisation, mitigated by restarts as in \textbf{Sect. \ref{sec:tech:kmeans}}. The Gaussian assumption means a regime whose true shape is not elliptical is modelled poorly regardless of \texttt{covariance\_type}. A full covariance structure requires enough observations per component to estimate $n(n+1)/2$ parameters reliably, which bounds how many components the data can support without overfitting.
+
+\paragraph{Summary}
+\label{sec:tech:gmm:summary}
+The generative alternative to a prototype method: richer cluster shapes and a principled route to $|\mathcal C|$ through BIC/AIC, at the cost of more parameters per component and the same local-optimum sensitivity as \textbf{Sect. \ref{sec:tech:kmeans}}. Whether the added flexibility is warranted here is carried into \textbf{Sect. \ref{sec:comparison}}.
+
+% ==================================================================
+%  REFERENCES USED
+%
+%    ref_5    Xu & Tian (2015), the model-based section     cited in: Overview, Formulation
+%    ref_13   De Santi et al. (2025), k-means and GMM
+%             clustering of wastewater treatment operation  cited in: Overview
+%
+%  Read but not yet assigned a ref_<n> key -- add to the shared
+%  citation mapping sheet before citing in this file or in gmm.py:
+%    Fraley & Raftery (2002), JASA 97(458) -- covariance-structure
+%      taxonomy and BIC/AIC
+%    Dempster, Laird & Rubin (1977), JRSS-B 39(1) -- EM
+% ==================================================================

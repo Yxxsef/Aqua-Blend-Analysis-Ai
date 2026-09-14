@@ -1,0 +1,19 @@
+{
+  "status": "INSUFFICIENT_DATA",
+  "ranking": [],
+  "verified_entries": [
+    {
+      "assumption": "cost_per_ml for groundwater_bore_1 (flagged estimated in the source view)",
+      "impact": "If actual groundwater cost is 20 percent lower than estimated, groundwater_bore_1 would likely enter the optimal blend instead of remaining unused",
+      "source_id": "groundwater_bore_1",
+      "provenance_field": "cost"
+    },
+    {
+      "assumption": "max_available_ml_per_day for yarra_kew (flagged estimated in the source view)",
+      "impact": "This constraint is currently binding; if real availability is lower than assumed, the model may become infeasible at this demand level",
+      "source_id": "yarra_kew",
+      "provenance_field": "max_available"
+    }
+  ],
+  "reason": "Verified sensitivity entries are available, but the current Results JSON provides only free-text impact descriptions. No agreed or structured comparison value exists, so a fair ranking is unsupported."
+}
