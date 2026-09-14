@@ -26,5 +26,15 @@ def _required(name: str) -> str:
     return value
 
 
-DB_URL = _required("DB_URL")
-DB_KEY = _required("DB_KEY")
+DB_URL = os.environ.get("DB_URL", "")
+DB_KEY = os.environ.get("DB_KEY", "")
+
+
+def require_db_credentials() -> tuple[str, str]:
+    """Validate DB_URL/DB_KEY, raising only when a Supabase call is imminent.
+
+    Local JSON mode never calls this, so it must work without either
+    variable set. Callers that do need Supabase (a read with no local file,
+    or ``--push``) call this right before constructing a client.
+    """
+    return _required("DB_URL"), _required("DB_KEY")

@@ -15,6 +15,7 @@ if str(AI_DIR) not in sys.path:
     sys.path.insert(0, str(AI_DIR))
 
 import main
+import supabase_repository
 from llm_validator import ValidationResult, ValidatorInputError, Warning_
 from model_runner import ModelConfig, rewrite_report
 from postgrest.exceptions import APIError
@@ -50,7 +51,10 @@ def test_optimal_result_uses_deterministic_fallback_without_model(
     assert response["gate_result"] == "PASS"
     assert response["confidence_flag"] == "PROVISIONAL"
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
-    assert PROTOTYPE_DISCLAIMER in response["display_explanation"]
+    assert PROTOTYPE_DISCLAIMER in response["detailed_explanation"]
+    assert response["display_explanation"] == response["executive_summary"]
+    assert PROTOTYPE_DISCLAIMER not in response["executive_summary"]
+    assert response["visualization_data"]["blend_ratios"]
     assert valid_results == original_results
 
 
@@ -359,6 +363,10 @@ def test_rejected_llm_rewrite_uses_deterministic_fallback(
 
 
 # Task 61 follow-up: integration from MILP output to AI
+# AquaBlend final AI integration: milp_model_output rows carry the canonical
+# Results JSON inside raw_output_json, plus flat metadata columns (id,
+# scenario_db_id, origin_run_id, output_hash, input_id, ...) - they are never
+# a flat merge of the two. The fakes below model that shape.
 
 
 class _FakeExecuteResult:
@@ -367,20 +375,21 @@ class _FakeExecuteResult:
 
 
 class _FakeQuery:
-    def __init__(self, rows: object, calls: list) -> None:
+    def __init__(self, rows: object, calls: list, table_name: str) -> None:
         self._rows = rows
         self._calls = calls
+        self._table_name = table_name
 
     def select(self, columns: str) -> _FakeQuery:
-        self._calls.append(("select", columns))
+        self._calls.append(("select", self._table_name, columns))
         return self
 
     def order(self, column: str, desc: bool) -> _FakeQuery:
-        self._calls.append(("order", column, desc))
+        self._calls.append(("order", self._table_name, column, desc))
         return self
 
     def eq(self, column: str, value: object) -> _FakeQuery:
-        self._calls.append(("eq", column, value))
+        self._calls.append(("eq", self._table_name, column, value))
         self._rows = [
             row for row in self._rows
             if isinstance(row, dict) and row.get(column) == value
@@ -388,22 +397,22 @@ class _FakeQuery:
         return self
 
     def limit(self, count: int) -> _FakeQuery:
-        self._calls.append(("limit", count))
+        self._calls.append(("limit", self._table_name, count))
         return self
 
     def insert(self, row: dict) -> _FakeQuery:
-        self._calls.append(("insert", row))
+        self._calls.append(("insert", self._table_name, row))
         self._rows = [row]
         return self
 
     def execute(self) -> _FakeExecuteResult:
-        self._calls.append(("execute",))
+        self._calls.append(("execute", self._table_name))
         return _FakeExecuteResult(self._rows)
 
 
 class _FakeSupabaseClient:
-    def __init__(self, rows: object, calls: list, fail_on: str | None) -> None:
-        self._rows = rows
+    def __init__(self, tables: dict, calls: list, fail_on: str | None) -> None:
+        self._tables = tables
         self._calls = calls
         self._fail_on = fail_on
 
@@ -411,29 +420,51 @@ class _FakeSupabaseClient:
         self._calls.append(("table", name))
         if self._fail_on == name:
             raise APIError({"message": f"{name} is unavailable", "code": "08006"})
-        return _FakeQuery(self._rows, self._calls)
+        return _FakeQuery(list(self._tables.get(name, [])), self._calls, name)
 
 
 def _install_fake_supabase(
     monkeypatch: pytest.MonkeyPatch,
-    row: object,
+    output_row: object = None,
+    input_row: object = None,
     fail_on: str | None = None,
 ) -> list:
-    """Patch main.create_client with a fake.
+    """Patch supabase_repository.create_client with a fake.
 
-    ``row`` is the single milp_model_output row a read returns; None means an
-    empty table. ``fail_on`` names a table whose access raises, standing in for
-    a connection or permission failure.
+    ``output_row``/``input_row`` are the single milp_model_output/
+    milp_model_input rows a read returns; None means an empty table.
+    ``fail_on`` names a table whose access raises, standing in for a
+    connection or permission failure.
     """
     calls: list = []
-    rows = [] if row is None else [row]
+    tables = {
+        "milp_model_output": [] if output_row is None else [output_row],
+        "milp_model_input": [] if input_row is None else [input_row],
+    }
 
     def fake_create_client(**kwargs: object) -> _FakeSupabaseClient:
         calls.append(("create_client", kwargs))
-        return _FakeSupabaseClient(rows, calls, fail_on)
+        return _FakeSupabaseClient(tables, calls, fail_on)
 
-    monkeypatch.setattr(main, "create_client", fake_create_client)
+    monkeypatch.setattr(supabase_repository, "create_client", fake_create_client)
+    monkeypatch.setenv("DB_URL", "https://example.supabase.co")
+    monkeypatch.setenv("DB_KEY", "test-key")
     return calls
+
+
+@pytest.fixture
+def milp_row(valid_results: dict) -> dict:
+    """A milp_model_output row: flat metadata plus the canonical payload
+    nested in raw_output_json, matching the real Supabase schema."""
+    return {
+        "id": "6f1d2c3b-0000-4000-8000-000000000001",
+        "scenario_db_id": 42,
+        "scenario_id": "scenario_2026_07_17_001",
+        "origin_run_id": 7,
+        "input_id": None,
+        "output_hash": None,
+        "raw_output_json": valid_results,
+    }
 
 
 def test_load_milp_output_reads_the_latest_run(
@@ -445,15 +476,15 @@ def test_load_milp_output_reads_the_latest_run(
 
     assert output == {"scenario_id": "row-from-db"}
     assert ("table", "milp_model_output") in calls
-    assert ("select", "*") in calls
-    assert ("order", "created_at", True) in calls
-    assert ("limit", 1) in calls
+    assert ("select", "milp_model_output", "*") in calls
+    assert ("order", "milp_model_output", "created_at", True) in calls
+    assert ("limit", "milp_model_output", 1) in calls
 
 
 def test_run_from_source_runs_the_pipeline_on_the_supabase_row(
-    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fake_supabase(monkeypatch, valid_results)
+    _install_fake_supabase(monkeypatch, milp_row)
 
     response = main.run_from_source()
 
@@ -462,16 +493,123 @@ def test_run_from_source_runs_the_pipeline_on_the_supabase_row(
     assert response["report_mode"] == "TEMPLATE_FALLBACK"
 
 
+def test_canonical_payload_is_extracted_from_raw_output_json(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No 'incomplete raw_output_json' warning when the canonical contract
+    is already complete - the flat-column fallback must not be used."""
+    _install_fake_supabase(monkeypatch, milp_row)
+
+    response = main.run_from_source()
+
+    assert not any("flat columns" in warning for warning in response["warnings"])
+
+
+def test_flat_column_fallback_is_used_when_raw_output_json_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row with an empty/partial raw_output_json falls back to the
+    documented flat-column normalization instead of failing outright."""
+    row = {
+        "id": "row-id",
+        "scenario_db_id": 42,
+        "scenario_id": "SCN-FLAT",
+        "origin_run_id": 7,
+        "input_id": None,
+        "output_hash": None,
+        "raw_output_json": {},
+        "solver_status": "INFEASIBLE",
+        "sources": [],
+        "plants": [],
+        "demand_zones": [],
+        "flows_source_to_plant": [],
+        "flows_plant_to_zone": [],
+        "quality": {},
+        "binding_constraints_summary": [],
+        "warnings": ["a solver-reported warning"],
+        "total_cost": None,
+    }
+    _install_fake_supabase(monkeypatch, row)
+
+    response = main.run_from_source()
+
+    assert response["solver_status"] == "INFEASIBLE"
+    assert response["report_mode"] == "STATUS_ONLY"
+    assert any("flat columns" in warning for warning in response["warnings"])
+
+
+def test_flat_column_fallback_splits_selected_and_unused_sources(
+) -> None:
+    row = {
+        "solver_status": "OPTIMAL",
+        "scenario_id": "SCN-FLAT",
+        "total_cost": 100.0,
+        "sources": [
+            {"source_id": "a", "source_name": "A", "volume_drawn_ml_per_day": 50},
+            {"source_id": "b", "source_name": "B", "volume_drawn_ml_per_day": 0},
+            {"source_id": "c", "source_name": "C", "selected": True},
+        ],
+    }
+
+    canonical = supabase_repository.normalize_output_columns(row)
+
+    selected_ids = {s["source_id"] for s in canonical["sources"]["selected"]}
+    unused_ids = {s["source_id"] for s in canonical["sources"]["unused"]}
+    assert selected_ids == {"a", "c"}
+    assert unused_ids == {"b"}
+    assert canonical["constraints"] == []
+    assert canonical["diagnostics"] == {}
+    assert canonical["data_flags"] == {"sources": [], "notes": []}
+
+
+def test_flat_column_fallback_uppercases_solver_status() -> None:
+    """The live column stores a lowercase solver_status (e.g. "optimal");
+    results_validator.VALID_STATUS is uppercase only, so normalize_output_columns
+    must uppercase it rather than let a valid row fail validation."""
+    row = {
+        "solver_status": "optimal",
+        "scenario_id": "SCN-FLAT",
+        "total_cost": 100.0,
+        "sources": [
+            {"source_id": "a", "source_name": "A", "selected": True, "volume_drawn_ml_per_day": 100},
+        ],
+        "demand_zones": [
+            {"zone_id": "z1", "zone_name": "Zone 1", "demand_ml_per_day": 100, "volume_supplied_ml_per_day": 100},
+        ],
+    }
+
+    canonical = supabase_repository.normalize_output_columns(row)
+
+    assert canonical["status"] == "OPTIMAL"
+    main.validate_results(canonical)  # must not raise
+
+
+@pytest.mark.parametrize("value", [None, 123, ["OPTIMAL"]])
+def test_flat_column_fallback_preserves_non_string_solver_status(value: object) -> None:
+    """None and unexpected non-string values must pass through unchanged, so
+    results_validator can reject them normally instead of the normalization
+    step silently swallowing bad data."""
+    row = {"solver_status": value}
+
+    canonical = supabase_repository.normalize_output_columns(row)
+
+    assert canonical["status"] == value
+    with pytest.raises(main.ValidationError):
+        main.validate_results(canonical)
+
+
 def test_run_from_source_rejects_a_row_that_is_not_results_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_fake_supabase(monkeypatch, {"origin_run_id": 7, "scenario_id": "db-row"})
+    _install_fake_supabase(
+        monkeypatch, {"origin_run_id": 7, "scenario_id": "db-row", "raw_output_json": {}}
+    )
 
     response = main.run_from_source()
 
     assert response["report_mode"] == "INVALID_INPUT"
     assert response["scenario_id"] == "db-row"
-    assert any("Missing required fields" in warning for warning in response["warnings"])
+    assert any("must be a string" in warning for warning in response["warnings"])
 
 
 def test_run_from_source_handles_an_empty_table(
@@ -486,15 +624,188 @@ def test_run_from_source_handles_an_empty_table(
     assert any("contains no rows to analyse" in warning for warning in response["warnings"])
 
 
-@pytest.fixture
-def milp_row(valid_results: dict) -> dict:
-    """A milp_model_output row: the Results JSON plus its database columns."""
-    return {
-        **valid_results,
-        "id": "6f1d2c3b-0000-4000-8000-000000000001",
-        "scenario_db_id": 42,
-        "origin_run_id": 7,
+# --- Lazy credential validation ---------------------------------------------
+
+
+def test_local_json_mode_needs_no_supabase_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local JSON mode must work without DB_URL or DB_KEY set."""
+    monkeypatch.delenv("DB_URL", raising=False)
+    monkeypatch.delenv("DB_KEY", raising=False)
+
+    response = main.run_from_source(FIXTURE_PATH)
+
+    assert response["report_mode"] == "TEMPLATE_FALLBACK"
+
+
+def test_supabase_read_without_credentials_is_invalid_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DB_URL", raising=False)
+    monkeypatch.delenv("DB_KEY", raising=False)
+
+    response = main.run_from_source()
+
+    assert response["report_mode"] == "INVALID_INPUT"
+    assert any("DB_URL" in warning or "DB_KEY" in warning for warning in response["warnings"])
+
+
+def test_credentials_set_after_import_reach_create_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: _client() must pass require_db_credentials()'s RETURNED
+    values to create_client(), not module-level DB_URL/DB_KEY captured once
+    at import time - those would go stale if the environment changes later."""
+    monkeypatch.delenv("DB_URL", raising=False)
+    monkeypatch.delenv("DB_KEY", raising=False)
+
+    captured: dict = {}
+
+    def fake_create_client(**kwargs: object) -> _FakeSupabaseClient:
+        captured.update(kwargs)
+        return _FakeSupabaseClient({"milp_model_output": []}, [], None)
+
+    monkeypatch.setattr(supabase_repository, "create_client", fake_create_client)
+
+    # Set only now - strictly after supabase_repository was imported.
+    monkeypatch.setenv("DB_URL", "https://late-set.supabase.co")
+    monkeypatch.setenv("DB_KEY", "late-set-key")
+
+    with pytest.raises(main.SupabaseError, match="no rows to analyse"):
+        main.load_milp_output()
+
+    assert captured == {
+        "supabase_url": "https://late-set.supabase.co",
+        "supabase_key": "late-set-key",
     }
+
+
+# --- Provenance retrieval ----------------------------------------------------
+
+
+def test_provenance_is_fetched_when_input_id_is_present(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    milp_row["input_id"] = "input-row-id"
+    input_row = {
+        "id": "input-row-id",
+        "scenario_data_json": {"demand": 500},
+        "source_data_snapshot_json": [],
+        "model_parameters_json": {},
+        "validation_policy": {},
+        "allow_estimated_values": True,
+    }
+    calls = _install_fake_supabase(monkeypatch, milp_row, input_row=input_row)
+
+    main.run_from_source()
+
+    assert ("eq", "milp_model_input", "id", "input-row-id") in calls
+
+
+def test_missing_provenance_lowers_confidence_without_failing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row whose raw_output_json falls back to flat-column normalization
+    has no per-source provenance, so confidence must degrade to UNKNOWN
+    rather than the pipeline failing outright."""
+    row = {
+        "id": "row-id",
+        "scenario_db_id": 42,
+        "scenario_id": "SCN-FLAT",
+        "origin_run_id": None,
+        "input_id": None,
+        "output_hash": None,
+        "raw_output_json": {},
+        "solver_status": "OPTIMAL",
+        "sources": [
+            {"source_id": "a", "source_name": "A", "volume_drawn_ml_per_day": 500,
+             "percent_of_blend": 100.0},
+        ],
+        "demand_zones": [
+            {"zone_id": "z1", "zone_name": "Zone 1", "demand_ml_per_day": 500,
+             "volume_supplied_ml_per_day": 500},
+        ],
+        "plants": [],
+        "flows_source_to_plant": [],
+        "flows_plant_to_zone": [],
+        "quality": {},
+        "binding_constraints_summary": [],
+        "warnings": [],
+        "total_cost": 1000.0,
+    }
+    _install_fake_supabase(monkeypatch, row)
+
+    response = main.run_from_source()
+
+    assert response["confidence_flag"] == "UNKNOWN"
+
+
+def test_unavailable_input_row_adds_a_warning_not_a_failure(
+    milp_row: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    milp_row["input_id"] = "missing-input-id"
+    _install_fake_supabase(monkeypatch, milp_row, input_row=None)
+
+    response = main.run_from_source()
+
+    assert response["report_mode"] != "INVALID_INPUT"
+    assert any(
+        "milp_model_input" in warning for warning in response["warnings"]
+    )
+
+
+def test_successfully_fetched_provenance_cannot_elevate_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """KNOWN INTEGRATION BLOCKER (see AI/README.md): milp_model_input's
+    provenance fields are fetched but not mapped into data_flags, so even a
+    fully populated, successfully-read milp_model_input row must not push
+    confidence to MEASURED or PROVISIONAL - only UNKNOWN is honest here."""
+    row = {
+        "id": "row-id",
+        "scenario_db_id": 42,
+        "scenario_id": "SCN-FLAT",
+        "origin_run_id": None,
+        "input_id": "input-row-id",
+        "output_hash": None,
+        "raw_output_json": {},
+        "solver_status": "OPTIMAL",
+        "sources": [
+            {"source_id": "a", "source_name": "A", "volume_drawn_ml_per_day": 500,
+             "percent_of_blend": 100.0},
+        ],
+        "demand_zones": [
+            {"zone_id": "z1", "zone_name": "Zone 1", "demand_ml_per_day": 500,
+             "volume_supplied_ml_per_day": 500},
+        ],
+        "plants": [],
+        "flows_source_to_plant": [],
+        "flows_plant_to_zone": [],
+        "quality": {},
+        "binding_constraints_summary": [],
+        "warnings": [],
+        "total_cost": 1000.0,
+    }
+    # A rich, fully-populated, successfully-read input row - if provenance
+    # mapping existed, this is exactly the data it would need to report
+    # MEASURED. It must still have no effect on confidence_flag.
+    input_row = {
+        "id": "input-row-id",
+        "scenario_data_json": {"demand": 500},
+        "source_data_snapshot_json": [
+            {"source_id": "a", "has_estimated_values": False},
+        ],
+        "model_parameters_json": {"solver": "HiGHS"},
+        "validation_policy": {"fail_if_source_missing_from_database": True},
+        "allow_estimated_values": False,
+    }
+    _install_fake_supabase(monkeypatch, row, input_row=input_row)
+
+    response = main.run_from_source()
+
+    assert response["confidence_flag"] == "UNKNOWN"
+    assert response["confidence_flag"] not in ("MEASURED", "PROVISIONAL")
 
 
 def test_save_ai_output_reads_foreign_keys_from_the_milp_row(
@@ -508,18 +819,22 @@ def test_save_ai_output_reads_foreign_keys_from_the_milp_row(
         "origin_run_id": 7,
     }
 
-    main.save_ai_output(response, db_row)
+    supabase_repository.save_ai_output(response, db_row)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     assert ("table", "milp_ai_output") in calls
     assert row["milp_output_id"] == "6f1d2c3b-0000-4000-8000-000000000001"
     assert row["scenario_id"] == 42
     assert row["origin_run_id"] == 7
-    assert row["milp_output_hash"] == main._sha256_json(db_row)
-    assert row["ai_output_hash"] == main._sha256_json(response)
+    assert row["milp_output_hash"] == supabase_repository._sha256_json(db_row)
+    assert row["ai_output_hash"] == supabase_repository._sha256_json(response)
     assert row["ai_contract_version"] == response["contract_version"]
     assert row["raw_ai_json"] == response
+    assert row["executive_summary"] == response["executive_summary"]
+    assert row["decision_explanation"] == response["detailed_explanation"]
     assert row["warnings"] == response["warnings"]
+    assert row["key_findings"] == []
+    assert row["risk_assessment"] == {}
 
 
 def test_save_ai_output_rejects_a_row_without_foreign_keys(
@@ -528,8 +843,22 @@ def test_save_ai_output_rejects_a_row_without_foreign_keys(
     _install_fake_supabase(monkeypatch, None)
     response = main.run_pipeline(valid_results)
 
-    with pytest.raises(main.SupabaseError, match="milp_ai_output"):
-        main.save_ai_output(response, {"origin_run_id": 7})
+    with pytest.raises(supabase_repository.SupabaseError, match="milp_ai_output"):
+        supabase_repository.save_ai_output(response, {"origin_run_id": 7})
+
+
+def test_save_ai_output_rejects_a_string_scenario_id(
+    valid_results: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """scenario_id is an integer FK; the string scenario identifier must
+    never be inserted into it."""
+    _install_fake_supabase(monkeypatch, None)
+    response = main.run_pipeline(valid_results)
+
+    with pytest.raises(supabase_repository.SupabaseError, match="integer"):
+        supabase_repository.save_ai_output(
+            response, {"id": "row-id", "scenario_db_id": "scenario_2026_07_17_001"}
+        )
 
 
 def test_save_ai_output_records_the_model_only_when_one_ran(
@@ -539,10 +868,13 @@ def test_save_ai_output_records_the_model_only_when_one_ran(
     response = main.run_pipeline(valid_results)
     db_row = {"id": "row-id", "scenario_db_id": 42}
 
-    main.save_ai_output(response, db_row)
-    main.save_ai_output(response, db_row, model_config=ModelConfig(model_id="test-model"))
+    supabase_repository.save_ai_output(response, db_row)
+    supabase_repository.save_ai_output(
+        response, db_row, model_config=ModelConfig(model_id="test-model"),
+        prompt_version=PROMPT_VERSION,
+    )
 
-    without_model, with_model = [call[1] for call in calls if call[0] == "insert"]
+    without_model, with_model = [call[2] for call in calls if call[0] == "insert"]
     assert "ai_model" not in without_model
     assert with_model["ai_model"] == "test-model"
     assert with_model["prompt_version"] == PROMPT_VERSION
@@ -557,13 +889,14 @@ def test_run_from_source_pushes_the_response_when_requested(
 
     inserts = [call for call in calls if call[0] == "insert"]
     assert len(inserts) == 1
-    row = inserts[0][1]
+    row = inserts[0][2]
     assert ("table", "milp_ai_output") in calls
     assert row["milp_output_id"] == milp_row["id"]
     assert row["origin_run_id"] == 7
     assert row["status"] == "completed"
     assert row["raw_ai_json"] == response
-    assert row["decision_explanation"] == response["display_explanation"]
+    assert row["decision_explanation"] == response["detailed_explanation"]
+    assert row["executive_summary"] == response["executive_summary"]
     assert row["latency_ms"] >= 0
 
 
@@ -582,12 +915,13 @@ def test_push_records_an_invalid_input_response_as_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _install_fake_supabase(
-        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
+        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7,
+                      "raw_output_json": {}}
     )
 
     response = main.run_from_source(push=True)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     assert response["report_mode"] == "INVALID_INPUT"
     assert row["status"] == "failed"
     assert row["scenario_id"] == 42
@@ -659,9 +993,9 @@ def test_push_uses_the_milp_published_output_hash(
     response = main.run_pipeline(valid_results)
     db_row = {"id": "row-id", "scenario_db_id": 42, "output_hash": "milp-published"}
 
-    main.save_ai_output(response, db_row)
+    supabase_repository.save_ai_output(response, db_row)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     # MILP's own digest, not one we recompute: both tables index on it.
     assert row["milp_output_hash"] == "milp-published"
 
@@ -673,22 +1007,23 @@ def test_push_falls_back_to_a_computed_hash(
     response = main.run_pipeline(valid_results)
     db_row = {"id": "row-id", "scenario_db_id": 42}  # output_hash is nullable
 
-    main.save_ai_output(response, db_row)
+    supabase_repository.save_ai_output(response, db_row)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
-    assert row["milp_output_hash"] == main._sha256_json(db_row)
+    row = [call for call in calls if call[0] == "insert"][0][2]
+    assert row["milp_output_hash"] == supabase_repository._sha256_json(db_row)
 
 
 def test_a_failed_analysis_fills_the_error_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _install_fake_supabase(
-        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7}
+        monkeypatch, {"id": "row-id", "scenario_db_id": 42, "origin_run_id": 7,
+                      "raw_output_json": {}}
     )
 
     response = main.run_from_source(push=True)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     assert response["report_mode"] == "INVALID_INPUT"
     assert row["status"] == "failed"
     assert row["error_code"] == "INVALID_INPUT"
@@ -702,7 +1037,7 @@ def test_a_successful_analysis_leaves_the_error_columns_unset(
 
     main.run_from_source(push=True)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     assert row["status"] == "completed"
     assert "error_code" not in row
     assert "error_message" not in row
@@ -715,7 +1050,7 @@ def test_push_records_when_the_run_started(
 
     main.run_from_source(push=True)
 
-    row = [call for call in calls if call[0] == "insert"][0][1]
+    row = [call for call in calls if call[0] == "insert"][0][2]
     assert row["started_at"] <= row["completed_at"]
 
 
@@ -727,8 +1062,8 @@ def test_a_row_without_scenario_db_id_is_a_supabase_error(
     _install_fake_supabase(monkeypatch, None)
     response = main.run_pipeline(valid_results)
 
-    with pytest.raises(main.SupabaseError, match="scenario_db_id"):
-        main.save_ai_output(response, {"id": "row-id", "scenario_db_id": None})
+    with pytest.raises(supabase_repository.SupabaseError, match="scenario_db_id"):
+        supabase_repository.save_ai_output(response, {"id": "row-id", "scenario_db_id": None})
 
 
 def test_a_file_path_bypasses_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -767,7 +1102,7 @@ def test_run_id_filters_on_origin_run_id(
 
     main.load_milp_output(run_id=7)
 
-    assert ("eq", "origin_run_id", 7) in calls
+    assert ("eq", "milp_model_output", "origin_run_id", 7) in calls
 
 
 def test_scenario_db_id_filters_on_that_column(
@@ -777,7 +1112,7 @@ def test_scenario_db_id_filters_on_that_column(
 
     main.load_milp_output(scenario_db_id=42)
 
-    assert ("eq", "scenario_db_id", 42) in calls
+    assert ("eq", "milp_model_output", "scenario_db_id", 42) in calls
 
 
 def test_scenario_filters_on_the_display_string(
@@ -787,7 +1122,7 @@ def test_scenario_filters_on_the_display_string(
 
     main.load_milp_output(scenario="scenario_2026_07_17_001")
 
-    assert ("eq", "scenario_id", "scenario_2026_07_17_001") in calls
+    assert ("eq", "milp_model_output", "scenario_id", "scenario_2026_07_17_001") in calls
 
 
 def test_no_selector_keeps_the_newest_row_ordering(
@@ -797,7 +1132,7 @@ def test_no_selector_keeps_the_newest_row_ordering(
 
     main.load_milp_output()
 
-    assert ("order", "created_at", True) in calls
+    assert ("order", "milp_model_output", "created_at", True) in calls
     assert not [call for call in calls if call[0] == "eq"]
 
 

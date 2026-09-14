@@ -565,6 +565,42 @@ def _identifier_word_set(identifier: str) -> frozenset[str]:
     return frozenset(re.findall(r"[a-z0-9]+", identifier.lower()))
 
 
+def _identifier_word_list(identifier: str) -> list[str]:
+    """Same tokenisation as _identifier_word_set, but ordered - needed to
+    check that one identifier is a trailing SUFFIX of another (word order
+    matters for that; a set does not preserve it)."""
+    return re.findall(r"[a-z0-9]+", identifier.lower())
+
+
+def _unambiguous_suffix_alias(llm_id: str, det_ids: set[str]) -> set[str]:
+    """Return the det_id string(s) naming the one entity a shortened
+    rewrite name like 'Bore 1' can stand for.
+
+    A short alias is accepted only when its words are a proper trailing
+    suffix of det_id word(s) belonging to EXACTLY ONE DISTINCT ENTITY - e.g.
+    'Bore 1' -> the entity written as both 'Groundwater Bore 1' and its
+    snake_case form 'groundwater_bore_1' in det_ids; those are the SAME
+    entity (identical word tokens once tokenised), not two rival matches,
+    so both are returned together. An invented identifier like 'Bore 2'
+    matches no det_id's suffix at all and returns an empty set, so it is
+    still left as a missing/new identifier rather than silently accepted.
+    A suffix matching more than one DISTINCT entity is also left
+    unresolved (ambiguous), never guessed."""
+    llm_words = _identifier_word_list(llm_id)
+    if not llm_words:
+        return set()
+
+    matches_by_entity: dict[tuple[str, ...], set[str]] = {}
+    for det_id in det_ids:
+        det_words = _identifier_word_list(det_id)
+        if len(det_words) > len(llm_words) and det_words[-len(llm_words):] == llm_words:
+            matches_by_entity.setdefault(tuple(det_words), set()).add(det_id)
+
+    if len(matches_by_entity) != 1:
+        return set()
+    return next(iter(matches_by_entity.values()))
+
+
 def _identifier_covered_by(det_id: str, llm_id: str) -> bool:
     """True if `llm_id` contains at least every word `det_id` has - so a
     rewrite is free to use a fuller or differently-formatted name for the
@@ -629,7 +665,21 @@ def _check_identifiers(
         elif _phrase_covers_snake_case_identifier(llm_output, det_id):
             continue  # covered via a sentence-case phrase, not an extracted identifier
         else:
-            missing.append(det_id)
+            alias_match = next(
+                (
+                    llm_id
+                    for llm_id in llm_ids
+                    if det_id in _unambiguous_suffix_alias(llm_id, det_ids)
+                ),
+                None,
+            )
+            if alias_match is not None:
+                # e.g. "Bore 1" unambiguously standing in for "Groundwater
+                # Bore 1" - accepted; an invented name like "Bore 2" never
+                # reaches this branch because it matches no det_id's suffix.
+                covered_llm_ids.add(alias_match)
+            else:
+                missing.append(det_id)
 
     failures = [
         CriticalFailure(
