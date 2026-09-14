@@ -2,7 +2,7 @@
   "scenario_id": "scenario_2026_07_17_plant_outage",
   "scenario_name": "Toy model \u2014 plant-outage stress scenario",
   "status": "draft",
-  "description": "Sprint 1 toy case, plant-outage variant: facility_1 disabled via network.plants[].enabled to simulate a treatment-facility outage. Since facility_1 is the only treatment facility in the toy model and every source-to-plant link routes through it, disabling it removes the only path from source to demand zone, so the expected result is a documented infeasible solve, not an error. All other fields are unchanged from the reference scenario.",
+  "description": "Sprint 1 toy case, plant-outage variant: facility_1 disabled via plants[].enabled to simulate a treatment-facility outage. Since facility_1 is the only treatment facility in the toy model and every source-to-plant link routes through it, disabling it removes the only path from source to demand zone, so the expected result is a documented infeasible solve, not an error. All other fields are unchanged from the reference scenario.",
   "data_source": {
     "type": "supabase",
     "view": "public.source_model_inputs",
