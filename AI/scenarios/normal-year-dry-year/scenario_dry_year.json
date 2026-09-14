@@ -1,6 +1,6 @@
 {
   "scenario_id": "toy_model_dry_year",
-  "scenario_name": "Dry-year scenario — differentiated supply reductions",
+  "scenario_name": "Dry-year scenario \u2014 differentiated supply reductions",
   "status": "draft",
   "description": "Applies a 20% reduction to Silvan Reservoir and Yarra Kew maximum flow limits, and a 25% reduction to Groundwater Bore 1 using a Victorian groundwater-management proxy.",
   "data_source": {
@@ -34,55 +34,53 @@
       "max_available_ml_per_day_override": null
     }
   ],
-  "network": {
-    "plants": [
-      {
-        "plant_id": "facility_1",
-        "name": "Treatment Facility 1",
-        "enabled": true,
-        "minimum_operating_flow_ml_per_day": 0,
-        "maximum_processing_capacity_ml_per_day": 600,
-        "fixed_activation_cost": 0.0,
-        "treatment_cost_per_ml": 64
-      }
-    ],
-    "demand_zones": [
-      {
-        "zone_id": "zone_1",
-        "name": "Zone 1",
-        "demand_ml_per_day": 500,
-        "demand_must_be_met": true
-      }
-    ],
-    "source_to_plant_links": [
-      {
-        "source_id": "silvan_reservoir",
-        "plant_id": "facility_1",
-        "enabled": true,
-        "maximum_flow_ml_per_day": 280
-      },
-      {
-        "source_id": "yarra_kew",
-        "plant_id": "facility_1",
-        "enabled": true,
-        "maximum_flow_ml_per_day": 240
-      },
-      {
-        "source_id": "groundwater_bore_1",
-        "plant_id": "facility_1",
-        "enabled": true,
-        "maximum_flow_ml_per_day": 45
-      }
-    ],
-    "plant_to_zone_links": [
-      {
-        "plant_id": "facility_1",
-        "zone_id": "zone_1",
-        "enabled": true,
-        "maximum_flow_ml_per_day": 600
-      }
-    ]
-  },
+  "plants": [
+    {
+      "plant_id": "facility_1",
+      "name": "Treatment Facility 1",
+      "enabled": true,
+      "minimum_operating_flow_ml_per_day": 0,
+      "maximum_processing_capacity_ml_per_day": 600,
+      "fixed_activation_cost": 0.0,
+      "treatment_cost_per_ml": 64
+    }
+  ],
+  "demand_zones": [
+    {
+      "zone_id": "zone_1",
+      "name": "Zone 1",
+      "demand_ml_per_day": 500,
+      "demand_must_be_met": true
+    }
+  ],
+  "source_to_plant_links": [
+    {
+      "source_id": "silvan_reservoir",
+      "plant_id": "facility_1",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 280
+    },
+    {
+      "source_id": "yarra_kew",
+      "plant_id": "facility_1",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 240
+    },
+    {
+      "source_id": "groundwater_bore_1",
+      "plant_id": "facility_1",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 45
+    }
+  ],
+  "plant_to_zone_links": [
+    {
+      "plant_id": "facility_1",
+      "zone_id": "zone_1",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 600
+    }
+  ],
   "quality_limits": {
     "applies_to": "blend_at_plant_inflow",
     "parameters": {
