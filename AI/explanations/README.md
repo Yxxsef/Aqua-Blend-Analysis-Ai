@@ -46,27 +46,46 @@ left open, and this upgrade brings the generator in line with it:
   (`waterQuality.applies_to`) and always ends with a fixed note that these are
   plant-inflow results, not final post-treatment drinking-water results.
 
-## 2. Note on Task 21 (`results_adapter.py`)
+## 2. Note on `results_adapter.py`'s real, current output shape (Task 91)
 
-Task 21 (`AI/results/results_adapter.py`, now merged) converts the raw external
-Results JSON into a stable internal shape by renaming a fixed set of TOP-LEVEL
-keys to camelCase (e.g. `scenario_id` -> `scenarioId`, `demand_zones` ->
-`demandZones`, `transfer_paths` -> `transferPaths`, `water_quality` ->
-`waterQuality`, `data_flags` -> `dataFlags`). `status`, `objective`, `sources`,
-`plants`, `constraints` and `diagnostics` pass through unchanged, and the
-adapter never renames anything nested inside those top-level values, so
-nested field names still match `Results_JSON_Field_Map.md` exactly.
+`results_adapter.py` was rewritten for the confirmed v1 contract (master,
+post-Task 56). Its output is now structurally different from the older
+top-level-renamed shape this section used to describe here -- not just
+different field names, but different nesting and container types:
 
-`json_explainer.py`'s input contract is that ADAPTED shape — i.e. this module
-assumes `results_adapter.adapt_results()` has already run upstream, not that
-it's reading the raw Results JSON directly. It does not call
-`adapt_results()` (or `results_validator.py`'s `validate_results()`) itself:
-both of those hard-require every top-level field and raise on the first gap,
-which conflicts with this module's own deliberately tolerant contract — only
-`status`/`scenarioId` are required here, and everything else degrades
-gracefully instead of raising. If the adapter's output shape changes, only
-the field-name constants at the top of `json_explainer.py` should need to
-change.
+- `scenarioId`/`status` now live under `scenario.scenario_id`/`solver.status`
+  (two separate statuses exist -- `solver.status` is the one this module
+  means by "status", since `FULL_REPORT_STATUSES = {"OPTIMAL"}` is a solver
+  outcome, never the scenario lifecycle status).
+- `objective.total_cost`/`.currency` are now `summary.costs.total_cost`, and
+  **no currency field exists anywhere in the real contract** -- confirmed,
+  not an oversight to chase down.
+- `sources`/`plants` are each now one flat list (with `selection_status`/
+  `activated` per item) instead of pre-split `selected`/`unused` or
+  `active`/`inactive` arrays.
+- `transferPaths` is now `flows`.
+- `waterQuality.by_plant` (a dict keyed by plant, of dicts keyed by
+  parameter) is now `quality.plant_inflow` (a **list** of plants, each with
+  a `parameters` **list**) -- a shape change, not a rename.
+- `dataFlags`, `alternativeFeasibleSolutions`, `sensitivityToKeyAssumptions`,
+  and `solvedAt` do not exist anywhere in the real contract. Confirmed two
+  ways: against `output_contract_v1.json`, and against real solved rows read
+  directly from Supabase's `milp_model_output` table.
+
+**This is bridged, not rewritten inline.** `json_explainer.py` still reads
+the old flat field names throughout (`data.get(F_STATUS)`, `sources.selected`,
+etc.) -- a `_normalize_v1_adapted_results()` step at the top of
+`generate_explanation()`/`generate_executive_summary()` reshapes the real
+adapter output onto that old shape before anything else runs. A dict that
+already has the old flat fields (e.g. existing test fixtures) passes through
+this step completely untouched, so nothing already working needed to change.
+
+The closing claim this section used to make -- "if the adapter's output
+shape changes, only the field-name constants... should need to change" --
+turned out to be wrong in practice: this was a structural change (nested vs.
+flat, list vs. dict), not just renamed keys, and fixing it took a real
+normalization layer, not a constant update. Worth remembering next time this
+contract moves again.
 
 ---
 
