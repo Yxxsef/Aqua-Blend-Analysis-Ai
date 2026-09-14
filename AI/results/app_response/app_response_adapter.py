@@ -123,7 +123,10 @@ def _contract_warnings(milp_result: Mapping[str, Any] | None) -> list[str]:
                 "real-world zero cost."
             )
 
-    water_quality = milp_result.get("water_quality")
+    # Real MILP output (confirmed against multiple solved Supabase rows) uses
+    # `quality.applies_to`, not `water_quality.applies_to` -- check both, so
+    # this safety disclaimer isn't silently dropped on real data.
+    water_quality = milp_result.get("water_quality") or milp_result.get("quality")
     if isinstance(water_quality, Mapping) and (
         water_quality.get("applies_to") == "blend_at_plant_inflow"
     ):

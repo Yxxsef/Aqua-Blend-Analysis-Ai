@@ -379,3 +379,26 @@ def test_passing_a_raw_row_directly_fails_with_a_clear_message() -> None:
     message that 'status' simply being absent would otherwise produce."""
     with pytest.raises(ValueError, match="raw milp_model_output row"):
         build_app_response(_real_optimal_row())
+
+
+def test_plant_inflow_disclaimer_fires_on_the_real_quality_key() -> None:
+    """Regression: real MILP output (confirmed against a solved row shared
+    directly from Supabase) puts applies_to under `quality`, not
+    `water_quality`. The plant-inflow safety disclaimer -- warning that
+    these values are pre-treatment, not final drinking-water quality --
+    must not be silently dropped just because the real key name differs
+    from the one this check originally assumed."""
+    canonical = {
+        "scenario_id": "SCN-005",
+        "status": "OPTIMAL",
+        "objective": {"total_cost": 9300.0},
+        "demand_zones": [],
+        "sources": {"selected": [], "unused": []},
+        "plants": {"active": [], "inactive": []},
+        "quality": {"applies_to": "blend_at_plant_inflow", "plant_inflow": []},
+    }
+    response = build_app_response(
+        canonical, deterministic_summary="x", detailed_explanation="x"
+    )
+    assert any("plant inflow" in w for w in response["warnings"])
+
