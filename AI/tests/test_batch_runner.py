@@ -73,7 +73,13 @@ def test_scenario_records_runtime_and_validation():
     assert result["runtime_seconds"] >= 0
     assert result["scenario_validation"]["valid"] is True
 
+def test_scenario_handles_real_milp_sources_shape():
+    result = run_scenario(NORMAL)
 
+    assert result["confidence"] == {
+        "confidence": "UNKNOWN",
+        "estimated_sources": [],
+    }
 # --- the batch ------------------------------------------------------------
 
 def test_batch_runs_every_scenario_in_a_folder():
