@@ -97,10 +97,21 @@ def run_scenario(
     validate_results(raw_results)
     adapted = adapt_results(raw_results)
 
-    confidence = determine_confidence(
-        raw_results.get("data_flags", {}).get("sources", []),
-        raw_results.get("sources", {}).get("selected", []),
+    sources = raw_results.get("sources", [])
+
+selected_sources = [
+    source
+    for source in sources
+    if (
+        isinstance(source, dict)
+        and source.get("selection_status") == "SELECTED"
     )
+]
+
+confidence = determine_confidence(
+    [],
+    selected_sources,
+)
 
     evaluations: dict[str, Any] = {}
 
