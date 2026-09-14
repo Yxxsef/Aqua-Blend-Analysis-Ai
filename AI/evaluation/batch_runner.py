@@ -75,7 +75,21 @@ def _gate_as_dict(gate: Any) -> dict[str, Any]:
         return gate.as_dict()
     return dict(vars(gate))
 
+def _get_selected_sources(
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return sources marked as selected by the MILP output contract."""
+    if not isinstance(sources, list):
+        return []
 
+    return [
+        source
+        for source in sources
+        if (
+            isinstance(source, dict)
+            and source.get("selection_status") == "SELECTED"
+        )
+    ]
 def run_scenario(
     scenario_path: str | Path,
     mode: str = MOCK,
@@ -97,16 +111,7 @@ def run_scenario(
     validate_results(raw_results)
     adapted = adapt_results(raw_results)
 
-    sources = raw_results.get("sources", [])
-
-selected_sources = [
-    source
-    for source in sources
-    if (
-        isinstance(source, dict)
-        and source.get("selection_status") == "SELECTED"
-    )
-]
+  selected_sources = _get_selected_sources(raw_results.get("sources", []))
 
 confidence = determine_confidence(
     [],
