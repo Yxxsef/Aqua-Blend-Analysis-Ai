@@ -111,12 +111,12 @@ def run_scenario(
     validate_results(raw_results)
     adapted = adapt_results(raw_results)
 
-  selected_sources = _get_selected_sources(raw_results.get("sources", []))
-
-confidence = determine_confidence(
-    [],
-    selected_sources,
-)
+    selected_sources = _get_selected_sources(raw_results.get("sources", []))
+        
+    confidence = determine_confidence(
+         [],
+         selected_sources,
+    )
 
     evaluations: dict[str, Any] = {}
 
