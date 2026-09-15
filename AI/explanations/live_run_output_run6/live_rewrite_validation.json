@@ -1,0 +1,23 @@
+{
+  "critical_result": "FAIL",
+  "critical_failures": [
+    {
+      "rule": "NUMBER_INVENTED",
+      "detail": "The value '2.0' appears in the rewrite but was not present in the deterministic report."
+    },
+    {
+      "rule": "INCOMPLETE_OUTPUT",
+      "detail": "The rewrite does not end with terminal punctuation, which suggests generation was cut off before finishing - most likely by hitting the model's max_tokens limit. A truncated response could be silently missing required content (such as the prototype disclaimer) that would have appeared after the cut point, and must not be accepted as a complete rewrite. Rerun with a higher max_tokens rather than accepting a partial response."
+    }
+  ],
+  "warnings": [
+    {
+      "rule": "NEW_IDENTIFIER",
+      "detail": "'Bore 1' appears in the rewrite but was not in the deterministic report. May be a legitimate rewording, or may be an invented name - worth a human check."
+    },
+    {
+      "rule": "NEW_IDENTIFIER",
+      "detail": "'deterministic_report' appears in the rewrite but was not in the deterministic report. May be a legitimate rewording, or may be an invented name - worth a human check."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+## Scenario and Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: TIME_LIMIT  
+Solved at: 2026-07-17T10:32:00Z
+
+## Result Availability
+
+The solver reached a time limit and did not complete the calculation. This result has not been verified and cannot be used for a final decision.
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.

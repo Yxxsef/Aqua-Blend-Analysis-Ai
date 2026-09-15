@@ -1,0 +1,27 @@
+{
+  "critical_result": "FAIL",
+  "critical_failures": [
+    {
+      "rule": "IDENTIFIER_MISSING",
+      "detail": "'cost_per_ml' appears in the deterministic report but not in the rewrite."
+    },
+    {
+      "rule": "IDENTIFIER_MISSING",
+      "detail": "'max_available_ml_per_day' appears in the deterministic report but not in the rewrite."
+    },
+    {
+      "rule": "INVENTED_CONTENT",
+      "detail": "The phrase 'regulatory compliance' appears in the rewrite but not in the deterministic report. This usually signals an invented reason, recommendation, or claim."
+    },
+    {
+      "rule": "UNSAFE_SAFETY_CLAIM",
+      "detail": "The phrase 'final drinking' appears in the rewrite. This wording is never permitted in an AquaBlend report, regardless of the source text (LLM_Report_Scope.md section 6)."
+    }
+  ],
+  "warnings": [
+    {
+      "rule": "NEW_IDENTIFIER",
+      "detail": "'Bore 1' appears in the rewrite but was not in the deterministic report. May be a legitimate rewording, or may be an invented name - worth a human check."
+    }
+  ]
+}

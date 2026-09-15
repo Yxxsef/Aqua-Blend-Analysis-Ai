@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import socket
 import sys
 
 import pytest
@@ -84,6 +85,38 @@ def test_timeout_returns_template_fallback() -> None:
     assert result.failure_type == "TIMEOUT"
 
 
+def test_socket_timeout_also_returns_timeout_not_model_error() -> None:
+    """Regression test for a real bug found on a genuine live run (Task 62),
+    not a synthetic case: on Python < 3.10, urllib's real network timeout
+    raises socket.timeout, a class SEPARATE from the builtin TimeoutError -
+    they were only unified as the same class starting in Python 3.10.
+    Catching TimeoutError alone let a genuine timeout on Python 3.9 fall
+    through to the generic Exception handler and be mis-labelled
+    MODEL_ERROR instead of TIMEOUT - reproduced directly against a real
+    endpoint: a call that ran out of time returned failure_type=MODEL_ERROR
+    with runtime_ms almost exactly equal to timeout_seconds, the signature
+    of a timeout being mis-categorised, not a genuine model error.
+
+    test_timeout_returns_template_fallback above only ever exercised the
+    builtin TimeoutError directly, never socket.timeout - which is exactly
+    why this bug was never caught by the existing suite; only a real
+    network call was ever going to hit the class that mattered."""
+    def socket_timeout_request(*_args, **_kwargs):
+        raise socket.timeout("timed out")
+
+    result = rewrite_report(
+        TEMPLATE_REPORT,
+        ModelConfig(model_id="test-model"),
+        request_fn=socket_timeout_request,
+    )
+
+    assert result.report_text == TEMPLATE_REPORT.strip()
+    assert result.report_mode == "TEMPLATE_FALLBACK"
+    assert result.fallback_used is True
+    assert result.failure_type == "TIMEOUT"
+    assert result.failure_type != "MODEL_ERROR"
+
+
 @pytest.mark.parametrize(
     "response",
     [
@@ -158,3 +191,50 @@ def test_load_model_config(tmp_path: Path) -> None:
 def test_invalid_config_is_rejected() -> None:
     with pytest.raises(ValueError, match="model_id"):
         ModelConfig(model_id=" ").validate()
+
+
+def test_frequency_penalty_is_omitted_from_payload_by_default() -> None:
+    """frequency_penalty defaults to None and must not appear in the request
+    at all unless explicitly set - it's not guaranteed to do anything for
+    every model (see model_runner.py's comment on this field), so it should
+    never be silently sent with a made-up default value."""
+    captured: dict = {}
+
+    def fake_request(url, headers, payload, timeout_seconds):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "Some output."}}]}
+
+    rewrite_report(
+        TEMPLATE_REPORT,
+        ModelConfig(model_id="test-model"),
+        request_fn=fake_request,
+    )
+
+    assert "frequency_penalty" not in captured["payload"]
+
+
+def test_frequency_penalty_is_included_when_set() -> None:
+    """Regression test for a real live-run finding (Task 62): a genuine run
+    fell into a repetition loop with no penalty configured at all.
+    frequency_penalty is opt-in via model_config.json - when set, it must
+    actually reach the request payload."""
+    captured: dict = {}
+
+    def fake_request(url, headers, payload, timeout_seconds):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "Some output."}}]}
+
+    rewrite_report(
+        TEMPLATE_REPORT,
+        ModelConfig(model_id="test-model", frequency_penalty=0.4),
+        request_fn=fake_request,
+    )
+
+    assert captured["payload"]["frequency_penalty"] == 0.4
+
+
+@pytest.mark.parametrize("bad_value", [-2.1, 2.1])
+def test_out_of_range_frequency_penalty_is_rejected(bad_value: float) -> None:
+    with pytest.raises(ValueError, match="frequency_penalty"):
+        ModelConfig(model_id="test-model", frequency_penalty=bad_value).validate()
+

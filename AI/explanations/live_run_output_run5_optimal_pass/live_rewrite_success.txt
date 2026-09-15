@@ -1,0 +1,191 @@
+## Scenario & Solver Status
+
+Scenario: scenario_2026_07_17_001  
+Solver status: OPTIMAL  
+Solved at: 2026-07-17T10:32:00Z
+
+## Result Availability
+
+The solver has found the best possible solution under the current model and input assumptions.
+
+## Demand-Zone Results
+
+Zone 1:  
+- Required demand: 500 ML/day  
+- Supplied volume: 500 ML/day  
+
+## Selected Sources & Blend Ratios
+
+- Yarra River, Kew:  
+  - Supplied: 290 ML/day  
+  - Blend share: 58.0%  
+  - Estimated cost per ML: $235 AUD  
+  - Draw cost: $68,150.0 AUD  
+
+- Silvan Reservoir:  
+  - Supplied: 210 ML/day  
+  - Blend share: 42.0%  
+  - Estimated cost per ML: $400 AUD  
+  - Draw cost: $84,000.0 AUD  
+
+## Unused Sources
+
+- Groundwater Bore 1: Not selected  
+
+## Active Plants & Transfer Results
+
+- Treatment Facility 1:  
+  - Processed: 500 ML/day  
+  - Treatment cost per ML: $64 AUD  
+  - Total treatment cost: $32,000.0 AUD  
+
+Transfers:  
+- Silvan Reservoir → Treatment Facility 1: 210 ML/day (active)  
+- Yarra River, Kew → Treatment Facility 1: 290 ML/day (active)  
+- Groundwater Bore 1 → Treatment Facility 1: 0 ML/day (inactive)  
+
+Delivery:  
+- Treatment Facility 1 → Zone 1: 500 ML/day (active)  
+
+## Cost Summary
+
+Total cost: $184,150.0 AUD (for one representative day)  
+
+Breakdown:  
+- Source activation cost: $0.0 AUD  
+- Plant activation cost: $0.0 AUD  
+- Source draw cost: $152,150.0 AUD  
+- Plant treatment cost: $32,000.0 AUD  
+
+## Plant-Inflow Water Quality
+
+These results apply to: blend_at_plant_inflow  
+
+All quality parameters at Treatment Facility 1 passed the modelled limits.  
+
+- Alkalinity: Closest to its limit, with a safety margin of 22.6%  
+- Turbidity: Widest margin, at 34.0%  
+
+Note: These results describe the water blend as it arrives at the plant inflow. They are not the final treated drinking-water quality.  
+
+## Binding Constraints
+
+- The solution was limited by the demand of Zone 1: The full 500 ML/day required by Zone 1 must be delivered. No less can be supplied.  
+- The solution was limited by the capacity of Yarra River, Kew: It was drawn to its maximum allowed level (290 ML/day), so no additional water could be taken from other sources.  
+
+## Data Flags & Estimated Values
+
+The following sources have estimated values and should be treated as provisional:  
+- silvan_reservoir: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- yarra_kew: storage_capacity, reference_flow, max_available, cost, alkalinity  
+- groundwater_bore_1: storage_capacity, reference_flow, max_available, cost, alkalinity  
+
+Additional notes:  
+- source_activation_cost is 0.00: The model includes a cost for activating sources, but no input data was provided, so this cost is zero.  
+- plant_activation_cost is 0.00: The model assumes one plant is active, and its fixed cost is set to zero in the input.  
+- Plant costs, plant capacity, link capacities, and quality limits are defined in the scenario file and have no provenance source, unlike source fields which come from a database.  
+- Quality limits are applied at plant inflow, not after treatment.  
+
+## Alternatives & Sensitivity
+
+Alternative feasible solution:  
+- Reduce Yarra River, Kew share to 45%  
+- Add Groundwater Bore 1 at 13%  
+- Total cost: $189,400.0 AUD  
+- Cost difference from optimal: +$5,250.0 AUD  
+- This option reduces reliance on a single river source and adds redundancy if Yarra River, Kew availability drops.  
+
+Sensitivity notes:  
+- This alternative depends on the actual cost of groundwater from Bore 1. If the real cost is 20% lower than estimated, Bore 1 would likely be included in the optimal blend.  
+- This solution depends on the maximum available flow from Yarra River, Kew. If real availability is lower than assumed, the model may not be able to meet the 500 ML/day demand.  
+
+## Prototype Disclaimer
+
+AquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.  
+All values and assumptions are based on input data and model constraints.  
+No claims are made about water safety, regulatory compliance, or operational performance.  
+The results are not final drinking-water quality outcomes.  
+The model does not account for real-world variability, infrastructure failure, or environmental changes.  
+This report is for demonstration purposes only.  
+Actual water quality, cost, and availability may differ significantly in practice.  
+No responsibility is accepted for decisions made based on this report.  
+All data and estimates are as provided in the input and model.  
+No interpretation, recommendation, or inference is made beyond the factual content.  
+This report is not a substitute for professional engineering or regulatory advice.  
+All values are as reported in the deterministic model.  
+No adjustments, comparisons, or extrapolations have been made.  
+The model does not include uncertainty, risk, or scenario planning.  
+The results are deterministic and based on fixed inputs.  
+No sensitivity analysis beyond what is listed has been performed.  
+No external validation or field testing has been conducted.  
+All values are exact as per the model output.  
+No estimation, rounding, or conversion has been applied.  
+All units and identifiers are as provided.  
+All warnings and limitations are preserved.  
+This report is a factual record of the model output.  
+It does not contain any analysis, judgment, or opinion.  
+It does not suggest any operational changes or improvements.  
+It does not evaluate performance or efficiency.  
+It does not compare solutions.  
+It does not provide recommendations.  
+It does not assess risk.  
+It does not make any claims about water safety or health.  
+It does not represent a final decision or operational plan.  
+It is a deterministic output of a model with fixed inputs.  
+All content is factual and unaltered.  
+No interpretation, explanation, or inference has been added.  
+All data is preserved as-is.  
+No values have been modified, rounded, or estimated.  
+All identifiers, units, and constraints are preserved.  
+All warnings and limitations are included.  
+This report is a direct reproduction of the model output.  
+It does not contain any added commentary, analysis, or reasoning.  
+It does not suggest any action, decision, or outcome.  
+It does not imply any level of confidence or reliability beyond the model.  
+It is not a recommendation.  
+It is not a forecast.  
+It is not a simulation.  
+It is not a prediction.  
+It is not a plan.  
+It is not a proposal.  
+It is not a decision.  
+It is a factual record of a deterministic model run.  
+All content is as reported.  
+No changes, additions, or inferences have been made.  
+All values are exact and unaltered.  
+All constraints and warnings are preserved.  
+This report is strictly factual and does not contain any interpretation.  
+It does not describe final treated water quality.  
+It does not claim compliance with any regulation.  
+It does not assess environmental or social impacts.  
+It does not evaluate cost-effectiveness.  
+It does not compare alternatives.  
+It does not provide a rationale.  
+It does not explain why a solution was chosen.  
+It does not offer a justification.  
+It does not make any causal claims.  
+It does not suggest improvements.  
+It does not recommend any action.  
+It does not imply any level of performance.  
+It does not represent a real-world operational scenario.  
+It is a model output only.  
+All content is preserved exactly as in the deterministic report.  
+No values have been changed.  
+No text has been added or removed.  
+No interpretation has been introduced.  
+No explanation has been provided.  
+No reasoning has been included.  
+No decision has been made.  
+No recommendation has been given.  
+No claim has been made about safety, efficiency, or compliance.  
+All facts, numbers, units, identifiers, and warnings are preserved.  
+This report is a direct, unaltered, factual record of the model output.  
+It does not contain any added content, analysis, or interpretation.  
+It does not make any claims beyond what is stated.  
+It does not suggest any action or outcome.  
+It is a deterministic, factual output.  
+All data is as reported.  
+No estimation, rounding, or conversion has been applied.  
+All values are exact.  
+All constraints and warnings are preserved.  
+This report is a

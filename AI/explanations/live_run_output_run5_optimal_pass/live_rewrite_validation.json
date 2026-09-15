@@ -1,0 +1,10 @@
+{
+  "critical_result": "PASS",
+  "critical_failures": [],
+  "warnings": [
+    {
+      "rule": "NEW_IDENTIFIER",
+      "detail": "'Bore 1' appears in the rewrite but was not in the deterministic report. May be a legitimate rewording, or may be an invented name - worth a human check."
+    }
+  ]
+}

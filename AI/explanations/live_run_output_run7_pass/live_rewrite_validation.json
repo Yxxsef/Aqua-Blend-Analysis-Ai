@@ -1,0 +1,27 @@
+{
+  "critical_result": "FAIL",
+  "critical_failures": [
+    {
+      "rule": "NUMBER_WRONG_ASSOCIATION",
+      "detail": "'235.0' and '58.0%' are written together in the deterministic report, but no longer appear paired in the rewrite - one of them may have been swapped with a different source's figure."
+    },
+    {
+      "rule": "NUMBER_WRONG_ASSOCIATION",
+      "detail": "'400.0' and '42.0%' are written together in the deterministic report, but no longer appear paired in the rewrite - one of them may have been swapped with a different source's figure."
+    },
+    {
+      "rule": "IDENTIFIER_MISSING",
+      "detail": "'plant_activation_cost' appears in the deterministic report but not in the rewrite."
+    },
+    {
+      "rule": "IDENTIFIER_MISSING",
+      "detail": "'source_activation_cost' appears in the deterministic report but not in the rewrite."
+    }
+  ],
+  "warnings": [
+    {
+      "rule": "NEW_IDENTIFIER",
+      "detail": "'Bore 1' appears in the rewrite but was not in the deterministic report. May be a legitimate rewording, or may be an invented name - worth a human check."
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "scenario_context_version": "1.0",
+  "scenario_id": "scenario_001",
+  "run_id": "run_001",
+  "scenario_name": "High Demand Summer Case",
+  "description": "Tests increased summer demand.",
+  "status": "ready",
+  "is_ready": true,
+  "validation_issues": [],
+  "sources": [
+    {
+      "source_id": "SRC_001",
+      "name": "Source A",
+      "enabled": true,
+      "forced_inactive": false,
+      "minimum_withdrawal_ml_per_day": 0,
+      "maximum_withdrawal_ml_per_day": 70,
+      "withdrawal_bounds_override": {},
+      "availability_status": "available"
+    },
+    {
+      "source_id": "SRC_002",
+      "name": "Source B",
+      "enabled": true,
+      "forced_inactive": false,
+      "minimum_withdrawal_ml_per_day": 0,
+      "maximum_withdrawal_ml_per_day": 40,
+      "withdrawal_bounds_override": {
+        "reason": "scenario override"
+      },
+      "availability_status": "available"
+    }
+  ],
+  "plants": [
+    {
+      "plant_id": "PLANT_001",
+      "name": "Plant 1",
+      "enabled": true,
+      "minimum_processing_capacity_ml_per_day": 10,
+      "maximum_processing_capacity_ml_per_day": 100,
+      "capacity_override": {},
+      "availability_status": "available"
+    }
+  ],
+  "demand_zones": [
+    {
+      "zone_id": "ZONE_001",
+      "name": "North Zone",
+      "demand_ml_per_day": 120
+    }
+  ],
+  "source_to_plant_links": [
+    {
+      "source_id": "SRC_001",
+      "plant_id": "PLANT_001",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 60,
+      "override": {}
+    }
+  ],
+  "plant_to_zone_links": [
+    {
+      "plant_id": "PLANT_001",
+      "zone_id": "ZONE_001",
+      "enabled": true,
+      "maximum_flow_ml_per_day": 100,
+      "override": {}
+    }
+  ],
+  "quality_limits": [
+    {
+      "parameter_id": "TDS",
+      "name": "Total Dissolved Solids",
+      "minimum": null,
+      "maximum": 500,
+      "unit": "mg/L",
+      "profile_id": "STANDARD_001",
+      "override": {}
+    },
+    {
+      "parameter_id": "CHLORIDE",
+      "name": "Chloride",
+      "minimum": null,
+      "maximum": 250,
+      "unit": "mg/L",
+      "profile_id": "STANDARD_001",
+      "override": {}
+    }
+  ]
+}
