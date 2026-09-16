@@ -1,5 +1,5 @@
 {
-  "execution": "Fresh in-process IPython session; standard Jupyter sockets unavailable",
+  "execution": "Jupyter kernel, Kernel -> Restart & Run All",
   "protocol": {
     "indices": [
       "silhouette"
@@ -28,15 +28,15 @@
         "matplotlib": "3.10.6"
       },
       "platform": "macOS-26.4-arm64-arm-64bit-Mach-O",
-      "revision": "9c59665-dirty"
+      "revision": "dec1578-dirty"
     }
   },
   "data_provenance": {
-    "source": "Task 34 seeded synthetic mixed-type fixture; no operational records",
+    "source": "sklearn iris, with derived categorical/ordinal/binary columns and controlled missingness for Gower evidence",
     "loader": "FrameLoader",
     "data_cutoff": null,
-    "retrieved_at": "2026-09-14T04:01:39+00:00",
-    "n_observations": 90,
+    "retrieved_at": "2026-09-16T13:49:51+00:00",
+    "n_observations": 150,
     "n_features": 8
   },
   "measure_params": {
@@ -50,9 +50,9 @@
     ],
     "ordinal_categories": {
       "3": [
-        "low",
+        "narrow",
         "medium",
-        "high"
+        "wide"
       ]
     },
     "weights": [
@@ -65,15 +65,15 @@
     ]
   },
   "summary": {
-    "observations": 90,
+    "observations": 150,
     "features": 6,
-    "missing_cells": 90,
-    "missing_percent": 16.666666666666668,
-    "selected_k": 3,
-    "silhouette": 0.8116210458904581,
-    "planted_ari": 1.0,
-    "stability_ari_mean": 0.9914518802477316,
-    "stability_ari_sd": 0.02703152812904243,
+    "missing_cells": 157,
+    "missing_percent": 17.444444444444443,
+    "selected_k": 2,
+    "silhouette": 0.49541609845393547,
+    "planted_ari": 0.49979135311024525,
+    "stability_ari_mean": 0.6660162902466821,
+    "stability_ari_sd": 0.19664764067149082,
     "stability_failures": 0,
     "ward_backend_error": "precomputed was provided as metric. Ward can only work with euclidean distances.",
     "ward_is_metric_gate": "pending: Task 40 Ward is not registered in this checkout",
@@ -84,12 +84,11 @@
     "tests/test_gower.py": "c977294ee2eb11dbdf8b269787eb9fad4e3cc77e3d117d7ef66e5abc111302fd"
   },
   "caveats": [
-    "Synthetic fixture; no operational AquaBlend claims.",
+    "Real iris measurements with derived categorical/ordinal/binary columns and synthetic missingness; no operational AquaBlend claims.",
     "One fully observed active feature ensures pairwise coverage in this fixture.",
     "Manual backend fitting and explicit precomputed silhouette bypass missing metric forwarding in ComparisonRun.",
     "Manual resampling with refitted Gower ranges replaces unimplemented StabilityAnalysis.",
     "Ward is_metric integration awaits Task 40; sklearn rejection is a separate check.",
-    "Ordinal distances assume equally spaced declared ranks, not Podani tie correction.",
-    "Gower, Podani and backend documentation citation keys await shared-sheet assignment."
+    "Ordinal distances assume equally spaced declared ranks, not Podani tie correction."
   ]
 }

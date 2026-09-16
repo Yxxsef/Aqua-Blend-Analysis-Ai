@@ -1,4 +1,3 @@
-cluster,rows,ph_mean,turbidity_observed,turbidity_mean,source_observed,alarm_observed
-0,30,6.786869451862248,25,1.8214279092117274,24,24
-1,30,8.109144663567948,20,35.56403923528579,21,20
-2,30,7.38581515033571,18,11.58094710943694,23,23
+cluster,rows,sepal_length_mean,petal_width_observed,petal_width_mean,petal_shape_observed,high_petal_width_observed
+0,96,6.28125,65,1.6861538461538461,66,69
+1,54,5.064814814814815,38,0.3473684210526316,45,42
