@@ -1,0 +1,126 @@
+% ==================================================================
+%  MEASURE TEMPLATE --- copy me, do not edit in place.
+%
+%  Covers both kinds of measurement in Section~\ref{sec:clustering_methods}:
+%    * a dissimilarity measure d(.,.) --- the input a method consumes;
+%    * a validity index --- the output a comparison is built from,
+%      whether internal, external or relative.
+%  Delete the prompts in Parts 3 and 4 that do not apply to your kind.
+%
+%    cp template/measure_template.tex \
+%       documentation/sections/clustering_methods/measures/NN-<name>.tex
+%
+%  Then: replace <NAME>, replace the label suffix `template' with the
+%  measure's short name, and add one \input line under Section 7.1 in
+%  cluster_main.tex.
+%
+%  This file is NOT included in the build.
+%
+%  Levels: a measure is a \subsubsection under Section 7.1, so the parts
+%  below are \paragraph.  Keep their order unchanged in every copy.
+%
+%  Code counterpart:
+%    xxcluster/measures/dissimilarity/<name>.py, or
+%    xxcluster/measures/validation/{internal,external,relative}.py.
+%  Part 3 must agree with the class attributes declared there ---
+%  `is_metric' and `is_symmetric' for a dissimilarity,
+%  `higher_is_better', `range_' and `handles_noise' for an index.
+%  See CONTRIBUTING.md, Part 2.
+%
+% ------------------------------------------------------------------
+%  REFERENCES --- a source is declared, not merely cited.
+%
+%  1. Add every source you use to the shared citation key mapping
+%     sheet.  Everyone declares their references there and nowhere
+%     else:
+%     https://deakin365-my.sharepoint.com/:x:/g/personal/s224236373_deakin_edu_au/IQDSW3PBbHhZSq6vzGGQqi3WAbgJ1id1-t02k5B6fduX5Ys?e=nShY5e
+%  2. Each entry in the sheet carries a key of the form ref_<n>.  Cite
+%     it in the text as \cite{ref_<n>}.  Do not invent your own key,
+%     and do not edit documentation/literature.bib yourself --- the
+%     document lead applies the mapping there.
+%  3. Record every source in the REFERENCES USED block at the end of
+%     this file, including anything you read but did not cite.
+%
+%  Cite in the part where the claim is made, not in a lump at the end.
+%  A measure carries more inherited claims than most sections: the
+%  definition, the metric properties or the attainable range, and any
+%  reported failure mode are all cited where they are stated, unless
+%  you demonstrate them yourself in `Behaviour'.
+%
+%  ACADEMIC INTEGRITY --- an uncited claim, figure, equation, table or
+%  code fragment is plagiarism, whether it came from a paper, a
+%  library's documentation, a teammate, or a generative AI tool.
+%  Quote and cite it, or write it yourself.  Declare AI assistance as
+%  Deakin policy requires.
+%
+%  Before opening the pull request, run your section through Turnitin.
+%  Do not commit the report --- the repository is not where it belongs.
+%  Paste the similarity summary into the pull request as an image, or
+%  send it to the document lead privately; the lead may also run the
+%  check later.  Policy and procedure:
+%     https://d2l.deakin.edu.au/d2l/le/content/93067/viewContent/5882569/View
+% ==================================================================
+\subsubsection{<Davies--Bouldin Index>}
+\label{sec:measure:davies_bouldin}
+
+\paragraph{Overview}
+\label{sec:measure:davies_bouldin:overview}
+
+The Davies--Bouldin Index is an internal clustering validity index that evaluates the quality of a clustering partition using only the dataset and the assigned cluster labels. It measures the average similarity between each cluster and its most similar neighbouring cluster, combining within-cluster dispersion with between-cluster separation. Smaller values indicate better clustering because they correspond to compact, well-separated clusters.
+
+\paragraph{Definition}
+\label{sec:measure:davies_bouldin:definition}
+
+For each cluster, the Davies--Bouldin Index computes the ratio of within-cluster scatter to the distance between cluster centroids and then averages the worst-case ratio across all clusters. Formally,
+
+\[
+DB=\frac{1}{k}\sum_{i=1}^{k}\max_{j\neq i}
+\left(
+\frac{S_i+S_j}{M_{ij}}
+\right),
+\]
+
+where \(S_i\) and \(S_j\) denote the within-cluster scatter of clusters \(i\) and \(j\), and \(M_{ij}\) is the distance between their centroids. Lower values indicate better clustering because they represent compact clusters that are well separated.
+
+\paragraph{Properties}
+\label{sec:measure:davies_bouldin:properties}
+
+The Davies--Bouldin Index ranges from \(0\) to positive infinity, where lower values indicate higher-quality clustering. The index is not corrected for chance and is defined only when at least two clusters are present. It assumes compact, approximately isotropic clusters and does not support partitions containing observations labelled as noise.
+
+\paragraph{Applicability}
+\label{sec:measure:davies_bouldin:applicability}
+
+The index is applicable to numerical datasets represented in Euclidean space and can evaluate any hard clustering partition. It is particularly useful for centroid-based clustering methods but may also be applied to other algorithms that produce crisp cluster assignments. Fuzzy partitions and noise-labelled observations are not supported directly.
+
+\paragraph{Computation and complexity}
+\label{sec:measure:davies_bouldin:complexity}
+
+The implementation validates the supplied cluster labels before delegating the computation to the corresponding scikit-learn routine. Computing cluster centroids, within-cluster scatter, and pairwise centroid distances requires approximately linear time in the number of observations, with an additional quadratic component in the number of clusters when comparing centroid pairs. Memory requirements remain modest relative to the input dataset.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:davies_bouldin:application}
+
+Within \projectname{}, the Davies--Bouldin Index is used as an internal validation metric for comparing clustering algorithms when reference labels are unavailable. It complements other internal indices by favouring solutions that minimise within-cluster dispersion while maximising separation between neighbouring clusters.
+
+\paragraph{Behaviour}
+\label{sec:measure:davies_bouldin:behaviour}
+
+The Davies--Bouldin Index rewards compact and well-separated clusters by assigning lower scores to better partitions. Clusters that overlap substantially or exhibit large internal dispersion increase the score, making them less desirable during model comparison.
+
+\paragraph{Limitations}
+\label{sec:measure:davies_bouldin:limitations}
+
+The Davies--Bouldin Index assumes approximately spherical cluster structure and may perform poorly when clusters have highly irregular shapes or substantially different densities. Because it is based on centroid distances, it is generally more appropriate for centroid-based clustering methods than for density-based approaches.
+
+\paragraph{Summary}
+\label{sec:measure:davies_bouldin:summary}
+
+The Davies--Bouldin Index is an efficient internal clustering validity measure that evaluates the trade-off between cluster compactness and separation. Lower scores indicate better clustering quality, making the index a useful complement to other internal validation measures available in \projectname{}.
+
+% ==================================================================
+%  ============================================================
+% REFERENCES USED
+%
+% TODO: Add Davies & Bouldin (1979) citation key once assigned.
+% ============================================================
+% ==================================================================
