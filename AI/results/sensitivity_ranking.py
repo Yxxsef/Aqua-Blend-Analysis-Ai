@@ -1,10 +1,20 @@
 """Task 28 sensitivity and value-of-data ranking support.
 
-The current Results JSON contract exposes sensitivity entries as free-text
-``assumption`` and ``impact`` values.  The team has not agreed on a fixed
-priority rule or numerical impact score.  This module therefore verifies that
-sensitivity entries refer to estimated source data, but refuses to invent a
-ranking when the available data does not support a fair comparison.
+Task 90 aligns this module with the latest inspected ``milp_model_output``
+example. The current raw MILP output exposes source decisions through the
+confirmed top-level ``sources`` JSONB field. It does not expose the removed
+``data_flags.sources`` structure.
+
+Inspection of ``milp_model_output_example.json`` also confirms that the source
+records contain solved decision/result fields, but no per-source provenance or
+``has_estimated_values`` fields. The example does not contain a
+``sensitivity_to_key_assumptions`` field either.
+
+Because Task 28 needs sensitivity evidence plus provenance/estimation evidence
+to support a value-of-data ranking, the current raw MILP output alone is
+insufficient. This module therefore validates the confirmed source structure
+and returns ``INSUFFICIENT_DATA`` rather than inventing provenance, sensitivity
+values, or a ranking.
 """
 
 from __future__ import annotations
@@ -16,17 +26,22 @@ STATUS_RANKED = "RANKED"
 STATUS_INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
 STATUS_INVALID_INPUT = "INVALID_INPUT"
 
-# Confirmed Task 21 provenance fields and common wording used by the current
-# MILP sensitivity examples.  Aliases are used only to verify an uncertainty;
-# they are never converted into a score.
-FIELD_ALIASES = {
-    "storage_capacity": "storage_capacity",
-    "reference_flow": "reference_flow",
-    "max_available_ml_per_day": "max_available",
-    "max_available": "max_available",
-    "cost_per_ml": "cost",
-    "cost": "cost",
-    "alkalinity": "alkalinity",
+
+# These are the source fields observed in the inspected current MILP output
+# example. Only source_id is required by this module; the remaining names are
+# documented here so Task 90 does not silently rely on old source structures.
+CONFIRMED_SOURCE_FIELDS = {
+    "source_id",
+    "activated",
+    "blend_ratio",
+    "model_included",
+    "selection_status",
+    "decision_evidence",
+    "total_source_cost",
+    "utilisation_percent",
+    "exclusion_reason_code",
+    "withdrawal_ml_per_day",
+    "variable_withdrawal_cost",
 }
 
 
@@ -39,159 +54,75 @@ def _invalid(reason: str) -> dict[str, Any]:
     }
 
 
-def _insufficient(
-    reason: str,
-    verified_entries: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+def _insufficient(reason: str) -> dict[str, Any]:
     return {
         "status": STATUS_INSUFFICIENT_DATA,
         "ranking": [],
-        "verified_entries": verified_entries or [],
+        "verified_entries": [],
         "reason": reason,
     }
 
 
-def _find_source_id(
-    assumption: str,
-    sources: list[dict[str, Any]],
-) -> str | None:
-    """Return one real source_id mentioned in the assumption, or None."""
-    assumption_lower = assumption.lower()
-    matches = [
-        source["source_id"]
-        for source in sources
-        if isinstance(source.get("source_id"), str)
-        and source["source_id"].lower() in assumption_lower
-    ]
-    return matches[0] if len(matches) == 1 else None
+def _validate_sources(
+    results: dict[str, Any],
+) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
+    """Validate the confirmed top-level ``milp_model_output.sources`` field."""
+    if "sources" not in results:
+        return None, _invalid(
+            "sources must be present in the current MILP output."
+        )
 
+    sources = results["sources"]
+    if not isinstance(sources, list):
+        return None, _invalid("sources must be a list.")
 
-def _find_provenance_field(assumption: str) -> str | None:
-    """Map assumption wording to one confirmed Task 21 provenance field."""
-    assumption_lower = assumption.lower()
-    for alias in sorted(FIELD_ALIASES, key=len, reverse=True):
-        if alias in assumption_lower:
-            return FIELD_ALIASES[alias]
-    return None
+    if not sources:
+        return None, _insufficient(
+            "No source records are available in milp_model_output.sources."
+        )
 
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            return None, _invalid(f"sources[{index}] must be an object.")
 
-def _is_verified_uncertain(
-    source: dict[str, Any],
-    provenance_field: str,
-) -> bool:
-    """Return True only when provenance confirms that field is estimated."""
-    if source.get("has_estimated_values") is not True:
-        return False
+        source_id = source.get("source_id")
+        if not isinstance(source_id, str) or not source_id.strip():
+            return None, _invalid(
+                f"sources[{index}].source_id must be a non-empty string."
+            )
 
-    provenance = source.get("provenance")
-    if not isinstance(provenance, dict):
-        return False
-
-    value = provenance.get(provenance_field)
-    return isinstance(value, str) and value.lower() == "estimate"
+    return sources, None
 
 
 def rank_sensitivities(results: dict[str, Any]) -> dict[str, Any]:
-    """Evaluate sensitivity entries and rank only when comparison is supported.
+    """Check whether the current MILP output can support sensitivity ranking.
 
-    With the current contract, sensitivity impacts are free text.  Free text is
-    not converted into a numerical or categorical priority because that would
-    invent a ranking rule.  Valid sensitivity entries are instead verified
-    against ``data_flags.sources`` and reported in ``verified_entries``.
-
-    Args:
-        results: One validated external MILP Results JSON object.
-
-    Returns:
-        A dictionary containing ``status``, ``ranking``, ``verified_entries``
-        and ``reason``.
+    Confirmed Task 90 behaviour after inspecting the current output example:
+    - source records are read from top-level ``sources``;
+    - ``data_flags.sources`` is not read;
+    - ``allow_estimated_values`` is a policy flag and is not treated as proof
+      that a particular source value was estimated;
+    - the inspected source objects do not contain per-source provenance;
+    - the inspected output does not contain sensitivity-to-assumption data;
+    - without both provenance and sensitivity evidence, no supported ranking
+      can be produced.
     """
     if not isinstance(results, dict):
         return _invalid("Results must be a JSON object.")
 
-    data_flags = results.get("data_flags")
-    if not isinstance(data_flags, dict):
-        return _invalid("data_flags must be an object.")
+    sources, source_error = _validate_sources(results)
+    if source_error is not None:
+        return source_error
+    assert sources is not None
 
-    sources = data_flags.get("sources")
-    if not isinstance(sources, list):
-        return _invalid("data_flags.sources must be a list.")
-
-    for index, source in enumerate(sources):
-        if not isinstance(source, dict):
-            return _invalid(
-                f"data_flags.sources[{index}] must be an object."
-            )
-        source_id = source.get("source_id")
-        if not isinstance(source_id, str) or not source_id.strip():
-            return _invalid(
-                f"data_flags.sources[{index}].source_id must be a "
-                "non-empty string."
-            )
-
-    if "sensitivity_to_key_assumptions" not in results:
-        return _insufficient(
-            "No sensitivity_to_key_assumptions field is available."
-        )
-
-    sensitivities = results["sensitivity_to_key_assumptions"]
-    if not isinstance(sensitivities, list):
-        return _invalid("sensitivity_to_key_assumptions must be a list.")
-
-    if not sensitivities:
-        return _insufficient("No sensitivity entries are available.")
-
-    verified_entries: list[dict[str, Any]] = []
-
-    for index, entry in enumerate(sensitivities):
-        if not isinstance(entry, dict):
-            return _invalid(
-                f"sensitivity_to_key_assumptions[{index}] must be an object."
-            )
-
-        assumption = entry.get("assumption")
-        impact = entry.get("impact")
-
-        if not isinstance(assumption, str) or not assumption.strip():
-            return _invalid(
-                f"sensitivity_to_key_assumptions[{index}].assumption must "
-                "be a non-empty string."
-            )
-        if not isinstance(impact, str) or not impact.strip():
-            return _invalid(
-                f"sensitivity_to_key_assumptions[{index}].impact must be "
-                "a non-empty string."
-            )
-
-        source_id = _find_source_id(assumption, sources)
-        provenance_field = _find_provenance_field(assumption)
-
-        if source_id is None or provenance_field is None:
-            continue
-
-        source = next(
-            source for source in sources if source["source_id"] == source_id
-        )
-
-        if _is_verified_uncertain(source, provenance_field):
-            verified_entries.append(
-                {
-                    "assumption": assumption,
-                    "impact": impact,
-                    "source_id": source_id,
-                    "provenance_field": provenance_field,
-                }
-            )
-
-    if not verified_entries:
-        return _insufficient(
-            "Sensitivity entries could not be verified against estimated "
-            "source provenance in data_flags.sources."
-        )
-
+    # The current milp_model_output example confirms solved source decision
+    # fields, but not the provenance/estimation evidence required by Task 28.
+    # Do not infer source provenance from the top-level allow_estimated_values
+    # policy flag or from source activation/withdrawal values.
     return _insufficient(
-        "Verified sensitivity entries are available, but the current Results "
-        "JSON provides only free-text impact descriptions. No agreed or "
-        "structured comparison value exists, so a fair ranking is unsupported.",
-        verified_entries,
+        "The current milp_model_output.sources records do not provide "
+        "confirmed per-source provenance/estimation data, and the inspected "
+        "MILP output does not provide sensitivity_to_key_assumptions. "
+        "A supported sensitivity/value-of-data ranking cannot be produced "
+        "from the raw MILP output alone."
     )

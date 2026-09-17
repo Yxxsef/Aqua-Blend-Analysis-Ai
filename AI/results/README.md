@@ -4,29 +4,68 @@
 
 ### Overview
 
-The sensitivity ranking module processes verified
-`sensitivity_to_key_assumptions` information from the Results JSON and
-cross-references relevant source provenance from `data_flags.sources`.
+Task 90 updates the sensitivity ranking module against the latest inspected
+`milp_model_output` example rather than the older mock Results JSON shape.
 
-The module does not modify MILP results or create new impact values.
+The current output confirms that source decisions are stored in the top-level
+`sources` JSONB field. The previous `data_flags.sources` structure is not
+present and is no longer read by `sensitivity_ranking.py`.
 
-### Ranking Behaviour
+Inspection of `milp_model_output_example.json` also confirms that each source
+record contains solved decision/result fields such as `source_id`, `activated`,
+`selection_status`, `blend_ratio`, `withdrawal_ml_per_day`, utilisation, cost,
+and `decision_evidence`. The inspected source records do **not** contain
+`has_estimated_values` or a per-source `provenance` object.
 
-Sensitivity entries are ranked only when the available information supports a
-fair comparison.
+The inspected MILP output also does not contain a
+`sensitivity_to_key_assumptions` field. Therefore the raw current
+`milp_model_output` does not currently contain enough evidence for Task 28 to
+produce a supported sensitivity/value-of-data ranking.
 
-The current Results JSON provides sensitivity impacts mainly as free-text
-descriptions. There is currently no agreed fixed priority rule such as
-feasibility > quality > cost.
+### Current Contract Behaviour
 
-The module therefore does not invent scores or priorities that are not
-supported by the Results JSON.
+- Source records are read from top-level `milp_model_output.sources`.
+- `data_flags.sources` is no longer required or read.
+- `source_id` is validated as the stable source identifier.
+- The top-level `allow_estimated_values` value is treated only as an input
+  policy flag. It is **not** interpreted as proof that any particular source
+  value was estimated.
+- Source activation, selection, withdrawal, cost, or utilisation values are not
+  treated as provenance.
+- Missing provenance and sensitivity evidence returns `INSUFFICIENT_DATA`
+  rather than being guessed.
+- No free-text impact is converted into an invented score or ranking.
+
+### Regression Fixture
+
+Task 90 now uses `milp_model_output_example.json`, an example extracted from
+Supabase, as the regression fixture. This replaces the earlier draft reliance
+on the Task 59 `milp_v1_solved_example.json` fixture for current-contract
+validation.
+
+The fixture confirms that the module can read the current top-level `sources`
+structure directly and does not depend on the removed `data_flags` wrapper.
+The expected Task 28 result for this fixture is `INSUFFICIENT_DATA` because the
+raw output does not provide per-source provenance or sensitivity-to-assumption
+evidence.
+
+### Remaining Dependency
+
+A final ranking implementation still depends on confirmation of where the
+current pipeline provides:
+
+- per-source provenance/estimation evidence; and
+- sensitivity-to-assumption evidence suitable for comparison.
+
+Until those inputs and their exact field paths are confirmed, the module must
+not infer or invent them.
 
 ### Insufficient-Data Behaviour
 
-When sensitivity information is missing, incomplete, or does not support a fair
-comparison, the module returns `INSUFFICIENT_DATA` instead of creating an
-unsupported ranking.
+When the confirmed current output does not contain the provenance and
+sensitivity evidence required for a fair comparison, the module returns
+`INSUFFICIENT_DATA` with an empty ranking and verified-entry list.
+
 # Results JSON Validator, Adapter and Confidence Flags
 
 ## Overview
