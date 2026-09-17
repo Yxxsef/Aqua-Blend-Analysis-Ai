@@ -10,26 +10,24 @@
         {
           "run": "optimiser",
           "is_baseline": false,
-          "gate": null,
-          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": null,
-            "status": null,
+            "status": "UNKNOWN",
             "reason": "not reported"
           },
           "total_cost": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           },
           "demand_satisfaction": {
-            "value": null,
-            "status": null,
-            "reason": "not reported"
+            "value": 100.0,
+            "status": "OK"
           },
           "minimum_safety_margin": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           }
         },
@@ -39,7 +37,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -62,7 +60,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -85,7 +83,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -112,26 +110,24 @@
         {
           "run": "optimiser",
           "is_baseline": false,
-          "gate": null,
-          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": null,
-            "status": null,
+            "status": "UNKNOWN",
             "reason": "not reported"
           },
           "total_cost": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           },
           "demand_satisfaction": {
-            "value": null,
-            "status": null,
-            "reason": "not reported"
+            "value": 100.0,
+            "status": "OK"
           },
           "minimum_safety_margin": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           }
         },
@@ -214,26 +210,24 @@
         {
           "run": "optimiser",
           "is_baseline": false,
-          "gate": null,
-          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": null,
-            "status": null,
+            "status": "UNKNOWN",
             "reason": "not reported"
           },
           "total_cost": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           },
           "demand_satisfaction": {
-            "value": null,
-            "status": null,
-            "reason": "not reported"
+            "value": 100.0,
+            "status": "OK"
           },
           "minimum_safety_margin": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           }
         },
@@ -243,7 +237,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -266,7 +260,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -289,7 +283,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -316,26 +310,24 @@
         {
           "run": "optimiser",
           "is_baseline": false,
-          "gate": null,
-          "error": "AttributeError: 'list' object has no attribute 'get'",
+          "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": null,
-            "status": null,
+            "status": "UNKNOWN",
             "reason": "not reported"
           },
           "total_cost": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           },
           "demand_satisfaction": {
-            "value": null,
-            "status": null,
-            "reason": "not reported"
+            "value": 100.0,
+            "status": "OK"
           },
           "minimum_safety_margin": {
             "value": null,
-            "status": null,
+            "status": "N/A",
             "reason": "not reported"
           }
         },
@@ -345,7 +337,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -368,7 +360,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,
@@ -391,7 +383,7 @@
           "gate": "UNABLE_TO_EVALUATE",
           "feasibility": {
             "value": "FEASIBLE",
-            "status": "OK"
+            "status": "UNKNOWN"
           },
           "total_cost": {
             "value": null,

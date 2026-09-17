@@ -1,0 +1,3 @@
+method,silhouette,n_clusters_found,fit_seconds
+gaussian_mixture,0.6867350732769777,2,0.012056625040713698
+kmeans,0.6810461692117462,2,0.003872999979648739

@@ -168,6 +168,22 @@ def _gate_as_dict(gate: Any) -> dict[str, Any]:
     return dict(vars(gate))
 
 
+def _get_selected_sources(
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return sources marked as selected by the MILP output contract."""
+    if not isinstance(sources, list):
+        return []
+    return [
+        source
+        for source in sources
+        if (
+            isinstance(source, dict)
+            and source.get("selection_status") == "SELECTED"
+        )
+    ]
+
+
 def build_scenario_context(scenario: dict[str, Any]) -> dict[str, Any]:
     """Collect the scenario inputs that Results JSON v1.0 no longer echoes.
 
@@ -334,7 +350,13 @@ def run_batch(
     """
     target = Path(path)
     if target.is_dir():
-        scenario_files = sorted(target.rglob("*.json"))
+        # Task 70's ScenarioData context files also live under AI/scenarios/
+        # but are not scenario inputs, so they are left out of the batch.
+        scenario_files = [
+            file
+            for file in sorted(target.rglob("*.json"))
+            if "scenario_context_version" not in file.read_text(encoding="utf-8")
+        ]
     else:
         scenario_files = [target]
 

@@ -40,7 +40,16 @@ OUTAGE = SCENARIO_DIR / "high-demand-outage" / "scenario_plant_outage.json"
 
 
 # --- the optimiser seam ---------------------------------------------------
-
+from batch_runner import (  # noqa: E402
+    _get_selected_sources,
+    MOCK,
+    MILP,
+    OptimiserError,
+    get_optimiser_result,
+    run_batch,
+    run_scenario,
+    write_run,
+)
 def test_mock_mode_returns_a_results_json():
     result, source = get_optimiser_result({}, MOCK)
     assert result["scenario_id"]
@@ -80,7 +89,28 @@ def test_scenario_records_runtime_and_validation():
     assert result["runtime_seconds"] >= 0
     assert result["scenario_validation"]["valid"] is True
 
+def test_get_selected_sources_handles_real_milp_shape():
+    sources = [
+        {
+            "source_id": "SRC_001",
+            "selection_status": "NOT_SELECTED",
+            "activated": False,
+        },
+        {
+            "source_id": "SRC_002",
+            "selection_status": "SELECTED",
+            "activated": True,
+        },
+        {
+            "source_id": "SRC_003",
+            "selection_status": "NOT_SELECTED",
+            "activated": False,
+        },
+    ]
 
+    selected = _get_selected_sources(sources)
+
+    assert [source["source_id"] for source in selected] == ["SRC_002"]
 # --- the batch ------------------------------------------------------------
 
 def test_batch_runs_every_scenario_in_a_folder():
