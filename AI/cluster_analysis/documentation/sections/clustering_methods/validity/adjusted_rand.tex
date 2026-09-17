@@ -1,0 +1,62 @@
+\subsubsection{Adjusted Rand Index}
+\label{sec:measure:adjusted_rand}
+
+\paragraph{Overview}
+\label{sec:measure:adjusted_rand:overview}
+
+The Adjusted Rand Index (ARI) is an external clustering validity measure used to compare a predicted clustering partition with a reference labelling \cite{ref_24}. Unlike internal validity indices, it measures agreement between two assignments of the same observations while correcting for agreement that may occur by chance.
+
+\paragraph{Definition}
+\label{sec:measure:adjusted_rand:definition}
+
+Given two partitions of the same set of observations, the Adjusted Rand Index is defined as \cite{ref_24}:
+
+\[
+\mathrm{ARI}
+=
+\frac{
+\mathrm{RI} - \mathbb{E}[\mathrm{RI}]
+}{
+\max(\mathrm{RI}) - \mathbb{E}[\mathrm{RI}]
+},
+\]
+
+where \(\mathrm{RI}\) denotes the Rand Index and
+\(\mathbb{E}[\mathrm{RI}]\) represents the expected agreement between the
+partitions under random labelling.
+
+\paragraph{Properties}
+\label{sec:measure:adjusted_rand:properties}
+
+The Adjusted Rand Index has a maximum value of \(1\), indicating perfect agreement between two partitions. Values close to \(0\) indicate agreement approximately equivalent to that expected by chance, while negative values indicate agreement worse than the chance expectation. The measure is invariant to permutations of cluster labels and is symmetric with respect to its two input partitions.
+
+\paragraph{Applicability}
+\label{sec:measure:adjusted_rand:applicability}
+
+The index is applicable when two cluster labellings of the same observations are available. It can be used with benchmark datasets containing known reference labels to evaluate clustering results. Within stability analysis, it can also compare partitions produced by repeated or perturbed clustering runs.
+
+\paragraph{Computation and complexity}
+\label{sec:measure:adjusted_rand:complexity}
+
+The implementation delegates computation to the corresponding scikit-learn routine after validating both supplied label arrays. The two label arrays must contain the same number of observations. The computation is based on the contingency between the two partitions and does not require the original feature matrix.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:adjusted_rand:application}
+
+Within \projectname{}, the Adjusted Rand Index can be used to assess agreement between clustering solutions. In particular, it supports stability analysis by comparing cluster assignments generated across repeated or perturbed runs. It can also be used with benchmark data containing known reference labels to validate clustering implementations.
+
+\paragraph{Behaviour}
+\label{sec:measure:adjusted_rand:behaviour}
+
+The Adjusted Rand Index rewards agreement in how pairs of observations are grouped while correcting for agreement expected by chance. Relabelling cluster identifiers does not change the score because the measure evaluates the partition structure rather than the numerical values assigned to cluster labels.
+
+\paragraph{Limitations}
+\label{sec:measure:adjusted_rand:limitations}
+
+The index requires two labellings defined over the same observations and therefore cannot directly evaluate a clustering solution when no comparison partition is available. Its value may also be influenced by the number and sizes of clusters, so results should be interpreted together with the characteristics of the partitions being compared.
+
+\paragraph{Summary}
+\label{sec:measure:adjusted_rand:summary}
+
+The Adjusted Rand Index provides a chance-corrected and label-invariant measure of agreement between two clustering partitions. A value of \(1\) represents perfect agreement, values near \(0\) represent approximately chance-level agreement, and negative values indicate agreement below that expected by chance.
+
