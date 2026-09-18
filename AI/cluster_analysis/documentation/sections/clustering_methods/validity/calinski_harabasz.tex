@@ -66,12 +66,12 @@
 \paragraph{Overview}
 \label{sec:measure:calinski_harabasz:overview}
 
-The Calinski--Harabasz Index is an internal clustering validity index that evaluates the quality of a partition using only the dataset and the assigned cluster labels. It measures the ratio of between-cluster dispersion to within-cluster dispersion, rewarding partitions that produce compact clusters that are well separated. Since it does not require ground-truth labels, it is suitable for comparing clustering results on unlabeled datasets and is widely used for centroid-based clustering methods such as K-means.
+The Calinski--Harabasz Index is an internal clustering validity index that evaluates the quality of a partition using only the dataset and the assigned cluster labels. It measures the ratio of between-cluster dispersion to within-cluster dispersion, rewarding partitions that produce compact clusters that are well separated. Since it does not require ground-truth labels, it is suitable for comparing clustering results on unlabeled datasets and is widely used for centroid-based clustering methods such as K-means \cite{ref_17}.
 
 \paragraph{Definition}
 \label{sec:measure:calinski_harabasz:definition}
 
-Given a dataset with \(n\) observations partitioned into \(k\) clusters, the Calinski--Harabasz Index is defined as
+Given a dataset with \(n\) observations partitioned into \(k\) clusters, the Calinski--Harabasz Index is defined as \cite{ref_17}
 
 \[
 CH=\frac{\operatorname{Tr}(B_k)}{\operatorname{Tr}(W_k)}

@@ -71,7 +71,7 @@ The Davies--Bouldin Index is an internal clustering validity index that evaluate
 \paragraph{Definition}
 \label{sec:measure:davies_bouldin:definition}
 
-For each cluster, the Davies--Bouldin Index computes the ratio of within-cluster scatter to the distance between cluster centroids and then averages the worst-case ratio across all clusters. Formally,
+For each cluster, the Davies--Bouldin Index computes the ratio of within-cluster scatter to the distance between cluster centroids and then averages the worst-case ratio across all clusters. Formally, \cite{ref_36}
 
 \[
 DB=\frac{1}{k}\sum_{i=1}^{k}\max_{j\neq i}
@@ -85,7 +85,7 @@ where \(S_i\) and \(S_j\) denote the within-cluster scatter of clusters \(i\) an
 \paragraph{Properties}
 \label{sec:measure:davies_bouldin:properties}
 
-The Davies--Bouldin Index ranges from \(0\) to positive infinity, where lower values indicate higher-quality clustering. The index is not corrected for chance and is defined only when at least two clusters are present. It assumes compact, approximately isotropic clusters and does not support partitions containing observations labelled as noise.
+The Davies--Bouldin Index ranges from \(0\) to positive infinity, where lower values indicate higher-quality clustering. The index is not corrected for chance and is defined only when at least two clusters are present. It assumes compact, approximately isotropic clusters and does not support partitions containing observations labelled as noise. \cite{ref_28}
 
 \paragraph{Applicability}
 \label{sec:measure:davies_bouldin:applicability}
@@ -121,6 +121,6 @@ The Davies--Bouldin Index is an efficient internal clustering validity measure t
 %  ============================================================
 % REFERENCES USED
 %
-% TODO: Add Davies & Bouldin (1979) citation key once assigned.
+% ref_28  Davies, David L. & Bouldin, Donald W. (1979), A Cluster Separation Measure
 % ============================================================
 % ==================================================================
