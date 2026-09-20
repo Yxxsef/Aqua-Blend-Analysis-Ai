@@ -120,12 +120,12 @@ when validating parameters --- the first step of \texttt{fit}, so the
 refusal precedes any tree construction, and it applies to an adapted
 method as much as to a native one.
 
-Anything not \emph{verifiable} as Euclidean is refused: the names
-\texttt{euclidean} and \texttt{l2} pass, while a callable metric and
+Anything not \emph{verifiable} as Euclidean is refused: only the
+canonical name \texttt{euclidean} passes, while a callable metric and
 \texttt{precomputed} do not, the latter because a supplied matrix carries
-no evidence of its own geometry. This is where scikit-learn's
-agglomerative clustering draws the line, so one registered name does not
-mean two things natively and through a backend. It also means Ward
+no evidence of its own geometry. The rule is deliberately narrower than
+scikit-learn's, which also admits the alias \texttt{l2}: one spelling of
+the requirement is easier to reason about than two. It also means Ward
 refuses Gower, which reaches a method only as a precomputed matrix.
 
 Two incompatible definitions both call themselves Ward~\cite{ref_30}. The
@@ -150,9 +150,10 @@ single joins the groups at the intermediate height, complete keeps them
 apart until the last merge. Ward's requirement is verified as behaviour
 and not only as a declaration: a method given a non-Euclidean metric
 raises at \texttt{fit}, and the test asserts no tree was built when it
-did. A further test requires each candidate metric to be accepted or
-refused identically by this package and by the adapted backend, which is
-what keeps a criterion resolved by name the same on both paths. All of it
+did. A further test requires that no metric the adapted backend refuses
+is accepted here, which is what stops a criterion resolved by name from
+meaning two things on the two paths; the reverse is permitted, since this
+rule is the stricter of the two. All of it
 is in \texttt{test\_linkage.py}.
 
 \paragraph{Summary}

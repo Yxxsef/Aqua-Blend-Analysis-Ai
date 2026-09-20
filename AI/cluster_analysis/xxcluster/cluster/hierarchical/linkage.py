@@ -262,11 +262,10 @@ class WardLinkage(BaseLinkage):
 
 
 #: Metric names that denote Euclidean distance, and therefore satisfy
-#: ``requires_euclidean``. Matches the pair scikit-learn's
-#: ``AgglomerativeClustering`` accepts under ``linkage="ward"``, so a
-#: criterion resolved natively and one resolved by an adapted backend
-#: refuse the same inputs.
-EUCLIDEAN_METRICS: frozenset[str] = frozenset({"euclidean", "l2"})
+#: ``requires_euclidean``. Narrowed to the canonical name alone on review:
+#: an alias is accepted only where it is unambiguous, and the single name
+#: keeps one spelling of the requirement in the codebase.
+EUCLIDEAN_METRICS: frozenset[str] = frozenset({"euclidean"})
 
 
 def resolve_linkage(linkage: str | BaseLinkage | type[BaseLinkage]) -> BaseLinkage:
@@ -368,7 +367,7 @@ def check_linkage_metric(
         f"which equals a squared Euclidean distance between centroids and "
         f"nothing else, so under metric={metric!r} the recurrence would "
         f"return a number that is not the criterion it names. Pass "
-        f"metric='euclidean' (or 'l2'), or choose a criterion defined for "
+        f"metric='euclidean', or choose a criterion defined for "
         f"any dissimilarity: "
         f"{', '.join(sorted(n for n in linkage_names() if n != criterion.name))}."
     )

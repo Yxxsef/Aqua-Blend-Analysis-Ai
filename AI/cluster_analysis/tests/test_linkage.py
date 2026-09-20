@@ -440,13 +440,17 @@ def test_a_criterion_resolved_by_name_matches_the_backend_of_that_name(
 @pytest.mark.parametrize(
     "metric", ["euclidean", "l2", "manhattan", "cosine", "precomputed"]
 )
-def test_the_ward_metric_rule_agrees_with_the_adapted_backend(blob, metric):
-    """Our guard draws the line where scikit-learn's Ward draws it.
+def test_the_ward_metric_rule_is_no_looser_than_the_adapted_backend(blob, metric):
+    """Our guard never accepts a metric scikit-learn's Ward refuses.
 
-    Task 40 adapts `AgglomerativeClustering`, so a disagreement here
-    would mean `linkage="ward"` accepts natively what the adapted
-    method refuses, or the reverse: one registered name with two
-    behaviours.
+    Task 40 adapts `AgglomerativeClustering`. Accepting natively what
+    the adapted method refuses would give one registered name two
+    behaviours, and is what this test forbids.
+
+    The converse is allowed: our rule is deliberately the stricter of
+    the two. It admits only the canonical name `euclidean`, where the
+    backend also admits the alias `l2`, so refusing where the backend
+    accepts is a narrowing we have chosen, not a divergence.
     """
     X = squareform(pdist(blob)) if metric == "precomputed" else blob
 
@@ -465,4 +469,8 @@ def test_the_ward_metric_rule_agrees_with_the_adapted_backend(blob, metric):
     else:
         ours_refused = False
 
-    assert ours_refused == backend_refused
+    if backend_refused:
+        assert ours_refused, (
+            f"metric={metric!r}: the backend refuses it under Ward but we "
+            f"accept it, so one registered name would mean two things"
+        )
