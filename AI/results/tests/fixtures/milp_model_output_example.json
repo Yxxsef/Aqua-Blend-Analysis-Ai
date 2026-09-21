@@ -1,0 +1,705 @@
+{
+  "id": "7bfc5d16-52e4-470d-8917-91797d17f066",
+  "schema_version": "0.1",
+  "scenario_id": "SCN-005",
+  "scenario_status": "ready",
+  "data_source_type": "supabase",
+  "data_source_view": "public.source_model_inputs",
+  "allow_estimated_values": true,
+  "fail_if_source_missing_from_database": true,
+  "fail_if_daily_availability_missing": true,
+  "fail_if_required_quality_value_missing": true,
+  "fail_if_demand_missing": true,
+  "loader_status": "PASSED",
+  "loader_scenario_ready": true,
+  "loader_validation_issues": [],
+  "loader_checks": [
+    {
+      "check": "loader_validation_issues_empty",
+      "passed": true,
+      "enabled": true
+    }
+  ],
+  "preprocessing_status": "PASSED",
+  "preprocessing_warnings": [],
+  "preprocessing_checks": [
+    {
+      "check": "model_parameters_constructed",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "capacity_feasibility_check",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "quality_feasibility_check",
+      "passed": true,
+      "enabled": true
+    }
+  ],
+  "output_consistency_status": "PASSED",
+  "output_consistency_tolerance": 1e-06,
+  "output_consistency_checks": [
+    {
+      "check": "decision_values_non_negative",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "source_activation_and_withdrawal_bounds",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "plant_activation_and_throughput_bounds",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "source_flow_conservation",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "plant_flow_conservation",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "source_to_plant_link_capacity",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "plant_to_zone_link_capacity",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "demand_satisfaction",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "plant_inflow_quality_limits",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "objective_cost_reconciliation",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "summary_total_reconciliation",
+      "passed": true,
+      "enabled": true
+    },
+    {
+      "check": "reported_ids_and_arcs_match_model_parameters",
+      "passed": true,
+      "enabled": true
+    }
+  ],
+  "solver_status": "optimal",
+  "solver_is_feasible": true,
+  "solver_is_optimal": true,
+  "solver_objective_value": 9300.0,
+  "solver_version": "0.1",
+  "total_demand_ml_per_day": 1.51,
+  "total_withdrawal_ml_per_day": 10.0,
+  "total_treated_ml_per_day": 10.0,
+  "total_delivered_ml_per_day": 10.0,
+  "selected_source_count": 1,
+  "active_plant_count": 1,
+  "total_source_fixed_cost": 0.0,
+  "total_source_variable_cost": 3500.0,
+  "total_plant_fixed_cost": 5000.0,
+  "total_plant_variable_cost": 800.0,
+  "reconstructed_total_cost": 9300.0,
+  "total_cost": 9300.0,
+  "cost_reconciles": true,
+  "sources": [
+    {
+      "activated": false,
+      "source_id": "SRC_003",
+      "blend_ratio": 0.0,
+      "model_included": true,
+      "selection_status": "NOT_SELECTED",
+      "decision_evidence": {
+        "binding_lower": false,
+        "binding_upper": false,
+        "unit_cost_rank": 3
+      },
+      "total_source_cost": 0.0,
+      "utilisation_percent": 0.0,
+      "exclusion_reason_code": "N/A",
+      "withdrawal_ml_per_day": 0.0,
+      "variable_withdrawal_cost": 0.0
+    },
+    {
+      "activated": false,
+      "source_id": "SRC_001",
+      "blend_ratio": 0.0,
+      "model_included": true,
+      "selection_status": "NOT_SELECTED",
+      "decision_evidence": {
+        "binding_lower": false,
+        "binding_upper": false,
+        "unit_cost_rank": 2
+      },
+      "total_source_cost": 0.0,
+      "utilisation_percent": 0.0,
+      "exclusion_reason_code": "N/A",
+      "withdrawal_ml_per_day": 0.0,
+      "variable_withdrawal_cost": 0.0
+    },
+    {
+      "activated": true,
+      "source_id": "SRC_002",
+      "blend_ratio": 1.0,
+      "model_included": true,
+      "selection_status": "SELECTED",
+      "decision_evidence": {
+        "binding_lower": false,
+        "binding_upper": false,
+        "unit_cost_rank": 1
+      },
+      "total_source_cost": 3500.0,
+      "utilisation_percent": 3.125,
+      "exclusion_reason_code": "N/A",
+      "withdrawal_ml_per_day": 10.0,
+      "variable_withdrawal_cost": 3500.0
+    }
+  ],
+  "plants": [
+    {
+      "plant_id": "PLANT_001",
+      "activated": true,
+      "total_plant_cost": 5800.0,
+      "utilisation_percent": 2.5,
+      "throughput_ml_per_day": 10.0,
+      "variable_treatment_cost": 800.0
+    },
+    {
+      "plant_id": "PLANT_002",
+      "activated": false,
+      "total_plant_cost": 0.0,
+      "utilisation_percent": 0.0,
+      "throughput_ml_per_day": 0.0,
+      "variable_treatment_cost": 0.0
+    }
+  ],
+  "demand_zones": [
+    {
+      "zone_id": "ZONE_001",
+      "demand_satisfied": true,
+      "demand_must_be_met": true,
+      "surplus_ml_per_day": 8.49,
+      "delivered_ml_per_day": 8.8,
+      "unmet_demand_ml_per_day": 0.0
+    },
+    {
+      "zone_id": "ZONE_002",
+      "demand_satisfied": true,
+      "demand_must_be_met": true,
+      "surplus_ml_per_day": 0.0,
+      "delivered_ml_per_day": 1.2,
+      "unmet_demand_ml_per_day": 0.0
+    }
+  ],
+  "flows_source_to_plant": [
+    {
+      "plant_id": "PLANT_001",
+      "activated": false,
+      "source_id": "SRC_001",
+      "flow_ml_per_day": 0.0,
+      "utilisation_percent": 0.0
+    },
+    {
+      "plant_id": "PLANT_001",
+      "activated": true,
+      "source_id": "SRC_002",
+      "flow_ml_per_day": 10.0,
+      "utilisation_percent": 5.0
+    },
+    {
+      "plant_id": "PLANT_002",
+      "activated": false,
+      "source_id": "SRC_002",
+      "flow_ml_per_day": 0.0,
+      "utilisation_percent": 0.0
+    },
+    {
+      "plant_id": "PLANT_002",
+      "activated": false,
+      "source_id": "SRC_003",
+      "flow_ml_per_day": 0.0,
+      "utilisation_percent": 0.0
+    }
+  ],
+  "flows_plant_to_zone": [
+    {
+      "zone_id": "ZONE_001",
+      "plant_id": "PLANT_001",
+      "activated": true,
+      "flow_ml_per_day": 8.8,
+      "utilisation_percent": 2.9333333333333336
+    },
+    {
+      "zone_id": "ZONE_002",
+      "plant_id": "PLANT_001",
+      "activated": true,
+      "flow_ml_per_day": 1.2,
+      "utilisation_percent": 0.8
+    },
+    {
+      "zone_id": "ZONE_002",
+      "plant_id": "PLANT_002",
+      "activated": false,
+      "flow_ml_per_day": 0.0,
+      "utilisation_percent": 0.0
+    }
+  ],
+  "quality": {
+    "applies_to": "blend_at_plant_inflow",
+    "plant_inflow": [
+      {
+        "plant_id": "PLANT_001",
+        "parameters": [
+          {
+            "model_max": 316.2277660168379,
+            "model_min": 3.1622776601683795,
+            "transform": "ph_to_hydrogen_ion",
+            "model_unit": "nmol/L",
+            "model_value": 31.62277660168379,
+            "parameter_id": "pH",
+            "binding_lower": false,
+            "binding_upper": false,
+            "reported_unit": "pH",
+            "within_limits": true,
+            "reported_value": 7.5,
+            "model_parameter_id": "hydrogen_ion_concentration_mol_l"
+          },
+          {
+            "model_max": 5.0,
+            "model_min": 0.5,
+            "transform": "identity",
+            "model_unit": "NTU",
+            "model_value": 3.5,
+            "parameter_id": "turbidity",
+            "binding_lower": false,
+            "binding_upper": false,
+            "reported_unit": "NTU",
+            "within_limits": true,
+            "reported_value": 3.5,
+            "model_parameter_id": "turbidity"
+          },
+          {
+            "model_max": 200.0,
+            "model_min": 20.0,
+            "transform": "identity",
+            "model_unit": "mg/L CaCO3",
+            "model_value": 52.0,
+            "parameter_id": "alkalinity",
+            "binding_lower": false,
+            "binding_upper": false,
+            "reported_unit": "mg/L CaCO3",
+            "within_limits": true,
+            "reported_value": 52.0,
+            "model_parameter_id": "alkalinity"
+          }
+        ],
+        "flow_ml_per_day": 10.0
+      },
+      {
+        "plant_id": "PLANT_002",
+        "parameters": [],
+        "flow_ml_per_day": 0.0
+      }
+    ]
+  },
+  "binding_constraints_summary": [],
+  "warnings": [
+    "Source 'SRC_003' activation indicator (True) disagrees with its solved withdrawal (0 ML/day); the withdrawal value was treated as authoritative.",
+    "Source 'SRC_001' activation indicator (True) disagrees with its solved withdrawal (0 ML/day); the withdrawal value was treated as authoritative.",
+    "Plant 'PLANT_002' has no inflow; blended 'pH' quality could not be computed and was omitted.",
+    "Plant 'PLANT_002' has no inflow; blended 'turbidity' quality could not be computed and was omitted.",
+    "Plant 'PLANT_002' has no inflow; blended 'alkalinity' quality could not be computed and was omitted."
+  ],
+  "created_at": "2026-09-06T00:37:45.452711+00:00",
+  "origin_run_id": 2,
+  "input_id": "18b07eb9-c187-437c-a6f4-d4123fa2bdd7",
+  "scenario_db_id": 5,
+  "execution_key": "26b8d2c995d508fef2b30e201ba8e894769aa0612a59844a382d4db36f1e5e63",
+  "input_hash": "f20b9c014e4a620f6c5f23151f7d9e9a88d9d74762d9928ff6c22b801e47e92c",
+  "model_parameters_hash": "f20b9c014e4a620f6c5f23151f7d9e9a88d9d74762d9928ff6c22b801e47e92c",
+  "milp_model_version": "local-integration-2026-09-06-v1",
+  "solver_name": "appsi_highs",
+  "solver_config_hash": "36ba1c067f20a397ff09465bd98cbdde333324b2ab36acf48a8532f4a7aebd09",
+  "solver_termination_condition": null,
+  "solver_message": null,
+  "solve_time_ms": 114.776000002166,
+  "raw_output_json": {
+    "flows": {
+      "plant_to_zone": [
+        {
+          "zone_id": "ZONE_001",
+          "plant_id": "PLANT_001",
+          "activated": true,
+          "flow_ml_per_day": 8.8,
+          "utilisation_percent": 2.9333333333333336
+        },
+        {
+          "zone_id": "ZONE_002",
+          "plant_id": "PLANT_001",
+          "activated": true,
+          "flow_ml_per_day": 1.2,
+          "utilisation_percent": 0.8
+        },
+        {
+          "zone_id": "ZONE_002",
+          "plant_id": "PLANT_002",
+          "activated": false,
+          "flow_ml_per_day": 0.0,
+          "utilisation_percent": 0.0
+        }
+      ],
+      "source_to_plant": [
+        {
+          "plant_id": "PLANT_001",
+          "activated": false,
+          "source_id": "SRC_001",
+          "flow_ml_per_day": 0.0,
+          "utilisation_percent": 0.0
+        },
+        {
+          "plant_id": "PLANT_001",
+          "activated": true,
+          "source_id": "SRC_002",
+          "flow_ml_per_day": 10.0,
+          "utilisation_percent": 5.0
+        },
+        {
+          "plant_id": "PLANT_002",
+          "activated": false,
+          "source_id": "SRC_002",
+          "flow_ml_per_day": 0.0,
+          "utilisation_percent": 0.0
+        },
+        {
+          "plant_id": "PLANT_002",
+          "activated": false,
+          "source_id": "SRC_003",
+          "flow_ml_per_day": 0.0,
+          "utilisation_percent": 0.0
+        }
+      ]
+    },
+    "plants": [
+      {
+        "plant_id": "PLANT_001",
+        "activated": true,
+        "total_plant_cost": 5800.0,
+        "utilisation_percent": 2.5,
+        "throughput_ml_per_day": 10.0,
+        "variable_treatment_cost": 800.0
+      },
+      {
+        "plant_id": "PLANT_002",
+        "activated": false,
+        "total_plant_cost": 0.0,
+        "utilisation_percent": 0.0,
+        "throughput_ml_per_day": 0.0,
+        "variable_treatment_cost": 0.0
+      }
+    ],
+    "run_id": "RUN-1002",
+    "solver": {
+      "status": "optimal",
+      "version": "0.1",
+      "is_optimal": true,
+      "is_feasible": true,
+      "objective_value": 9300.0
+    },
+    "quality": {
+      "applies_to": "blend_at_plant_inflow",
+      "plant_inflow": [
+        {
+          "plant_id": "PLANT_001",
+          "parameters": [
+            {
+              "model_max": 316.2277660168379,
+              "model_min": 3.1622776601683795,
+              "transform": "ph_to_hydrogen_ion",
+              "model_unit": "nmol/L",
+              "model_value": 31.62277660168379,
+              "parameter_id": "pH",
+              "binding_lower": false,
+              "binding_upper": false,
+              "reported_unit": "pH",
+              "within_limits": true,
+              "reported_value": 7.5,
+              "model_parameter_id": "hydrogen_ion_concentration_mol_l"
+            },
+            {
+              "model_max": 5.0,
+              "model_min": 0.5,
+              "transform": "identity",
+              "model_unit": "NTU",
+              "model_value": 3.5,
+              "parameter_id": "turbidity",
+              "binding_lower": false,
+              "binding_upper": false,
+              "reported_unit": "NTU",
+              "within_limits": true,
+              "reported_value": 3.5,
+              "model_parameter_id": "turbidity"
+            },
+            {
+              "model_max": 200.0,
+              "model_min": 20.0,
+              "transform": "identity",
+              "model_unit": "mg/L CaCO3",
+              "model_value": 52.0,
+              "parameter_id": "alkalinity",
+              "binding_lower": false,
+              "binding_upper": false,
+              "reported_unit": "mg/L CaCO3",
+              "within_limits": true,
+              "reported_value": 52.0,
+              "model_parameter_id": "alkalinity"
+            }
+          ],
+          "flow_ml_per_day": 10.0
+        },
+        {
+          "plant_id": "PLANT_002",
+          "parameters": [],
+          "flow_ml_per_day": 0.0
+        }
+      ]
+    },
+    "sources": [
+      {
+        "activated": false,
+        "source_id": "SRC_003",
+        "blend_ratio": 0.0,
+        "model_included": true,
+        "selection_status": "NOT_SELECTED",
+        "decision_evidence": {
+          "binding_lower": false,
+          "binding_upper": false,
+          "unit_cost_rank": 3
+        },
+        "total_source_cost": 0.0,
+        "utilisation_percent": 0.0,
+        "exclusion_reason_code": "N/A",
+        "withdrawal_ml_per_day": 0.0,
+        "variable_withdrawal_cost": 0.0
+      },
+      {
+        "activated": false,
+        "source_id": "SRC_001",
+        "blend_ratio": 0.0,
+        "model_included": true,
+        "selection_status": "NOT_SELECTED",
+        "decision_evidence": {
+          "binding_lower": false,
+          "binding_upper": false,
+          "unit_cost_rank": 2
+        },
+        "total_source_cost": 0.0,
+        "utilisation_percent": 0.0,
+        "exclusion_reason_code": "N/A",
+        "withdrawal_ml_per_day": 0.0,
+        "variable_withdrawal_cost": 0.0
+      },
+      {
+        "activated": true,
+        "source_id": "SRC_002",
+        "blend_ratio": 1.0,
+        "model_included": true,
+        "selection_status": "SELECTED",
+        "decision_evidence": {
+          "binding_lower": false,
+          "binding_upper": false,
+          "unit_cost_rank": 1
+        },
+        "total_source_cost": 3500.0,
+        "utilisation_percent": 3.125,
+        "exclusion_reason_code": "N/A",
+        "withdrawal_ml_per_day": 10.0,
+        "variable_withdrawal_cost": 3500.0
+      }
+    ],
+    "summary": {
+      "costs": {
+        "total_cost": 9300.0,
+        "cost_reconciles": true,
+        "total_plant_fixed_cost": 5000.0,
+        "total_source_fixed_cost": 0.0,
+        "reconstructed_total_cost": 9300.0,
+        "total_plant_variable_cost": 800.0,
+        "total_source_variable_cost": 3500.0
+      },
+      "active_plant_count": 1,
+      "selected_source_count": 1,
+      "total_demand_ml_per_day": 1.51,
+      "total_treated_ml_per_day": 10.0,
+      "total_delivered_ml_per_day": 10.0,
+      "total_withdrawal_ml_per_day": 10.0
+    },
+    "scenario": {
+      "status": "ready",
+      "data_source": {
+        "type": "supabase",
+        "view": "public.source_model_inputs",
+        "allow_estimated_values": true
+      },
+      "scenario_id": "SCN-005"
+    },
+    "warnings": [
+      "Source 'SRC_003' activation indicator (True) disagrees with its solved withdrawal (0 ML/day); the withdrawal value was treated as authoritative.",
+      "Source 'SRC_001' activation indicator (True) disagrees with its solved withdrawal (0 ML/day); the withdrawal value was treated as authoritative.",
+      "Plant 'PLANT_002' has no inflow; blended 'pH' quality could not be computed and was omitted.",
+      "Plant 'PLANT_002' has no inflow; blended 'turbidity' quality could not be computed and was omitted.",
+      "Plant 'PLANT_002' has no inflow; blended 'alkalinity' quality could not be computed and was omitted."
+    ],
+    "validation": {
+      "loader": {
+        "checks": [
+          {
+            "check": "loader_validation_issues_empty",
+            "passed": true,
+            "enabled": true
+          }
+        ],
+        "status": "PASSED",
+        "scenario_ready": true,
+        "validation_issues": []
+      },
+      "input_policy": {
+        "fail_if_demand_missing": true,
+        "fail_if_daily_availability_missing": true,
+        "fail_if_source_missing_from_database": true,
+        "fail_if_required_quality_value_missing": true
+      },
+      "preprocessing": {
+        "checks": [
+          {
+            "check": "model_parameters_constructed",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "capacity_feasibility_check",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "quality_feasibility_check",
+            "passed": true,
+            "enabled": true
+          }
+        ],
+        "status": "PASSED",
+        "warnings": []
+      },
+      "output_consistency": {
+        "checks": [
+          {
+            "check": "decision_values_non_negative",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "source_activation_and_withdrawal_bounds",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "plant_activation_and_throughput_bounds",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "source_flow_conservation",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "plant_flow_conservation",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "source_to_plant_link_capacity",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "plant_to_zone_link_capacity",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "demand_satisfaction",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "plant_inflow_quality_limits",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "objective_cost_reconciliation",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "summary_total_reconciliation",
+            "passed": true,
+            "enabled": true
+          },
+          {
+            "check": "reported_ids_and_arcs_match_model_parameters",
+            "passed": true,
+            "enabled": true
+          }
+        ],
+        "status": "PASSED",
+        "tolerance": 1e-06
+      }
+    },
+    "demand_zones": [
+      {
+        "zone_id": "ZONE_001",
+        "demand_satisfied": true,
+        "demand_must_be_met": true,
+        "surplus_ml_per_day": 8.49,
+        "delivered_ml_per_day": 8.8,
+        "unmet_demand_ml_per_day": 0.0
+      },
+      {
+        "zone_id": "ZONE_002",
+        "demand_satisfied": true,
+        "demand_must_be_met": true,
+        "surplus_ml_per_day": 0.0,
+        "delivered_ml_per_day": 1.2,
+        "unmet_demand_ml_per_day": 0.0
+      }
+    ],
+    "schema_version": "0.1",
+    "binding_constraints_summary": []
+  },
+  "output_hash": "edd613f6586c4c1712c93148e9520067727b1a13bf237ffebc9dd487f389b380",
+  "cache_reusable": true,
+  "forced_recompute": false,
+  "started_at": "2026-09-06T00:37:50.182637+00:00",
+  "completed_at": "2026-09-06T00:37:50.182637+00:00",
+  "updated_at": "2026-09-06T00:37:50.182637+00:00"
+}
