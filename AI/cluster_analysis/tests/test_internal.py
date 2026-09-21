@@ -69,3 +69,28 @@ def test_davies_bouldin_is_minimised():
 def test_internal_indices_declare_shape():
     assert CalinskiHarabasz.assumes_shape == "compact, isotropic"
     assert DaviesBouldin.assumes_shape == "compact, isotropic"
+
+
+def test_internal_indices_iris_benchmark():
+    from sklearn.datasets import load_iris
+    from sklearn.metrics import (
+        calinski_harabasz_score,
+        davies_bouldin_score,
+    )
+
+    # Load the Iris benchmark dataset
+    iris = load_iris()
+    X = iris.data
+    labels = iris.target
+
+    # Calculate scores using AquaBlend
+    ch_score = CalinskiHarabasz().score(X, labels)
+    db_score = DaviesBouldin().score(X, labels)
+
+    # Calculate reference scores using scikit-learn
+    expected_ch = calinski_harabasz_score(X, labels)
+    expected_db = davies_bouldin_score(X, labels)
+
+    # Verify that both implementations match
+    assert ch_score == pytest.approx(expected_ch)
+    assert db_score == pytest.approx(expected_db)
