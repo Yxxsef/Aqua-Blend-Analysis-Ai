@@ -304,7 +304,13 @@ def test_incomplete_data_clusters_without_imputation_and_ward_backend_refuses():
 
 
 def test_task40_ward_is_metric_gate_when_registered():
-    if "ward" not in REGISTRY:
+    # Filtered by kind, not by bare name: Task 31 registers a Ward *linkage
+    # criterion* under "ward" as well, and constructing that as a clusterer
+    # fails with `WardLinkage() takes no arguments` rather than skipping.
+    # What this test needs is Task 40's Ward *method*.
+    from xxcluster.core.types import ComponentKind
+
+    if "ward" not in REGISTRY.names(kind=ComponentKind.CLUSTERER):
         pytest.skip("Task 40: no registered Ward implementation; is_metric gate cannot yet be exercised.")
     X = np.array([[0., 0], [0, 1], [1, 0], [1, 1]])
     measure = Gower().fit(X)
