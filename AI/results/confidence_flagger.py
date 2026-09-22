@@ -31,22 +31,14 @@ def determine_confidence(
     selected_sources: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
-    Determine confidence from source provenance.
+    Determine confidence from ALL source provenance records.
 
-    Args:
-        provenance_sources:
-            Source provenance records from
-            results["data_flags"]["sources"].
+    The confirmed Results contract defines results["data_flags"]["sources"]
+    as the sole provenance source. Selected/unused optimisation status must
+    not affect whether an input source is estimated, measured, or unknown.
 
-        selected_sources:
-            Selected/contributing sources from
-            results["sources"]["selected"].
-
-    Returns:
-        {
-            "confidence": "PROVISIONAL | MEASURED | UNKNOWN",
-            "estimated_sources": [...]
-        }
+    selected_sources is retained only for API compatibility with existing
+    callers; it is intentionally not used for provenance classification.
     """
 
     if not isinstance(provenance_sources, list):
@@ -65,47 +57,14 @@ def determine_confidence(
             "estimated_sources": [],
         }
 
-    # Build the set of contributing source IDs.
-    selected_ids = set()
-
-    for index, source in enumerate(selected_sources):
-
-        if not isinstance(source, dict):
-            raise ConfidenceError(
-                f"Selected source at index {index} "
-                "must be an object."
-            )
-
-        source_id = source.get("source_id")
-
-        if (
-            not isinstance(source_id, str)
-            or not source_id.strip()
-        ):
-            raise ConfidenceError(
-                f"Selected source at index {index} "
-                "has an invalid source_id."
-            )
-
-        selected_ids.add(source_id)
-
-    if not selected_ids:
-        return {
-            "confidence": "UNKNOWN",
-            "estimated_sources": [],
-        }
-
-    estimated_sources = []
+    estimated_sources: list[str] = []
     unknown = False
-    matched_selected_sources = set()
 
     for index, source in enumerate(provenance_sources):
 
         if not isinstance(source, dict):
-            raise ConfidenceError(
-                f"Source at index {index} "
-                "must be an object."
-            )
+            unknown = True
+            continue
 
         source_id = source.get("source_id")
 
@@ -115,33 +74,18 @@ def determine_confidence(
         ):
             unknown = True
             continue
-
-        # Ignore provenance for sources that did not
-        # contribute to the optimisation result.
-        if source_id not in selected_ids:
-            continue
-
-        matched_selected_sources.add(source_id)
 
         estimated_flag = source.get(
             "has_estimated_values"
         )
 
-        if not isinstance(
-            estimated_flag,
-            bool,
-        ):
+        if not isinstance(estimated_flag, bool):
             unknown = True
             continue
 
-        provenance = source.get(
-            "provenance"
-        )
+        provenance = source.get("provenance")
 
-        if not isinstance(
-            provenance,
-            dict,
-        ):
+        if not isinstance(provenance, dict):
             unknown = True
             continue
 
@@ -154,18 +98,24 @@ def determine_confidence(
             unknown = True
             continue
 
+        # A required provenance key with no actual provenance value
+        # cannot confirm that source as fully measured.
+        if any(
+            provenance.get(field) is None
+            for field in REQUIRED_PROVENANCE_FIELDS
+        ):
+            unknown = True
+
         if estimated_flag:
             estimated_sources.append(source_id)
 
-    # Every selected source should have provenance.
-    if matched_selected_sources != selected_ids:
-        unknown = True
-
+    # Estimated data takes precedence even when another source has
+    # incomplete/unknown provenance.
     if estimated_sources:
         return {
             "confidence": "PROVISIONAL",
             "estimated_sources": sorted(
-                estimated_sources
+                set(estimated_sources)
             ),
         }
 
@@ -179,3 +129,4 @@ def determine_confidence(
         "confidence": "MEASURED",
         "estimated_sources": [],
     }
+
