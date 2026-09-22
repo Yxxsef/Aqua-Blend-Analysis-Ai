@@ -43,6 +43,10 @@ from model_runner import ModelConfig, load_model_config, rewrite_report
 from prompts import PROMPT_VERSION
 from results_adapter import AdapterError, adapt_results
 from results_validator import ValidationError, validate_results
+from milp_ai_contract_adapter import (
+    MilpAiContractError,
+    adapt_milp_output_for_ai,
+)
 from env import DB_URL, DB_KEY
 
 # Prefix used when a push fails, so main() can set a non-zero exit status
@@ -236,9 +240,14 @@ def run_pipeline(
 ) -> dict[str, Any]:
     """Validate and present one MILP result without mutating its input."""
     try:
+        results = adapt_milp_output_for_ai(
+            results,
+            db_url=DB_URL,
+            db_key=DB_KEY,
+        )
         validate_results(results)
         adapted_results = adapt_results(results)
-    except (ValidationError, AdapterError) as exc:
+    except (ValidationError, AdapterError, MilpAiContractError) as exc:
         return _invalid_input_response(results, f"Results validation failed: {exc}")
 
     status = results["status"]
