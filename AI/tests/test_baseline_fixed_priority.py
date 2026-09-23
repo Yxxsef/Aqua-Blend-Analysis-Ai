@@ -85,50 +85,48 @@ TOY_SCENARIO = {
         {"source_id": "yarra_kew", "enabled": True, "forced_inactive": False},
         {"source_id": "groundwater_bore_1", "enabled": True, "forced_inactive": False},
     ],
-    "network": {
-        "plants": [
-            {
-                "plant_id": "facility_1",
-                "name": "Treatment Facility 1",
-                "enabled": True,
-                "minimum_processing_capacity_ml_per_day": 0,
-                "maximum_processing_capacity_ml_per_day": 600,
-                "fixed_activation_cost": 0.0,
-                "treatment_cost_per_ml": 64,
-            }
-        ],
-        "demand_zones": [
-            {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
-        ],
-        "source_to_plant_links": [
-            {
-                "source_id": "silvan_reservoir",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 350,
-            },
-            {
-                "source_id": "yarra_kew",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 300,
-            },
-            {
-                "source_id": "groundwater_bore_1",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 60,
-            },
-        ],
-        "plant_to_zone_links": [
-            {
-                "plant_id": "facility_1",
-                "zone_id": "zone_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 600,
-            }
-        ],
-    },
+    "plants": [
+        {
+            "plant_id": "facility_1",
+            "name": "Treatment Facility 1",
+            "enabled": True,
+            "minimum_processing_capacity_ml_per_day": 0,
+            "maximum_processing_capacity_ml_per_day": 600,
+            "fixed_activation_cost": 0.0,
+            "treatment_cost_per_ml": 64,
+        }
+    ],
+    "demand_zones": [
+        {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
+    ],
+    "source_to_plant_links": [
+        {
+            "source_id": "silvan_reservoir",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 350,
+        },
+        {
+            "source_id": "yarra_kew",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 300,
+        },
+        {
+            "source_id": "groundwater_bore_1",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 60,
+        },
+    ],
+    "plant_to_zone_links": [
+        {
+            "plant_id": "facility_1",
+            "zone_id": "zone_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 600,
+        }
+    ],
 }
 
 
@@ -258,7 +256,7 @@ def test_source_outside_the_priority_order_is_drawn_last(scenario):
     scenario["sources"].append(
         {"source_id": "emergency_bore", "enabled": True, "forced_inactive": False}
     )
-    scenario["network"]["source_to_plant_links"].append(
+    scenario["source_to_plant_links"].append(
         {
             "source_id": "emergency_bore",
             "plant_id": "facility_1",
@@ -266,7 +264,7 @@ def test_source_outside_the_priority_order_is_drawn_last(scenario):
             "maximum_flow_ml_per_day": 100,
         }
     )
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 560
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 560
     result = run_fixed_priority(scenario)
     selected = selected_by_id(result)
     assert selected["silvan_reservoir"]["volume_drawn_ml_per_day"] == pytest.approx(350.0, abs=VOLUME_TOLERANCE)
@@ -279,7 +277,7 @@ def test_allocation_is_independent_of_input_order(scenario):
     reversed_scenario = copy.deepcopy(scenario)
     reversed_scenario["sources"].reverse()
     reversed_scenario["data_source"]["source_rows"].reverse()
-    reversed_scenario["network"]["source_to_plant_links"].reverse()
+    reversed_scenario["source_to_plant_links"].reverse()
     original = {s["source_id"]: s["volume_drawn_ml_per_day"] for s in run_fixed_priority(scenario)["sources"]["selected"]}
     flipped = {s["source_id"]: s["volume_drawn_ml_per_day"] for s in run_fixed_priority(reversed_scenario)["sources"]["selected"]}
     assert original == flipped
@@ -314,7 +312,7 @@ def test_tighter_capacity_changes_the_split_at_higher_demand(scenario):
     """At 660 ML/day, yarra_kew's real 290 ML/day limit (vs the documented
     300) means groundwater has to pick up the extra 10 ML."""
     set_row(scenario, "yarra_kew", max_available_ml_per_day=290)
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 660
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 660
     result = run_fixed_priority(scenario)
     selected = selected_by_id(result)
     assert selected["silvan_reservoir"]["volume_drawn_ml_per_day"] == pytest.approx(350.0, abs=VOLUME_TOLERANCE)
@@ -335,7 +333,7 @@ def test_scenario_override_beats_the_source_row(scenario):
 # ---------------------------------------------------------------------------
 def test_capacity_exhaustion_moves_through_every_source(scenario):
     """710 ML is exactly the total capacity, so all three end at their cap."""
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 710
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 710
     result = run_fixed_priority(scenario)
     assert result["feasible"] is True
     assert result["unmet_demand_ml_per_day"] == 0.0
@@ -345,7 +343,7 @@ def test_capacity_exhaustion_moves_through_every_source(scenario):
 
 def test_infeasible_when_capacity_is_below_demand(scenario):
     """Baseline_FixedPriority.md section 6: demand 800 against 710 total."""
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 800
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 800
     result = run_fixed_priority(scenario)
     assert result["status"] == "INFEASIBLE"
     assert result["feasible"] is False
@@ -363,7 +361,7 @@ def test_infeasible_when_no_source_is_usable(scenario):
 
 
 def test_zero_demand_selects_nothing(scenario):
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 0
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 0
     result = run_fixed_priority(scenario)
     assert result["feasible"] is True
     assert result["sources"]["selected"] == []
@@ -371,7 +369,7 @@ def test_zero_demand_selects_nothing(scenario):
 
 
 def test_missing_demand_is_an_error_not_an_assumption(scenario):
-    del scenario["network"]["demand_zones"][0]["demand_ml_per_day"]
+    del scenario["demand_zones"][0]["demand_ml_per_day"]
     with pytest.raises(BaselineInputError, match="demand_ml_per_day"):
         run_fixed_priority(scenario)
 
@@ -379,7 +377,7 @@ def test_missing_demand_is_an_error_not_an_assumption(scenario):
 def test_rounding_is_deferred_to_output(scenario):
     """A demand that lands mid-fraction still sums correctly, proving
     rounding happens once, on output, not mid-allocation."""
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 350 + 100 / 3
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 350 + 100 / 3
     result = run_fixed_priority(scenario)
     selected = selected_by_id(result)
     assert selected["yarra_kew"]["volume_drawn_ml_per_day"] == pytest.approx(33.3, abs=VOLUME_TOLERANCE)
@@ -412,13 +410,13 @@ def test_source_inactive_in_the_source_data_is_excluded(scenario):
 
 
 def test_disconnected_source_is_excluded(scenario):
-    scenario["network"]["source_to_plant_links"][1]["enabled"] = False
+    scenario["source_to_plant_links"][1]["enabled"] = False
     result = run_fixed_priority(scenario)
     assert "no enabled route to zone_1" in unused_by_id(result)["yarra_kew"]["reason"]
 
 
 def test_disabled_plant_disconnects_every_source(scenario):
-    scenario["network"]["plants"][0]["enabled"] = False
+    scenario["plants"][0]["enabled"] = False
     result = run_fixed_priority(scenario)
     assert result["status"] == "INFEASIBLE"
     assert all("no enabled route" in s["reason"] for s in result["sources"]["unused"])
@@ -434,20 +432,20 @@ def test_draw_below_minimum_withdrawal_is_warned_about(scenario):
 
 
 def test_plant_throughput_breach_is_warned_about(scenario):
-    scenario["network"]["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
+    scenario["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
     warnings = run_fixed_priority(scenario)["warnings"]
     assert any("above its maximum" in w for w in warnings)
 
 
 def test_contract_warnings_do_not_change_the_allocation(scenario):
     baseline = run_fixed_priority(scenario)["sources"]["selected"]
-    scenario["network"]["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
+    scenario["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
     assert run_fixed_priority(scenario)["sources"]["selected"] == baseline
 
 
 def test_activation_costs_are_included(scenario):
     scenario["sources"][0]["fixed_activation_cost"] = 500.0
-    scenario["network"]["plants"][0]["fixed_activation_cost"] = 250.0
+    scenario["plants"][0]["fixed_activation_cost"] = 250.0
     breakdown = run_fixed_priority(scenario)["objective"]["cost_breakdown"]
     assert breakdown["source_activation_cost"] == pytest.approx(500.00, abs=COST_TOLERANCE)
     assert breakdown["plant_activation_cost"] == pytest.approx(250.00, abs=COST_TOLERANCE)

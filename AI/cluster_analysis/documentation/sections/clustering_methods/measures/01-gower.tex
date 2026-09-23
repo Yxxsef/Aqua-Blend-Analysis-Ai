@@ -1,0 +1,175 @@
+% ------------------------------------------------------------------
+%  Measure: Gower dissimilarity (mixed-type dissimilarity measure).
+%  Written from template/measure_template.tex; the part order is fixed.
+%  Code counterpart: xxcluster/measures/dissimilarity/gower.py
+% ------------------------------------------------------------------
+% Existing citation keys: ref_8, ref_3, ref_32, ref_33, ref_34,
+% matching Gower._capabilities.references.
+
+\input{tables/gower-summary.tex}
+\subsubsection{Gower dissimilarity}
+\label{sec:measure:gower}
+
+\paragraph{Overview}
+\label{sec:measure:gower:overview}
+Gower dissimilarity compares observations described by numeric, nominal,
+binary and explicitly ordered features while retaining missing values.
+Each pair is compared only on its available information. This provides
+an alternative input to clustering when imputation would introduce values
+that were not measured. Algorithm choice and data suitability are broader
+clustering concerns discussed by Gatea et al.~\cite{ref_3}; the specific
+missing-data behaviour here is established by the implementation and
+experiments below. The component returns the complement of Gower's
+similarity, not its square root.
+
+\paragraph{Definition}
+\label{sec:measure:gower:definition}
+Gower (1971)~\cite{ref_32} is the original source. For two observations,
+the implemented weighted dissimilarity is
+\begin{equation}
+ d(\mathbf{x},\mathbf{y}) =
+ \frac{\displaystyle\sum_{\text{comparable features}}
+       \text{weight}\times\text{difference}}
+      {\displaystyle\sum_{\text{comparable features}}\text{weight}}.
+ \label{eq:gower:definition}
+\end{equation}
+Numeric difference is the absolute difference divided by that feature's
+observed training range. Nominal and symmetric binary differences are zero
+for equality and one otherwise. An asymmetric binary feature uses the same
+difference but excludes joint zeros from both sums. Missing observations
+also exclude the feature for that pair. Feature weights are finite,
+non-negative and not all zero; zero-weight features are inactive.
+
+The following choices complete the implementation's domain. A numeric
+feature with zero training range, or any entirely unobserved training
+column, is excluded globally. Query batches do not recompute ranges or
+reactivate columns. Numeric differences larger than the fitted range
+saturate at one, an explicit extension for new observations. A zero
+denominator raises an error for non-identical vectors. Identical vectors,
+including matching missing positions, receive zero by convention; no
+off-diagonal distance is invented for unequal vectors with no overlap.
+
+Ordinal columns require an explicit increasing sequence of levels.
+Their contribution is the difference in level positions divided by the
+number of intervals in that sequence. Unknown levels are rejected and a
+single-level feature is excluded. Equally spaced level positions are a
+modelling assumption. Podani (1999)~\cite{ref_33} distinguishes ordinal
+extensions; this implementation does not claim his empirical-rank tie
+correction.
+
+\paragraph{Properties}
+\label{sec:measure:gower:properties}
+Every returned contribution lies in $[0,1]$, so its non-negative weighted
+mean does too. Availability and contributions are symmetric, and
+$d(\mathbf{x},\mathbf{x})=0$. The declarations are therefore
+\texttt{bounded=(0.0, 1.0)} and \texttt{is\_symmetric=True}.
+However, the separation and triangle axioms of a metric~\cite{ref_8} need
+not hold when comparisons use different subsets of features: distinct
+incomplete vectors can have zero dissimilarity, and the triangle
+inequality can fail across such pairs. Consequently
+\texttt{is\_metric=False} is declared. This is a statement about the
+general supported domain; it does not assert that every complete-data
+special case fails to be metric.
+
+\paragraph{Applicability}
+\label{sec:measure:gower:applicability}
+The class declares \texttt{accepts\_missing=True} and
+\texttt{accepts\_categorical=True}, with matching capability tags. It
+accepts numeric, nominal, symmetric and asymmetric binary, and explicitly
+ordered features in any combination, with values missing at the
+per-feature level. Types are supplied per column; numeric-looking
+category codes are not silently interpreted as measurements. Binary
+values must be 0/1 or booleans. Missing sentinels are normalised without
+filling measurements; infinities, complex values and sparse matrices are
+rejected.
+
+Serving \texttt{metric="precomputed"}, it is usable by any clustering
+family that accepts a precomputed dissimilarity matrix rather than a
+feature matrix directly -- hierarchical and density-based methods among
+them -- and is not restricted to a method assuming Euclidean geometry,
+since it makes no such claim itself~\cite{ref_34}. Data with no comparable
+positive-weight information between unequal rows fall outside the
+defined domain and are refused before clustering.
+
+\paragraph{Computation and complexity}
+\label{sec:measure:gower:complexity}
+Fitting learns feature ranges and activity in $\mathcal{O}(mn)$ time.
+A square dissimilarity matrix costs $\mathcal{O}(m^2n)$ time and
+$\mathcal{O}(m^2+mn)$ space; rectangular evaluation replaces $m^2$ by the
+product of the two row counts. Dense quadratic storage is the main
+scaling constraint.
+
+\paragraph{Application to \projectname{} data}
+\label{sec:measure:gower:application}
+\placeholder{To be completed once the AquaBlend dataset is available; see the handover documentation.}
+
+\paragraph{Behaviour}
+\label{sec:measure:gower:behaviour}
+This measure accepts numeric, nominal, symmetric and asymmetric binary,
+and explicitly ordered categorical features together, with values missing
+at the per-feature level, and serves any clustering family that consumes
+a precomputed dissimilarity matrix rather than raw feature values.
+
+Independent hand calculations test numeric, categorical and weighted
+contributions. One example gives dissimilarity $0.5$ when a binary joint
+absence is counted, versus $1.0$ when it is excluded. Tests also check
+missing-weight removal, ordinal ordering, rectangular consistency,
+unchanged inputs and invariance to query-batch composition.
+All applicable scikit-learn estimator checks pass without exclusions.
+
+Selection chooses \GowerSelectedK{} clusters with Gower silhouette
+\GowerSilhouette{}. Supplementary agreement with the held-back planted
+labels is adjusted Rand index \GowerPlantedARI{}. The resampling adjusted
+Rand index has mean \GowerStabilityMean{} and sample standard deviation
+\GowerStabilitySD{}, with \GowerStabilityFailures{} failed resamples.
+These values are generated by the notebook, including the
+less-than-perfect resampling agreement. The table and figure below are
+exported outputs rather than manually reconstructed results.
+
+\begin{table}[htbp]
+ \centering
+ \caption{Gower with average linkage on the incomplete synthetic fixture.}
+ \label{tab:gower:results}
+ \input{tables/gower-results.tex}
+\end{table}
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\linewidth]{gower-evidence.png}
+ \caption{Synthetic observations ordered by the fitted partition (left)
+ and the full silhouette selection curve (right). Root seed: 42.}
+ \label{fig:gower:evidence}
+\end{figure}
+
+\paragraph{Limitations}
+\label{sec:measure:gower:limitations}
+Pair-dependent missingness can make unlike rows appear identical on the
+available information. Same-data silhouette is a selection score, not an
+independent generalisation estimate, and subsampling agreement does not
+establish stable operational regimes. Constant-feature exclusion can
+conceal new variation until refitting; range saturation discards the
+magnitude of extreme query differences. Ordinal rank spacing and binary
+absence semantics need domain justification. Dense storage limits scale.
+
+\paragraph{Summary}
+\label{sec:measure:gower:summary}
+This component provides a reproducible, bounded dissimilarity for mixed
+and incomplete observations without filling missing measurements. The
+executed fixture demonstrates precomputed average-linkage clustering and
+records non-metric behaviour and coverage limits explicitly. Operational
+validation and the Task 40 Ward guard remain separate completion checks.
+
+% REFERENCES USED
+% ref_8  Rudin (1976), Principles of Mathematical Analysis, Ch. 2.
+%        Cited in Properties for the metric axioms; counterexample computed here.
+% ref_3  Gatea et al. (2026), Clustering in Data Analysis: Comprehensive
+%        Insights into Techniques and Challenges. Bibliographic record and
+%        abstract inspected, full chapter not accessed; general context only.
+% ref_32 Gower (1971), A General Coefficient of Similarity and Some of
+%        Its Properties. Definition; primary full text inaccessible,
+%        formula also inspected in Podani p. 334.
+% ref_33 Podani (1999), Extending Gower's General Coefficient of
+%        Similarity to Ordinal Characters. Definition; author-hosted
+%        PDF, pp. 334-335; ordinal scope, not implemented tie correction.
+% ref_34 Pedregosa et al. (2011), scikit-learn. Applicability; backend
+%        precomputed route and Ward's Euclidean restriction.

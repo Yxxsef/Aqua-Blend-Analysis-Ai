@@ -93,49 +93,47 @@ TOY_SCENARIO = {
         {"source_id": "yarra_kew", "enabled": True, "forced_inactive": False},
         {"source_id": "groundwater_bore_1", "enabled": True, "forced_inactive": False},
     ],
-    "network": {
-        "plants": [
-            {
-                "plant_id": "facility_1",
-                "name": "Treatment Facility 1",
-                "enabled": True,
-                "minimum_processing_capacity_ml_per_day": 0,
-                "maximum_processing_capacity_ml_per_day": 600,
-                "treatment_cost_per_ml": 64,
-            }
-        ],
-        "demand_zones": [
-            {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
-        ],
-        "source_to_plant_links": [
-            {
-                "source_id": "silvan_reservoir",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 350,
-            },
-            {
-                "source_id": "yarra_kew",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 300,
-            },
-            {
-                "source_id": "groundwater_bore_1",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 60,
-            },
-        ],
-        "plant_to_zone_links": [
-            {
-                "plant_id": "facility_1",
-                "zone_id": "zone_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 600,
-            }
-        ],
-    },
+    "plants": [
+        {
+            "plant_id": "facility_1",
+            "name": "Treatment Facility 1",
+            "enabled": True,
+            "minimum_processing_capacity_ml_per_day": 0,
+            "maximum_processing_capacity_ml_per_day": 600,
+            "treatment_cost_per_ml": 64,
+        }
+    ],
+    "demand_zones": [
+        {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
+    ],
+    "source_to_plant_links": [
+        {
+            "source_id": "silvan_reservoir",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 350,
+        },
+        {
+            "source_id": "yarra_kew",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 300,
+        },
+        {
+            "source_id": "groundwater_bore_1",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 60,
+        },
+    ],
+    "plant_to_zone_links": [
+        {
+            "plant_id": "facility_1",
+            "zone_id": "zone_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 600,
+        }
+    ],
 }
 
 
@@ -309,7 +307,7 @@ def test_capacity_limited_single_redistribution_round(scenario):
 def test_capacity_limited_multiple_redistribution_rounds(scenario):
     """700 ML across 350/300/60 caps: groundwater caps first (60), then
     yarra_kew (300), leaving silvan_reservoir with 340."""
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 700
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 700
     result = run_equal_blend(scenario)
     selected = selected_by_id(result)
 
@@ -321,7 +319,7 @@ def test_capacity_limited_multiple_redistribution_rounds(scenario):
 
 def test_infeasible_when_capacity_is_below_demand(scenario):
     """Step 7: every source at its cap, 710 total, 90 ML unmet."""
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 800
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 800
     result = run_equal_blend(scenario)
 
     assert result["status"] == "INFEASIBLE"
@@ -343,7 +341,7 @@ def test_infeasible_when_no_source_is_usable(scenario):
 
 
 def test_zero_demand_selects_nothing(scenario):
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 0
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 0
     result = run_equal_blend(scenario)
 
     assert result["feasible"] is True
@@ -353,7 +351,7 @@ def test_zero_demand_selects_nothing(scenario):
 
 
 def test_missing_demand_is_an_error_not_an_assumption(scenario):
-    del scenario["network"]["demand_zones"][0]["demand_ml_per_day"]
+    del scenario["demand_zones"][0]["demand_ml_per_day"]
     with pytest.raises(BaselineInputError, match="demand_ml_per_day"):
         run_equal_blend(scenario)
 
@@ -386,13 +384,13 @@ def test_source_inactive_in_the_source_data_is_excluded(scenario):
 
 
 def test_disconnected_source_is_excluded(scenario):
-    scenario["network"]["source_to_plant_links"][2]["enabled"] = False
+    scenario["source_to_plant_links"][2]["enabled"] = False
     result = run_equal_blend(scenario)
     assert "no enabled route to zone_1" in unused_by_id(result)["groundwater_bore_1"]["reason"]
 
 
 def test_disabled_plant_disconnects_every_source(scenario):
-    scenario["network"]["plants"][0]["enabled"] = False
+    scenario["plants"][0]["enabled"] = False
     result = run_equal_blend(scenario)
 
     assert result["status"] == "INFEASIBLE"
@@ -408,7 +406,7 @@ def test_disabled_plant_disconnects_every_source(scenario):
 def test_rounding_is_deferred_to_output(scenario):
     """500 / 3 = 166.666... Rounding each share to 166.7 and summing would give
     500.1, so the supplied total proves the sum was taken before rounding."""
-    for link in scenario["network"]["source_to_plant_links"]:
+    for link in scenario["source_to_plant_links"]:
         link["maximum_flow_ml_per_day"] = 400
     result = run_equal_blend(scenario)
 
@@ -430,7 +428,7 @@ def test_output_order_follows_the_scenario(scenario):
 def test_allocation_is_independent_of_source_order(scenario):
     reversed_scenario = copy.deepcopy(scenario)
     reversed_scenario["sources"].reverse()
-    reversed_scenario["network"]["source_to_plant_links"].reverse()
+    reversed_scenario["source_to_plant_links"].reverse()
 
     original = {s["source_id"]: s["volume_drawn_ml_per_day"] for s in run_equal_blend(scenario)["sources"]["selected"]}
     flipped = {s["source_id"]: s["volume_drawn_ml_per_day"] for s in run_equal_blend(reversed_scenario)["sources"]["selected"]}
@@ -468,7 +466,7 @@ def test_draw_below_minimum_withdrawal_is_warned_about(scenario):
 
 
 def test_plant_throughput_breach_is_warned_about(scenario):
-    scenario["network"]["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
+    scenario["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
     warnings = run_equal_blend(scenario)["warnings"]
     assert any("above its maximum" in w for w in warnings)
 
@@ -476,7 +474,7 @@ def test_plant_throughput_breach_is_warned_about(scenario):
 def test_contract_warnings_do_not_change_the_allocation(scenario):
     """Warnings report; they never quietly rewrite the approved rule."""
     baseline = run_equal_blend(scenario)["sources"]["selected"]
-    scenario["network"]["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
+    scenario["plants"][0]["maximum_processing_capacity_ml_per_day"] = 400
     assert run_equal_blend(scenario)["sources"]["selected"] == baseline
 
 
