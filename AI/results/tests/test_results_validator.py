@@ -40,6 +40,16 @@ def test_missing_required_field(field):
     with pytest.raises(ValidationError):
         validate_results(results)
 
+def test_unbounded_status_is_valid():
+    results = valid_results()
+
+    results["status"] = "UNBOUNDED"
+
+    assert validate_results(results) is True
+
+
+def test_missing_required_field():
+    results = valid_results()
 
 def test_invalid_root_type():
     with pytest.raises(ValidationError):

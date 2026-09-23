@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.1-draft",
+  "contract_version": "0.2-draft",
   "scenario_id": "scenario_2026_07_17_001",
   "solver_status": "OPTIMAL",
   "kpis": {
@@ -13,7 +13,25 @@
   "confidence_flag": "UNKNOWN",
   "comparison": null,
   "report_mode": "TEMPLATE_FALLBACK",
-  "display_explanation": "An optimal solution was found for scenario_2026_07_17_001. Total cost is AUD 184150.00 for one representative day, and 500 ML/day is supplied against 500 ML/day of required demand.",
+  "executive_summary": "Scenario scenario_2026_07_17_001: solver status OPTIMAL, 500 of 500 ML/day demand supplied, total cost $184,150 AUD. Largest contributor Yarra River, Kew at 58.0% of the blend.",
+  "detailed_explanation": "## Scenario & Solver Status\n\nScenario: scenario_2026_07_17_001. Solver status: OPTIMAL.\n\n## Prototype Disclaimer\n\nAquaBlend is a public-data decision-support proof-of-concept. This report does not replace qualified operators, engineers, regulators, or health authorities.",
+  "visualization_data": {
+    "blend_ratios": [
+      { "source": "Yarra River, Kew", "volume_ml_day": 290.0, "share_pct": 58.0 },
+      { "source": "Silvan Reservoir", "volume_ml_day": 210.0, "share_pct": 42.0 }
+    ],
+    "cost_breakdown": [
+      { "category": "Source draw cost", "amount_aud": 152150.0 },
+      { "category": "Plant treatment cost", "amount_aud": 32000.0 }
+    ],
+    "quality_margins": [
+      { "plant_id": "facility_1", "parameter": "alkalinity", "value": 38.04, "limit_min": 20, "limit_max": 100, "margin_pct": 22.6, "status": "PASS" }
+    ],
+    "solution_costs": [
+      { "solution": "Optimal", "amount_aud": 184150.0 }
+    ]
+  },
+  "display_explanation": "Scenario scenario_2026_07_17_001: solver status OPTIMAL, 500 of 500 ML/day demand supplied, total cost $184,150 AUD. Largest contributor Yarra River, Kew at 58.0% of the blend.",
   "warnings": [
     "One or more source inputs contain estimated values; interpret the result and confidence flag accordingly.",
     "Source activation cost is currently structurally zero in the model input path and should not be interpreted as a confirmed real-world zero cost.",
