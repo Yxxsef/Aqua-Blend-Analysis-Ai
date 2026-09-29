@@ -15,6 +15,12 @@ sys.path.insert(0, str(REPO_ROOT / "AI" / "evaluation"))
 from batch_runner import (  # noqa: E402
     MOCK,
     MILP,
+    INGEST,
+    find_output_file,
+    SCHEMA_TOY,
+    SCHEMA_V1,
+    V1_FIXTURE,
+    detect_schema,
     OptimiserError,
     get_optimiser_result,
     run_batch,
@@ -45,9 +51,10 @@ from batch_runner import (  # noqa: E402
     write_run,
 )
 def test_mock_mode_returns_a_results_json():
-    result = get_optimiser_result({}, MOCK)
+    result, source = get_optimiser_result({}, MOCK)
     assert result["scenario_id"]
     assert result["status"]
+    assert source is None
 
 
 def test_milp_mode_is_not_wired_up_yet():
@@ -213,3 +220,266 @@ def test_csv_row_width_matches_header_when_not_comparable(tmp_path):
     assert len(row) == len(header)
     assert row[header.index("scenario_reason")] == comparison["comparisons"][0]["reason"]
     assert row[header.index("gate")] == ""
+
+# --- schema detection -----------------------------------------------------
+
+def test_v1_fixture_is_detected_as_milp_v1():
+    result, _ = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    assert detect_schema(result) == SCHEMA_V1
+
+
+def test_toy_fixture_is_detected_as_toy():
+    result, _ = get_optimiser_result({}, MOCK)
+    assert detect_schema(result) == SCHEMA_TOY
+
+
+def test_v1_fixture_is_a_solved_run():
+    """The v1 fixture must be solved, or it cannot test value-level behaviour."""
+    result, _ = get_optimiser_result({}, MOCK, V1_FIXTURE)
+    assert result["solver"]["status"] == "OPTIMAL"
+    assert result["solver"]["objective_value"] is not None
+
+
+# --- v1 payloads must not take the run down --------------------------------
+
+def test_v1_scenario_still_returns_a_result():
+    """A schema the KPI layer cannot read yet must not raise out of run_scenario."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["schema"] == SCHEMA_V1
+    assert result["scenario_id"]
+
+
+def test_v1_run_survives_an_optimiser_that_cannot_be_evaluated():
+    """The three baselines stay comparable even when the optimiser entry fails."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    evaluations = result["evaluations"]
+
+    assert set(evaluations) == {
+        "optimiser",
+        "equal_blend",
+        "cheapest_first",
+        "fixed_priority",
+    }
+    for name in ("equal_blend", "cheapest_first", "fixed_priority"):
+        assert evaluations[name]["gate"] is not None
+
+
+def test_v1_failure_is_recorded_not_swallowed():
+    """A failure must name what broke, so the owning task can act on it."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["unsupported"]
+    assert any("56" in note for note in result["unsupported"])
+
+
+def test_toy_path_keeps_the_flagger_and_records_what_it_lost():
+    """Task 56 moved the validator and adapter to v1.0, so toy no longer has them.
+
+    The flagger still accepts the Sprint 2 provenance shape, so it still runs.
+    What is missing is recorded rather than silently dropped.
+    """
+    result = run_scenario(NORMAL, MOCK)
+    assert result["schema"] == SCHEMA_TOY
+    assert result["confidence"] is not None
+    assert result["adapted_optimiser_result"] is None
+    assert any(
+        "validator and adapter skipped" in entry
+        for entry in result["unsupported"]
+    )
+
+
+def test_v1_path_runs_the_task_57_flagger_and_says_why_it_is_unknown():
+    """v1.0 has the validator, the adapter and, since Task 57, the flagger.
+
+    The scenario file carries no provenance, so confidence is UNKNOWN, and the
+    run says so rather than presenting it as a measured result.
+    """
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["schema"] == SCHEMA_V1
+    assert result["adapted_optimiser_result"] is not None
+    assert result["confidence"] == {"confidence": "UNKNOWN", "estimated_sources": []}
+    assert any(
+        "Supabase source view" in entry
+        for entry in result["unsupported"]
+    )
+    assert not any("Task 57 pending" in entry for entry in result["unsupported"])
+
+
+def _full_provenance():
+    return {
+        "storage_capacity": "measured",
+        "reference_flow": "measured",
+        "minimum_withdrawal": "measured",
+        "maximum_withdrawal": "measured",
+        "cost": "measured",
+        "quality.ph": "measured",
+    }
+
+
+def _v1_with_provenance(estimated_ids):
+    """Run the v1.0 fixture against the normal scenario with provenance added."""
+    from batch_runner import _v1_confidence
+
+    scenario = json.loads(NORMAL.read_text())
+    for source in scenario["sources"]:
+        source["has_estimated_values"] = source["source_id"] in estimated_ids
+        source["provenance"] = _full_provenance()
+    notes: list[str] = []
+    confidence = _v1_confidence(scenario, json.loads(V1_FIXTURE.read_text()), notes)
+    return confidence, notes
+
+
+def test_v1_confidence_is_provisional_when_a_contributing_source_is_estimated():
+    confidence, notes = _v1_with_provenance({"silvan_reservoir"})
+    assert confidence == {
+        "confidence": "PROVISIONAL",
+        "estimated_sources": ["silvan_reservoir"],
+    }
+    assert notes == []
+
+
+def test_v1_confidence_is_measured_when_every_contributing_source_is_confirmed():
+    confidence, notes = _v1_with_provenance(set())
+    assert confidence == {"confidence": "MEASURED", "estimated_sources": []}
+    assert notes == []
+
+
+def test_v1_records_that_the_kpi_layer_is_unmapped():
+    """An N/A from an unmapped KPI must not read as a measured N/A."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert any(
+        "KPI layer not mapped" in entry
+        for entry in result["unsupported"]
+    )
+
+
+# --- scenario context ------------------------------------------------------
+
+def test_scenario_context_carries_the_capacities_v1_dropped():
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    context = result["scenario_context"]
+    assert context["source_to_plant_capacity"]["yarra_kew->facility_1"] == 300
+    assert context["plants"]["facility_1"]["maximum_processing_capacity_ml_per_day"] == 600
+    assert context["demand"]["zone_1"] == 500
+
+
+def test_scenario_context_names_what_it_cannot_supply():
+    """Source bounds and costs live in Supabase — the gap must be stated, not implied."""
+    result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
+    assert result["scenario_context"]["unavailable"]
+
+
+# --- ingest mode -----------------------------------------------------------
+
+def _drop_output(directory, scenario_id, filename="milp_run_output.json"):
+    """Write the solved v1 fixture into directory, under the given scenario id."""
+    payload = json.loads(Path(V1_FIXTURE).read_text())
+    payload["scenario"]["scenario_id"] = scenario_id
+    target = Path(directory) / filename
+    target.write_text(json.dumps(payload, indent=2))
+    return target
+
+
+def test_a_correctly_named_file_with_the_wrong_id_is_not_used(tmp_path):
+    """The filename is a hint. A file that declares another scenario is not ours."""
+    _drop_output(
+        tmp_path,
+        "some_other_scenario",
+        filename="toy_model_normal_year.json",
+    )
+
+    with pytest.raises(OptimiserError) as excinfo:
+        find_output_file("toy_model_normal_year", tmp_path)
+
+    assert "some_other_scenario" in str(excinfo.value)
+
+
+def test_the_right_id_wins_over_the_matching_filename(tmp_path):
+    """A misnamed file holding our scenario is preferred over a misleading name."""
+    _drop_output(
+        tmp_path,
+        "some_other_scenario",
+        filename="toy_model_normal_year.json",
+    )
+    correct = _drop_output(
+        tmp_path,
+        "toy_model_normal_year",
+        filename="milp_run_output.json",
+    )
+
+    assert find_output_file("toy_model_normal_year", tmp_path) == correct
+
+
+def test_ingest_reads_the_real_output_file(tmp_path):
+    _drop_output(tmp_path, "toy_model_normal_year")
+    result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
+
+    assert result["schema"] == SCHEMA_V1
+    assert result["raw_optimiser_result"]["solver"]["status"] == "OPTIMAL"
+
+
+def test_ingest_records_which_file_it_read(tmp_path):
+    """The manifest has to say where a number came from, not just what it was."""
+    dropped = _drop_output(tmp_path, "toy_model_normal_year")
+    result = run_scenario(NORMAL, INGEST, ingest_dir=tmp_path)
+
+    assert result["optimiser_source"] == str(dropped)
+    assert "_ingested_from" not in result["raw_optimiser_result"]
+
+
+def test_ingest_matches_on_scenario_id_not_filename(tmp_path):
+    """Optimisation names its own files, so the join is on scenario_id."""
+    _drop_output(tmp_path, "toy_model_normal_year", filename="whatever_they_called_it.json")
+    found = find_output_file("toy_model_normal_year", tmp_path)
+
+    assert found.name == "whatever_they_called_it.json"
+
+
+def test_ingest_prefers_a_file_named_after_the_scenario(tmp_path):
+    _drop_output(tmp_path, "toy_model_normal_year", filename="toy_model_normal_year.json")
+    _drop_output(tmp_path, "toy_model_normal_year", filename="another_run.json")
+    found = find_output_file("toy_model_normal_year", tmp_path)
+
+    assert found.name == "toy_model_normal_year.json"
+
+
+def test_ingest_says_which_scenario_had_no_output(tmp_path):
+    """A silent skip would look like a passing run with nothing in it."""
+    _drop_output(tmp_path, "some_other_scenario")
+
+    with pytest.raises(OptimiserError) as error:
+        find_output_file("toy_model_normal_year", tmp_path)
+    assert "toy_model_normal_year" in str(error.value)
+
+
+def test_ingest_reports_a_missing_directory(tmp_path):
+    with pytest.raises(OptimiserError):
+        find_output_file("toy_model_normal_year", tmp_path / "not_there")
+
+
+def test_ingest_ignores_unreadable_files(tmp_path):
+    """A stray or half-written file must not stop the real one being found."""
+    (tmp_path / "broken.json").write_text("{ not json")
+    _drop_output(tmp_path, "toy_model_normal_year")
+
+    found = find_output_file("toy_model_normal_year", tmp_path)
+    assert found.name == "milp_run_output.json"
+
+
+def test_solver_mode_points_at_ingest(tmp_path):
+    """The harness ingests output files; it does not run the solver."""
+    with pytest.raises(NotImplementedError) as error:
+        get_optimiser_result({}, MILP)
+    assert "ingest" in str(error.value)
+
+
+def test_scenario_context_still_reads_the_pre_task_92_network_wrapper():
+    """Task 92 flattened the scenario layout; older files nest it under "network"."""
+    from batch_runner import build_scenario_context
+
+    flat = json.loads(NORMAL.read_text())
+    keys = ("plants", "demand_zones", "source_to_plant_links", "plant_to_zone_links")
+    wrapped = {key: value for key, value in flat.items() if key not in keys}
+    wrapped["network"] = {key: flat[key] for key in keys}
+
+    assert build_scenario_context(wrapped) == build_scenario_context(flat)
+    assert build_scenario_context(wrapped)["source_to_plant_capacity"]["yarra_kew->facility_1"] == 300
