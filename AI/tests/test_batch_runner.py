@@ -274,8 +274,8 @@ def test_v1_failure_is_recorded_not_swallowed():
 def test_toy_path_keeps_the_flagger_and_records_what_it_lost():
     """Task 56 moved the validator and adapter to v1.0, so toy no longer has them.
 
-    The flagger is the one component still reading toy provenance, so it still
-    runs. What is missing is recorded rather than silently dropped.
+    The flagger still accepts the Sprint 2 provenance shape, so it still runs.
+    What is missing is recorded rather than silently dropped.
     """
     result = run_scenario(NORMAL, MOCK)
     assert result["schema"] == SCHEMA_TOY
@@ -287,16 +287,60 @@ def test_toy_path_keeps_the_flagger_and_records_what_it_lost():
     )
 
 
-def test_v1_path_validates_and_adapts_and_records_the_missing_flagger():
-    """The mirror of the toy case: v1.0 has the validator and adapter, not the flagger."""
+def test_v1_path_runs_the_task_57_flagger_and_says_why_it_is_unknown():
+    """v1.0 has the validator, the adapter and, since Task 57, the flagger.
+
+    The scenario file carries no provenance, so confidence is UNKNOWN, and the
+    run says so rather than presenting it as a measured result.
+    """
     result = run_scenario(NORMAL, MOCK, V1_FIXTURE)
     assert result["schema"] == SCHEMA_V1
     assert result["adapted_optimiser_result"] is not None
-    assert result["confidence"] is None
+    assert result["confidence"] == {"confidence": "UNKNOWN", "estimated_sources": []}
     assert any(
-        "confidence flagger skipped" in entry
+        "Supabase source view" in entry
         for entry in result["unsupported"]
     )
+    assert not any("Task 57 pending" in entry for entry in result["unsupported"])
+
+
+def _full_provenance():
+    return {
+        "storage_capacity": "measured",
+        "reference_flow": "measured",
+        "minimum_withdrawal": "measured",
+        "maximum_withdrawal": "measured",
+        "cost": "measured",
+        "quality.ph": "measured",
+    }
+
+
+def _v1_with_provenance(estimated_ids):
+    """Run the v1.0 fixture against the normal scenario with provenance added."""
+    from batch_runner import _v1_confidence
+
+    scenario = json.loads(NORMAL.read_text())
+    for source in scenario["sources"]:
+        source["has_estimated_values"] = source["source_id"] in estimated_ids
+        source["provenance"] = _full_provenance()
+    notes: list[str] = []
+    confidence = _v1_confidence(scenario, json.loads(V1_FIXTURE.read_text()), notes)
+    return confidence, notes
+
+
+def test_v1_confidence_is_provisional_when_a_contributing_source_is_estimated():
+    confidence, notes = _v1_with_provenance({"silvan_reservoir"})
+    assert confidence == {
+        "confidence": "PROVISIONAL",
+        "estimated_sources": ["silvan_reservoir"],
+    }
+    assert notes == []
+
+
+def test_v1_confidence_is_measured_when_every_contributing_source_is_confirmed():
+    confidence, notes = _v1_with_provenance(set())
+    assert confidence == {"confidence": "MEASURED", "estimated_sources": []}
+    assert notes == []
 
 
 def test_v1_records_that_the_kpi_layer_is_unmapped():
@@ -426,3 +470,16 @@ def test_solver_mode_points_at_ingest(tmp_path):
     with pytest.raises(NotImplementedError) as error:
         get_optimiser_result({}, MILP)
     assert "ingest" in str(error.value)
+
+
+def test_scenario_context_still_reads_the_pre_task_92_network_wrapper():
+    """Task 92 flattened the scenario layout; older files nest it under "network"."""
+    from batch_runner import build_scenario_context
+
+    flat = json.loads(NORMAL.read_text())
+    keys = ("plants", "demand_zones", "source_to_plant_links", "plant_to_zone_links")
+    wrapped = {key: value for key, value in flat.items() if key not in keys}
+    wrapped["network"] = {key: flat[key] for key in keys}
+
+    assert build_scenario_context(wrapped) == build_scenario_context(flat)
+    assert build_scenario_context(wrapped)["source_to_plant_capacity"]["yarra_kew->facility_1"] == 300

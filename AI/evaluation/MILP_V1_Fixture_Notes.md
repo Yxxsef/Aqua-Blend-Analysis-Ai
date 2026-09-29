@@ -37,9 +37,10 @@ below is the answer: the margin has to be recomputed by us, in model space.
 
 The rest of his questions still need the MILP team. In particular questions 1 and
 2 — where per-field provenance lives in v1.0, and whether diagnostics were dropped
-on purpose — cannot be answered from our side. Question 1 blocks Task 57, since
-`confidence_flagger.py` reads `results["data_flags"]["sources"]`, which no longer
-exists.
+on purpose — cannot be answered from our side. Question 1 was blocking Task 57.
+Task 57 has since merged: the flagger now joins the MILP source decisions to
+ScenarioData provenance on `source_id` instead of reading
+`results["data_flags"]["sources"]`, and the batch runner uses it on v1.0 runs.
 
 ## 3. The pH margin problem
 

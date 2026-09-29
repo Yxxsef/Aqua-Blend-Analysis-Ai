@@ -1,6 +1,6 @@
 {
-  "run_id": "20260917T013352Z",
-  "generated_at_utc": "2026-09-17T01:33:52.119570+00:00",
+  "run_id": "20260929T034828Z",
+  "generated_at_utc": "2026-09-29T03:48:28.673113+00:00",
   "mode": "mock",
   "mock_fixture": "AI/evaluation/fixtures/milp_v1_solved_example.json",
   "ingest_dir": null,
@@ -18,7 +18,7 @@
       "schema": "milp_v1",
       "source": null,
       "unsupported": [
-        "milp_v1: confidence flagger skipped \u2014 it reads data_flags.sources, which v1.0 does not carry (Task 56 note 1; Task 57 pending)",
+        "milp_v1: confidence is UNKNOWN because the scenario file carries no has_estimated_values or provenance \u2014 they are held in the Supabase source view (Task 57)",
         "milp_v1: KPI layer not mapped to the v1.0 contract \u2014 feasibility, demand satisfaction, minimum safety margin and quality violations all read toy fields, so their results are unmapped rather than measured. The margin and cost mappings are undefined in v1.0 (Task 56 notes 5 and 8)."
       ],
       "raw_output": "raw/scenario_2026_07_17_high_demand.json",
@@ -32,7 +32,7 @@
       "schema": "milp_v1",
       "source": null,
       "unsupported": [
-        "milp_v1: confidence flagger skipped \u2014 it reads data_flags.sources, which v1.0 does not carry (Task 56 note 1; Task 57 pending)",
+        "milp_v1: confidence is UNKNOWN because the scenario file carries no has_estimated_values or provenance \u2014 they are held in the Supabase source view (Task 57)",
         "milp_v1: KPI layer not mapped to the v1.0 contract \u2014 feasibility, demand satisfaction, minimum safety margin and quality violations all read toy fields, so their results are unmapped rather than measured. The margin and cost mappings are undefined in v1.0 (Task 56 notes 5 and 8)."
       ],
       "raw_output": "raw/scenario_2026_07_17_plant_outage.json",
@@ -46,7 +46,7 @@
       "schema": "milp_v1",
       "source": null,
       "unsupported": [
-        "milp_v1: confidence flagger skipped \u2014 it reads data_flags.sources, which v1.0 does not carry (Task 56 note 1; Task 57 pending)",
+        "milp_v1: confidence is UNKNOWN because the scenario file carries no has_estimated_values or provenance \u2014 they are held in the Supabase source view (Task 57)",
         "milp_v1: KPI layer not mapped to the v1.0 contract \u2014 feasibility, demand satisfaction, minimum safety margin and quality violations all read toy fields, so their results are unmapped rather than measured. The margin and cost mappings are undefined in v1.0 (Task 56 notes 5 and 8)."
       ],
       "raw_output": "raw/toy_model_dry_year.json",
@@ -60,7 +60,7 @@
       "schema": "milp_v1",
       "source": null,
       "unsupported": [
-        "milp_v1: confidence flagger skipped \u2014 it reads data_flags.sources, which v1.0 does not carry (Task 56 note 1; Task 57 pending)",
+        "milp_v1: confidence is UNKNOWN because the scenario file carries no has_estimated_values or provenance \u2014 they are held in the Supabase source view (Task 57)",
         "milp_v1: KPI layer not mapped to the v1.0 contract \u2014 feasibility, demand satisfaction, minimum safety margin and quality violations all read toy fields, so their results are unmapped rather than measured. The margin and cost mappings are undefined in v1.0 (Task 56 notes 5 and 8)."
       ],
       "raw_output": "raw/toy_model_normal_year.json",

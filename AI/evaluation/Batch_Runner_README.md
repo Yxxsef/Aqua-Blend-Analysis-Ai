@@ -117,18 +117,22 @@ comparable. It is not a real solve. See `MILP_V1_Fixture_Notes.md`.
 from, because once real output arrives the harness receives whatever the
 optimiser sends. v1.0 is identified by its `schema_version` key.
 
-No schema has the full pipeline. Task 56 moved the validator and adapter to
-the v1.0 contract, while the confidence flagger still reads toy provenance
-(Task 57, not merged). Each component is therefore chosen on its own, not as
-a schema pair.
+Task 56 moved the validator and adapter to the v1.0 contract, and Task 57
+moved the confidence flagger. Each component is still chosen on its own, not
+as a schema pair.
 
-A v1.0 payload is validated and adapted, and skips the confidence flagger:
-it reads `data_flags.sources`, which v1.0 does not carry (Task 56 note 1).
-`confidence` comes back as `None`.
+A v1.0 payload is validated, adapted and run through the confidence flagger.
+v1.0 carries no provenance, so the flagger joins the MILP `sources` decisions
+to the scenario's source records on `source_id`, and reads
+`has_estimated_values` and `provenance` from the scenario side. The scenario
+files only select sources — those fields live in the Supabase source view — so
+from files alone `confidence` is `UNKNOWN`, and the run says why in
+`unsupported`. Scenario sources that do carry the fields give `MEASURED` or
+`PROVISIONAL` as normal.
 
-A toy payload runs the confidence flagger, and skips the validator and
-adapter: no toy path remains in either. `adapted_optimiser_result` comes
-back as `None`.
+A toy payload runs the confidence flagger on its Sprint 2 provenance, and
+skips the validator and adapter: no toy path remains in either.
+`adapted_optimiser_result` comes back as `None`.
 
 The KPI layer reads toy fields on both paths. On a v1.0 payload, minimum
 safety margin and quality violations raise and are caught per run, while

@@ -28,7 +28,7 @@ from scenario_validator import validate_scenario  # noqa: E402
 from baseline_runner import run_all_baselines  # noqa: E402
 from results_validator import validate_results  # noqa: E402
 from results_adapter import adapt_results  # noqa: E402
-from confidence_flagger import determine_confidence  # noqa: E402
+from confidence_flagger import ConfidenceError, determine_confidence  # noqa: E402
 from kpi_gate import evaluate  # noqa: E402
 
 MOCK = "mock"
@@ -198,7 +198,10 @@ def build_scenario_context(scenario: dict[str, Any]) -> dict[str, Any]:
     "source->plant" strings rather than tuples so the context stays JSON
     serialisable for the run manifest.
     """
-    network = scenario.get("network", {})
+    # Task 92 flattened the scenario layout: plants, demand_zones and the link
+    # lists now sit at the top level. Older files kept them under "network", so
+    # fall back to that wrapper rather than silently returning empty context.
+    network = scenario.get("network") or scenario
 
     unavailable = [
         "source withdrawal bounds — held in the Supabase source view, not the "
@@ -252,6 +255,40 @@ def _evaluate_one(result: dict[str, Any]) -> dict[str, Any]:
     return {"kpis": report.as_dict(), "gate": _gate_as_dict(gate)}
 
 
+def _v1_confidence(
+    scenario: dict[str, Any],
+    raw_results: dict[str, Any],
+    unsupported: list[str],
+) -> dict[str, Any] | None:
+    """Run the Task 57 confidence flagger on a v1.0 result.
+
+    The flagger joins the MILP source decisions to ScenarioData source records
+    on source_id, and reads has_estimated_values and provenance from the
+    scenario side. The scenario files only select sources; those two fields
+    are held in the Supabase source view. From a file alone, then, confidence
+    comes back UNKNOWN, which the flagger treats as a valid state. If the
+    scenario sources do carry the fields, they are used as they are.
+    """
+    scenario_sources = scenario.get("sources", [])
+    try:
+        confidence = determine_confidence(scenario_sources, raw_results.get("sources", []))
+    except ConfidenceError as exc:
+        unsupported.append(f"{SCHEMA_V1}: confidence could not be determined: {exc}")
+        return None
+
+    carries_provenance = any(
+        isinstance(source, dict) and "has_estimated_values" in source
+        for source in scenario_sources
+    )
+    if not carries_provenance:
+        unsupported.append(
+            f"{SCHEMA_V1}: confidence is {confidence['confidence']} because the "
+            "scenario file carries no has_estimated_values or provenance — "
+            "they are held in the Supabase source view (Task 57)"
+        )
+    return confidence
+
+
 def run_scenario(
     scenario_path: str | Path,
     mode: str = MOCK,
@@ -277,18 +314,13 @@ def run_scenario(
     schema = detect_schema(raw_results)
     unsupported: list[str] = []
 
-    # Task 56 moved the validator and adapter to v1.0; the confidence flagger
-    # still reads the toy provenance fields (Task 57, PR #54, not merged). So
-    # the components are chosen one at a time rather than as a schema pair.
+    # Task 56 moved the validator and adapter to v1.0, and Task 57 moved the
+    # confidence flagger: v1.0 carries no provenance, so the flagger joins the
+    # MILP source decisions to the scenario's source records on source_id.
     if schema == SCHEMA_V1:
         validate_results(raw_results)
         adapted = adapt_results(raw_results)
-        confidence = None
-        unsupported.append(
-            f"{schema}: confidence flagger skipped — it reads "
-            "data_flags.sources, which v1.0 does not carry "
-            "(Task 56 note 1; Task 57 pending)"
-        )
+        confidence = _v1_confidence(scenario, raw_results, unsupported)
         # The KPI layer still reads toy fields. Two KPIs raise and are caught
         # per run; the other two return N/A, which is indistinguishable from a
         # real N/A unless it is said plainly here.
