@@ -21,3 +21,5 @@ for time-series dissimilarities such as DTW.
 """
 
 from __future__ import annotations
+
+from .gower import Gower

@@ -45,7 +45,9 @@ class ScenarioValidator:
 
     TOP_LEVEL_REQUIRED = {
         "scenario_id", "scenario_name", "data_source",
-        "sources", "network", "quality_limits",
+        "sources", "plants", "demand_zones",
+        "source_to_plant_links", "plant_to_zone_links",
+        "quality_limits",
     }
     TOP_LEVEL_ALLOWED = TOP_LEVEL_REQUIRED | {
         "status", "description", "validation", "treatment",
@@ -64,10 +66,6 @@ class ScenarioValidator:
         "source_id", "enabled", "forced_inactive",
         "minimum_withdrawal_ml_per_day",
         "max_available_ml_per_day_override",
-    }
-    NETWORK_REQUIRED = {
-        "plants", "demand_zones",
-        "source_to_plant_links", "plant_to_zone_links",
     }
     PLANT_ALLOWED = {
         "plant_id", "name", "enabled",
@@ -105,24 +103,24 @@ class ScenarioValidator:
     ALLOWED_CHANGE_PATHS = {
         "NORMAL": set(),
         "DRY_YEAR": {
-            "network.source_to_plant_links[source_id=silvan_reservoir,plant_id=facility_1].maximum_flow_ml_per_day",
-            "network.source_to_plant_links[source_id=yarra_kew,plant_id=facility_1].maximum_flow_ml_per_day",
-            "network.source_to_plant_links[source_id=groundwater_bore_1,plant_id=facility_1].maximum_flow_ml_per_day",
+            "source_to_plant_links[source_id=silvan_reservoir,plant_id=facility_1].maximum_flow_ml_per_day",
+            "source_to_plant_links[source_id=yarra_kew,plant_id=facility_1].maximum_flow_ml_per_day",
+            "source_to_plant_links[source_id=groundwater_bore_1,plant_id=facility_1].maximum_flow_ml_per_day",
         },
         "HIGH_DEMAND": {
-            "network.demand_zones[zone_id=zone_1].demand_ml_per_day",
+            "demand_zones[zone_id=zone_1].demand_ml_per_day",
         },
         "PLANT_OUTAGE": {
-            "network.plants[plant_id=facility_1].enabled",
+            "plants[plant_id=facility_1].enabled",
         },
     }
 
     IDENTITY_FIELDS_BY_PATH = {
         "sources": ("source_id",),
-        "network.plants": ("plant_id",),
-        "network.demand_zones": ("zone_id",),
-        "network.source_to_plant_links": ("source_id", "plant_id"),
-        "network.plant_to_zone_links": ("plant_id", "zone_id"),
+        "plants": ("plant_id",),
+        "demand_zones": ("zone_id",),
+        "source_to_plant_links": ("source_id", "plant_id"),
+        "plant_to_zone_links": ("plant_id", "zone_id"),
     }
 
     EXPECTED_DRY_YEAR_LINK_CAPACITIES = {
@@ -170,7 +168,14 @@ class ScenarioValidator:
         self._validate_data_source(scenario.get("data_source"), errors)
         self._validate_validation_block(scenario.get("validation"), errors)
         source_ids = self._validate_sources(scenario.get("sources"), errors)
-        self._validate_network(scenario.get("network"), source_ids, errors)
+        plant_ids = self._validate_plants(scenario.get("plants"), errors)
+        zone_ids = self._validate_demand_zones(scenario.get("demand_zones"), errors)
+        self._validate_source_to_plant_links(
+            scenario.get("source_to_plant_links"), source_ids, plant_ids, errors
+        )
+        self._validate_plant_to_zone_links(
+            scenario.get("plant_to_zone_links"), plant_ids, zone_ids, errors
+        )
         self._validate_quality_limits(scenario.get("quality_limits"), errors)
         self._validate_treatment(scenario.get("treatment"), errors)
 
@@ -206,9 +211,7 @@ class ScenarioValidator:
         if not connectivity["all_required_zones_reachable"]:
             warnings.append(connectivity["message"])
 
-        for plant in self._safe_list(
-            scenario.get("network", {}).get("plants", [])
-        ):
+        for plant in self._safe_list(scenario.get("plants", [])):
             if (
                 isinstance(plant, Mapping)
                 and "minimum_processing_capacity_ml_per_day" not in plant
@@ -271,7 +274,6 @@ class ScenarioValidator:
             "data_source": Mapping,
             "validation": Mapping,
             "sources": list,
-            "network": Mapping,
             "quality_limits": Mapping,
             "treatment": Mapping,
         }
@@ -375,45 +377,17 @@ class ScenarioValidator:
         self._add_duplicate_errors(ids, "source_id", errors)
         return set(ids)
 
-    def _validate_network(
-        self,
-        value: Any,
-        source_ids: set[str],
-        errors: list[str],
-    ) -> None:
-        if not isinstance(value, Mapping):
-            return
-
-        self._validate_object_fields(
-            value,
-            required=self.NETWORK_REQUIRED,
-            allowed=self.NETWORK_REQUIRED,
-            path="network",
-            errors=errors,
-        )
-
-        plant_ids = self._validate_plants(value.get("plants"), errors)
-        zone_ids = self._validate_demand_zones(value.get("demand_zones"), errors)
-        self._validate_source_to_plant_links(
-            value.get("source_to_plant_links"),
-            source_ids, plant_ids, errors
-        )
-        self._validate_plant_to_zone_links(
-            value.get("plant_to_zone_links"),
-            plant_ids, zone_ids, errors
-        )
-
     def _validate_plants(self, value: Any, errors: list[str]) -> set[str]:
         if not isinstance(value, list):
             if value is not None:
-                errors.append("network.plants must be a list.")
+                errors.append("plants must be a list.")
             return set()
         if not value:
-            errors.append("network.plants must contain at least one plant.")
+            errors.append("plants must contain at least one plant.")
 
         ids: list[str] = []
         for index, plant in enumerate(value):
-            path = f"network.plants[{index}]"
+            path = f"plants[{index}]"
             if not isinstance(plant, Mapping):
                 errors.append(f"{path} must be an object.")
                 continue
@@ -466,12 +440,12 @@ class ScenarioValidator:
     def _validate_demand_zones(self, value: Any, errors: list[str]) -> set[str]:
         if not isinstance(value, list):
             if value is not None:
-                errors.append("network.demand_zones must be a list.")
+                errors.append("demand_zones must be a list.")
             return set()
 
         ids: list[str] = []
         for index, zone in enumerate(value):
-            path = f"network.demand_zones[{index}]"
+            path = f"demand_zones[{index}]"
             if not isinstance(zone, Mapping):
                 errors.append(f"{path} must be an object.")
                 continue
@@ -511,12 +485,12 @@ class ScenarioValidator:
     ) -> None:
         if not isinstance(value, list):
             if value is not None:
-                errors.append("network.source_to_plant_links must be a list.")
+                errors.append("source_to_plant_links must be a list.")
             return
 
         seen: set[tuple[str, str]] = set()
         for index, link in enumerate(value):
-            path = f"network.source_to_plant_links[{index}]"
+            path = f"source_to_plant_links[{index}]"
             if not isinstance(link, Mapping):
                 errors.append(f"{path} must be an object.")
                 continue
@@ -569,12 +543,12 @@ class ScenarioValidator:
     ) -> None:
         if not isinstance(value, list):
             if value is not None:
-                errors.append("network.plant_to_zone_links must be a list.")
+                errors.append("plant_to_zone_links must be a list.")
             return
 
         seen: set[tuple[str, str]] = set()
         for index, link in enumerate(value):
-            path = f"network.plant_to_zone_links[{index}]"
+            path = f"plant_to_zone_links[{index}]"
             if not isinstance(link, Mapping):
                 errors.append(f"{path} must be an object.")
                 continue
@@ -725,14 +699,14 @@ class ScenarioValidator:
             self._require_zone_demand(scenario, "zone_1", 600, errors)
         elif scenario_type == "PLANT_OUTAGE":
             plant = self._find_by_id(
-                scenario.get("network", {}).get("plants", []),
+                scenario.get("plants", []),
                 "plant_id",
                 "facility_1",
             )
             if plant is None or plant.get("enabled") is not False:
                 errors.append(
                     "Plant-outage scenario must set "
-                    "network.plants[plant_id=facility_1].enabled to false."
+                    "plants[plant_id=facility_1].enabled to false."
                 )
             self._require_zone_demand(scenario, "zone_1", 500, errors)
 
@@ -742,7 +716,7 @@ class ScenarioValidator:
         expected: Mapping[tuple[str, str], float],
         errors: list[str],
     ) -> None:
-        links = scenario.get("network", {}).get("source_to_plant_links", [])
+        links = scenario.get("source_to_plant_links", [])
         actual = {
             (link.get("source_id"), link.get("plant_id")):
                 link.get("maximum_flow_ml_per_day")
@@ -766,7 +740,7 @@ class ScenarioValidator:
         errors: list[str],
     ) -> None:
         zone = self._find_by_id(
-            scenario.get("network", {}).get("demand_zones", []),
+            scenario.get("demand_zones", []),
             "zone_id",
             zone_id,
         )
@@ -776,10 +750,6 @@ class ScenarioValidator:
             )
 
     def check_capacity(self, scenario: Mapping[str, Any]) -> dict[str, Any]:
-        network = scenario.get("network", {})
-        if not isinstance(network, Mapping):
-            return self._empty_capacity_result("network is unavailable")
-
         sources = {
             item.get("source_id"): item
             for item in self._safe_list(scenario.get("sources", []))
@@ -787,12 +757,12 @@ class ScenarioValidator:
         }
         plants = {
             item.get("plant_id"): item
-            for item in self._safe_list(network.get("plants", []))
+            for item in self._safe_list(scenario.get("plants", []))
             if isinstance(item, Mapping)
         }
 
         source_link_capacity = 0.0
-        for link in self._safe_list(network.get("source_to_plant_links", [])):
+        for link in self._safe_list(scenario.get("source_to_plant_links", [])):
             if not isinstance(link, Mapping) or not self._enabled(link):
                 continue
             source = sources.get(link.get("source_id"))
@@ -824,7 +794,7 @@ class ScenarioValidator:
         )
 
         plant_zone_capacity = 0.0
-        for link in self._safe_list(network.get("plant_to_zone_links", [])):
+        for link in self._safe_list(scenario.get("plant_to_zone_links", [])):
             if not isinstance(link, Mapping) or not self._enabled(link):
                 continue
             plant = plants.get(link.get("plant_id"))
@@ -838,7 +808,7 @@ class ScenarioValidator:
 
         required_demand = sum(
             float(zone["demand_ml_per_day"])
-            for zone in self._safe_list(network.get("demand_zones", []))
+            for zone in self._safe_list(scenario.get("demand_zones", []))
             if (
                 isinstance(zone, Mapping)
                 and zone.get("demand_must_be_met", True) is True
@@ -876,16 +846,6 @@ class ScenarioValidator:
         }
 
     def check_connectivity(self, scenario: Mapping[str, Any]) -> dict[str, Any]:
-        network = scenario.get("network", {})
-        if not isinstance(network, Mapping):
-            return {
-                "all_required_zones_reachable": False,
-                "unreachable_zone_ids": [],
-                "message": (
-                    "Connectivity could not be checked because network is unavailable."
-                ),
-            }
-
         active_sources = {
             source.get("source_id")
             for source in self._safe_list(scenario.get("sources", []))
@@ -897,13 +857,13 @@ class ScenarioValidator:
         }
         active_plants = {
             plant.get("plant_id")
-            for plant in self._safe_list(network.get("plants", []))
+            for plant in self._safe_list(scenario.get("plants", []))
             if isinstance(plant, Mapping) and self._enabled(plant)
         }
 
         reachable_plants = {
             link.get("plant_id")
-            for link in self._safe_list(network.get("source_to_plant_links", []))
+            for link in self._safe_list(scenario.get("source_to_plant_links", []))
             if (
                 isinstance(link, Mapping)
                 and self._enabled(link)
@@ -915,7 +875,7 @@ class ScenarioValidator:
 
         reachable_zones = {
             link.get("zone_id")
-            for link in self._safe_list(network.get("plant_to_zone_links", []))
+            for link in self._safe_list(scenario.get("plant_to_zone_links", []))
             if (
                 isinstance(link, Mapping)
                 and self._enabled(link)
@@ -926,7 +886,7 @@ class ScenarioValidator:
 
         required_zones = {
             zone.get("zone_id")
-            for zone in self._safe_list(network.get("demand_zones", []))
+            for zone in self._safe_list(scenario.get("demand_zones", []))
             if (
                 isinstance(zone, Mapping)
                 and zone.get("demand_must_be_met", True) is True
@@ -1204,19 +1164,6 @@ class ScenarioValidator:
     @classmethod
     def _positive(cls, value: Any) -> bool:
         return cls._is_number(value) and value > 0
-
-    @staticmethod
-    def _empty_capacity_result(reason: str) -> dict[str, Any]:
-        return {
-            "required_demand_ml_per_day": 0,
-            "active_source_link_capacity_ml_per_day": 0,
-            "active_plant_capacity_ml_per_day": 0,
-            "active_plant_to_zone_capacity_ml_per_day": 0,
-            "effective_capacity_ml_per_day": 0,
-            "remaining_capacity_ml_per_day": 0,
-            "possible_infeasible": True,
-            "message": f"Capacity could not be checked because {reason}.",
-        }
 
 
 def validate_scenario(

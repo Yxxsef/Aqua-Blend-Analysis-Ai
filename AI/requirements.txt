@@ -1,0 +1,14 @@
+
+# --- Supabase access ------------------------------------------------------
+# main.py reads milp_model_output and writes milp_ai_output through the
+# supabase-py REST client. Note that MILP/ and cluster_analysis/ reach the
+# same database over Postgres with psycopg instead; if the team settles on
+# one access path, this is the line that changes.
+supabase>=2.0,<3
+
+# Credentials are read from AI/.env by AI/env.py. AI/.env is gitignored --
+# copy AI/.env.example and fill it in.
+python-dotenv>=1.0,<2
+
+# --- Tests ----------------------------------------------------------------
+pytest>=7.4

@@ -454,6 +454,38 @@ class TestIdentifierFailures:
         )
         assert "storage_capacity" in failure.detail
 
+    def test_bore_1_accepted_as_an_unambiguous_alias(self):
+        """'Bore 1' unambiguously maps to the only known identifier ending
+        in those words - 'Groundwater Bore 1' - so it must not be flagged
+        as IDENTIFIER_MISSING or as a suspicious NEW_IDENTIFIER. Both the
+        title-case and snake_case forms are replaced so the entity's ONLY
+        surviving reference is the shortened alias, isolating the alias
+        mechanism from the pre-existing snake_case-coverage path."""
+        rewrite = CORRECT_REWRITE.replace("Groundwater Bore 1", "Bore 1")
+        rewrite = rewrite.replace("groundwater_bore_1", "that source's internal id")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "PASS"
+        assert not any(
+            f.rule == "IDENTIFIER_MISSING" and "Groundwater Bore 1" in f.detail
+            for f in result.critical_failures
+        )
+        assert not any("Bore 1" in w.detail for w in result.warnings)
+
+    def test_bore_2_is_not_silently_accepted_as_an_alias(self):
+        """An invented identifier like 'Bore 2' matches no known
+        identifier's suffix, so it must not be treated as a legitimate
+        alias: the genuine 'Groundwater Bore 1' entity still reads as
+        missing, and 'Bore 2' itself is at most a NEW_IDENTIFIER warning,
+        never silently accepted."""
+        rewrite = CORRECT_REWRITE.replace("Groundwater Bore 1", "Bore 2")
+        rewrite = rewrite.replace("groundwater_bore_1", "an unspecified source")
+        result = validate_llm_output(REFERENCE_REPORT, rewrite)
+        assert result.critical_result == "FAIL"
+        assert any(
+            f.rule == "IDENTIFIER_MISSING" and "Groundwater Bore 1" in f.detail
+            for f in result.critical_failures
+        )
+
     def test_new_identifier_is_a_warning_not_a_failure(self):
         rewrite = CORRECT_REWRITE + " This is broadly similar to the nearby Coliban Channel source."
         result = validate_llm_output(REFERENCE_REPORT, rewrite)

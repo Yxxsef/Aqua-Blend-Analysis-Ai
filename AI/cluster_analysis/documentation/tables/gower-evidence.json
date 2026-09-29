@@ -1,0 +1,94 @@
+{
+  "execution": "Jupyter kernel, Kernel -> Restart & Run All",
+  "protocol": {
+    "indices": [
+      "silhouette"
+    ],
+    "n_restarts": 10,
+    "random_state": 42,
+    "preprocessing": null,
+    "n_clusters_candidates": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "environment": {
+      "python_version": "3.13.9",
+      "package_versions": {
+        "numpy": "2.3.5",
+        "scipy": "1.16.3",
+        "scikit-learn": "1.7.2",
+        "pandas": "2.3.3",
+        "matplotlib": "3.10.6"
+      },
+      "platform": "macOS-26.4-arm64-arm-64bit-Mach-O",
+      "revision": "dec1578-dirty"
+    }
+  },
+  "data_provenance": {
+    "source": "sklearn iris, with derived categorical/ordinal/binary columns and controlled missingness for Gower evidence",
+    "loader": "FrameLoader",
+    "data_cutoff": null,
+    "retrieved_at": "2026-09-16T13:49:51+00:00",
+    "n_observations": 150,
+    "n_features": 8
+  },
+  "measure_params": {
+    "feature_types": [
+      "numeric",
+      "numeric",
+      "categorical",
+      "ordinal",
+      "asymmetric_binary",
+      "numeric"
+    ],
+    "ordinal_categories": {
+      "3": [
+        "narrow",
+        "medium",
+        "wide"
+      ]
+    },
+    "weights": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "summary": {
+    "observations": 150,
+    "features": 6,
+    "missing_cells": 157,
+    "missing_percent": 17.444444444444443,
+    "selected_k": 2,
+    "silhouette": 0.49541609845393547,
+    "planted_ari": 0.49979135311024525,
+    "stability_ari_mean": 0.6660162902466821,
+    "stability_ari_sd": 0.19664764067149082,
+    "stability_failures": 0,
+    "ward_backend_error": "precomputed was provided as metric. Ward can only work with euclidean distances.",
+    "ward_is_metric_gate": "pending: Task 40 Ward is not registered in this checkout",
+    "no_overlap_error": "No comparable positive-weight features for pair (0, 0). Gower is undefined for non-identical observations with no overlap; review feature coverage rather than impute a distance."
+  },
+  "source_sha256": {
+    "xxcluster/measures/dissimilarity/gower.py": "04acbda49df9c0b332f4858d831a64503940b72fdfa1e2c206f23e8d8593bf42",
+    "tests/test_gower.py": "c977294ee2eb11dbdf8b269787eb9fad4e3cc77e3d117d7ef66e5abc111302fd"
+  },
+  "caveats": [
+    "Real iris measurements with derived categorical/ordinal/binary columns and synthetic missingness; no operational AquaBlend claims.",
+    "One fully observed active feature ensures pairwise coverage in this fixture.",
+    "Manual backend fitting and explicit precomputed silhouette bypass missing metric forwarding in ComparisonRun.",
+    "Manual resampling with refitted Gower ranges replaces unimplemented StabilityAnalysis.",
+    "Ward is_metric integration awaits Task 40; sklearn rejection is a separate check.",
+    "Ordinal distances assume equally spaced declared ranks, not Podani tie correction."
+  ]
+}

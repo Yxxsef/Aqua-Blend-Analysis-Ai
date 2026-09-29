@@ -37,6 +37,26 @@ REQUIRED_FIELDS = [
 ]
 
 
+VALID_STATUS = {
+    "OPTIMAL",
+    "SUCCESS",
+    "FEASIBLE",
+    "INFEASIBLE",
+    "UNBOUNDED",
+    "ERROR",
+    "TIME_LIMIT",
+}
+
+
+REQUIRED_PROVENANCE_FIELDS = {
+    "storage_capacity",
+    "reference_flow",
+    "max_available",
+    "cost",
+    "alkalinity",
+}
+
+
 def validate_results(results: dict[str, Any]) -> bool:
     """
     Validate Results JSON against the MILP output contract v1.

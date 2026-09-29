@@ -1,0 +1,3 @@
+cluster,rows,sepal_length_mean,petal_width_observed,petal_width_mean,petal_shape_observed,high_petal_width_observed
+0,96,6.28125,65,1.6861538461538461,66,69
+1,54,5.064814814814815,38,0.3473684210526316,45,42

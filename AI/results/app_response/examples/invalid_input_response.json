@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.1-draft",
+  "contract_version": "0.2-draft",
   "scenario_id": "scenario_2026_07_17_001",
   "solver_status": null,
   "kpis": null,
@@ -7,6 +7,9 @@
   "confidence_flag": null,
   "comparison": null,
   "report_mode": "INVALID_INPUT",
+  "executive_summary": "The scenario could not be processed because the input was invalid.",
+  "detailed_explanation": null,
+  "visualization_data": null,
   "display_explanation": "The scenario could not be processed because the input was invalid.",
   "warnings": [
     "Scenario input validation failed; the solver result is not available for display."

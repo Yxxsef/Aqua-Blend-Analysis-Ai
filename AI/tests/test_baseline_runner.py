@@ -75,50 +75,48 @@ TOY_SCENARIO = {
         {"source_id": "yarra_kew", "enabled": True, "forced_inactive": False},
         {"source_id": "groundwater_bore_1", "enabled": True, "forced_inactive": False},
     ],
-    "network": {
-        "plants": [
-            {
-                "plant_id": "facility_1",
-                "name": "Treatment Facility 1",
-                "enabled": True,
-                "minimum_processing_capacity_ml_per_day": 0,
-                "maximum_processing_capacity_ml_per_day": 600,
-                "fixed_activation_cost": 0.0,
-                "treatment_cost_per_ml": 64,
-            }
-        ],
-        "demand_zones": [
-            {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
-        ],
-        "source_to_plant_links": [
-            {
-                "source_id": "silvan_reservoir",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 350,
-            },
-            {
-                "source_id": "yarra_kew",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 300,
-            },
-            {
-                "source_id": "groundwater_bore_1",
-                "plant_id": "facility_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 60,
-            },
-        ],
-        "plant_to_zone_links": [
-            {
-                "plant_id": "facility_1",
-                "zone_id": "zone_1",
-                "enabled": True,
-                "maximum_flow_ml_per_day": 600,
-            }
-        ],
-    },
+    "plants": [
+        {
+            "plant_id": "facility_1",
+            "name": "Treatment Facility 1",
+            "enabled": True,
+            "minimum_processing_capacity_ml_per_day": 0,
+            "maximum_processing_capacity_ml_per_day": 600,
+            "fixed_activation_cost": 0.0,
+            "treatment_cost_per_ml": 64,
+        }
+    ],
+    "demand_zones": [
+        {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500}
+    ],
+    "source_to_plant_links": [
+        {
+            "source_id": "silvan_reservoir",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 350,
+        },
+        {
+            "source_id": "yarra_kew",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 300,
+        },
+        {
+            "source_id": "groundwater_bore_1",
+            "plant_id": "facility_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 60,
+        },
+    ],
+    "plant_to_zone_links": [
+        {
+            "plant_id": "facility_1",
+            "zone_id": "zone_1",
+            "enabled": True,
+            "maximum_flow_ml_per_day": 600,
+        }
+    ],
 }
 
 
@@ -132,11 +130,11 @@ def _multi_zone_scenario():
     demand, so zone_id selection can be tested honestly."""
     scenario = copy.deepcopy(TOY_SCENARIO)
     scenario["scenario_id"] = "toy_model_multi_zone_test"
-    scenario["network"]["demand_zones"] = [
+    scenario["demand_zones"] = [
         {"zone_id": "zone_1", "name": "Zone 1", "demand_ml_per_day": 500},
         {"zone_id": "zone_2", "name": "Zone 2", "demand_ml_per_day": 100},
     ]
-    scenario["network"]["plant_to_zone_links"] = [
+    scenario["plant_to_zone_links"] = [
         {
             "plant_id": "facility_1",
             "zone_id": "zone_1",
@@ -246,7 +244,7 @@ def test_one_baseline_cannot_affect_another():
 
 def test_scenario_error_is_raised_with_baseline_context():
     with pytest.raises(BaselineRunnerError, match="equal_blend|cheapest_first|fixed_priority"):
-        run_all_baselines({"scenario_id": "broken", "network": {}})
+        run_all_baselines({"scenario_id": "broken"})
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +484,7 @@ def test_non_dict_scenario_raises_before_touching_any_baseline():
 
 
 def test_zero_demand_is_feasible_and_selects_nothing_everywhere(scenario):
-    scenario["network"]["demand_zones"][0]["demand_ml_per_day"] = 0
+    scenario["demand_zones"][0]["demand_ml_per_day"] = 0
     result = run_all_baselines(scenario)
     for name, entry in result["baselines"].items():
         assert entry["feasible"] is True, name

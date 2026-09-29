@@ -23,3 +23,5 @@ from __future__ import annotations
 # Groups with registered measures, imported so that their `@register`
 # lines run; see the note in `cluster/partitional/sse_based/__init__.py`.
 from . import validation  # noqa: F401
+
+from . import dissimilarity

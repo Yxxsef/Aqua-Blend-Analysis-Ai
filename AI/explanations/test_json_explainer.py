@@ -25,6 +25,7 @@ Two families of tests:
 """
 
 import copy
+import re
 import sys
 from pathlib import Path
 
@@ -49,11 +50,13 @@ from json_explainer import (
     explain_sensitivity,
     explain_estimated_fields,
     explain_alternatives_and_sensitivity,
+    generate_executive_summary,
     generate_explanation,
     FULL_REPORT_STATUSES,
     PROTOTYPE_DISCLAIMER,
     WATER_QUALITY_STAGE_NOTE,
 )
+from llm_validator import _extract_identifiers, _strip_headings
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +337,23 @@ class TestReferenceJSON:
     def test_binding_constraints_demand_and_capacity(self):
         text = explain_binding_constraints(ref())
         assert "water demand for zone_1" in text
-        assert "500 ML needed by zone_1" in text
+        assert "500 ML/day needed by zone_1" in text
         assert "available capacity of Yarra River, Kew" in text
-        assert "290 ML" in text
+        assert "290 ML/day" in text
+
+    def test_capacity_wording_names_the_other_source_not_a_vague_clause(self):
+        """Regression for a real LLM rewrite that inverted 'any additional
+        water had to come from other sources' into 'no extra water could
+        come from other sources' - the opposite meaning. Naming the actual
+        other source removes that ambiguity."""
+        text = explain_binding_constraints(ref())
+        assert "reached its maximum available capacity" in text
+        assert (
+            "The remaining demand was supplied by the other selected "
+            "source, Silvan Reservoir." in text
+        )
+        assert "no extra water could come from other sources" not in text
+        assert "any additional water had to come from other sources" not in text
 
     def test_estimated_fields_lists_all_three_sources(self):
         text = explain_estimated_fields(ref())
@@ -413,6 +430,69 @@ class TestReferenceJSON:
         assert "Yarra River, Kew" in text and "58.0%" in text
         assert "Groundwater Bore 1" in text
         assert "turbidity" in text
+
+    def test_headings_are_valid_markdown_not_bold_wrapped(self):
+        """Headings must be plain '## Title', never '**## Title**'."""
+        text = generate_explanation(ref())
+        assert "**##" not in text
+        assert "## Cost Summary" in text
+
+    def test_executive_summary_is_short_and_deterministic(self):
+        summary_a = generate_executive_summary(ref())
+        summary_b = generate_executive_summary(ref())
+        assert summary_a == summary_b
+        assert "scenario_2026_07_17_001" in summary_a
+        assert "OPTIMAL" in summary_a
+        assert "500 ML/day" in summary_a
+        assert "Yarra River, Kew" in summary_a
+        assert len(summary_a) < len(generate_explanation(ref()))
+
+    def test_executive_summary_contains_every_required_fact(self):
+        """AquaBlend final AI integration: the executive summary must cover
+        scenario/status, demand satisfaction, cost, every selected source's
+        blend share, the closest plant-inflow quality margin, one binding
+        constraint, a provisional/estimated-data note, and one alternative
+        or sensitivity finding - using only values already in the fixture."""
+        summary = generate_executive_summary(ref())
+
+        assert "scenario_2026_07_17_001" in summary
+        assert "OPTIMAL" in summary
+        assert "500 ML/day" in summary
+        assert "184,150" in summary
+        assert "Yarra River, Kew" in summary and "58.0%" in summary
+        assert "Silvan Reservoir" in summary and "42.0%" in summary
+        assert "22.6%" in summary
+        assert "plant inflow" in summary
+        assert "Yarra River, Kew" in summary and "capacity" in summary
+        assert "provisional" in summary.lower()
+        assert "estimated" in summary.lower()
+        assert "189,400" in summary or "5,250" in summary
+
+    def test_executive_summary_word_count_is_bounded(self):
+        summary = generate_executive_summary(ref())
+        word_count = len(summary.split())
+        assert word_count <= 180
+        assert 60 <= word_count <= 160
+
+    def test_executive_summary_never_triggers_false_identifier_matches(self):
+        """Regression: a real live Qwen run rejected a rewrite because the
+        deterministic summary contained 'OPTIMAL, 500', which
+        llm_validator's Title-Case identifier pattern misread as a two-word
+        proper noun. Every extracted 'identifier' in the summary must be a
+        genuine source/plant/scenario name, never a status word or any
+        other capitalised word glued to a following number."""
+        summary = generate_executive_summary(ref())
+        identifiers = _extract_identifiers(_strip_headings(summary))
+        known = {
+            "Yarra River, Kew", "Silvan Reservoir", "Treatment Facility 1",
+            "scenario_2026_07_17_001", "facility_1",
+        }
+        assert identifiers <= known, identifiers - known
+
+    def test_executive_summary_never_contains_the_full_report(self):
+        summary = generate_executive_summary(ref())
+        assert PROTOTYPE_DISCLAIMER not in summary
+        assert "## " not in summary
 
 
 # ---------------------------------------------------------------------------
@@ -703,6 +783,27 @@ class TestWaterQualityEdgeCases:
 
 class TestBindingConstraintsEdgeCases:
 
+    def test_all_four_constraint_categories_report_ml_per_day(self):
+        """demand_ml_per_day, volume_drawn_ml_per_day,
+        volume_processed_ml_per_day, and flow_ml_per_day are all daily flow
+        values - every binding-constraint sentence sourced from them must
+        say 'ML/day', never a bare 'ML'."""
+        data = ref()
+        data["bindingConstraintsSummary"] = [
+            "demand_satisfaction_zone_1",
+            "source_capacity_yarra_kew",
+            "plant_capacity_facility_1",
+            "link_capacity_silvan_reservoir_to_facility_1",
+        ]
+        text = explain_binding_constraints(data)
+
+        assert "500 ML/day needed by zone_1" in text
+        assert "290 ML/day, estimated" in text
+        assert "500 ML/day" in text  # plant_capacity_facility_1
+        assert "210 ML/day" in text  # link_capacity_..._to_facility_1
+        # No stray bare "ML" (not immediately followed by "/day").
+        assert not re.search(r"\bML\b(?!/day)", text)
+
     def test_empty_binding_list(self):
         data = ref()
         data["bindingConstraintsSummary"] = []
@@ -727,7 +828,7 @@ class TestBindingConstraintsEdgeCases:
         data["bindingConstraintsSummary"] = ["plant_capacity_facility_1"]
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
         assert "batch" not in text.lower()
 
     def test_water_quality_range_binding(self):
@@ -744,7 +845,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Silvan Reservoir" in text
         assert "Treatment Facility 1" in text
-        assert "210 ML" in text
+        assert "210 ML/day" in text
         assert "no plain-language mapping available" not in text
 
     def test_link_capacity_plant_to_zone_binding(self):
@@ -753,7 +854,7 @@ class TestBindingConstraintsEdgeCases:
         text = explain_binding_constraints(data)
         assert "Treatment Facility 1" in text
         assert "Zone 1" in text
-        assert "500 ML" in text
+        assert "500 ML/day" in text
 
     def test_link_capacity_unknown_path_id_falls_back(self):
         data = ref()
@@ -772,7 +873,7 @@ class TestBindingConstraintsEdgeCases:
 
     def test_estimated_disclosure_reads_per_source_flag(self):
         text = explain_binding_constraints(ref())
-        assert "(290 ML, estimated)" in text
+        assert "(290 ML/day, estimated)" in text
 
     def test_missing_demand_ml_per_day_drops_clause_not_whole_sentence(self):
         data = ref()
@@ -785,7 +886,7 @@ class TestBindingConstraintsEdgeCases:
         data = ref()
         del data["sources"]["selected"][1]["volume_drawn_ml_per_day"]  # yarra_kew
         text = explain_binding_constraints(data)
-        assert "was drawn up to the most its capacity allows, so" in text
+        assert "reached its maximum available capacity." in text
         assert "None" not in text
 
     def test_missing_plant_fields_drops_clause(self):
@@ -980,6 +1081,180 @@ class TestDeterminism:
         data["status"] = "INFEASIBLE"
         outputs = {generate_explanation(copy.deepcopy(data)) for _ in range(5)}
         assert len(outputs) == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 91: prove generate_explanation()/generate_executive_summary() work
+# against the REAL, current results_adapter.py output shape, not just the
+# old flat REFERENCE_JSON shape above. Confirmed against two independent
+# real sources: (1) results_adapter.py (master) run on the real
+# output_contract_v1.json fixture, and (2) real solved rows pulled directly
+# from Supabase's milp_model_output table.
+# ---------------------------------------------------------------------------
+
+# A genuinely unsolved row, exactly as confirmed from output_contract_v1.json
+# (nested scenario.scenario_id/solver.status, no dataFlags, no objective key).
+REAL_UNSOLVED_ADAPTED_RESULTS = {
+    "schemaVersion": "1.0",
+    "runId": None,
+    "scenario": {"scenario_id": "scenario_2026_07_17_001", "status": "draft"},
+    "solver": {"status": "NOT_SOLVED", "is_feasible": None, "is_optimal": None},
+    "summary": {"total_demand_ml_per_day": 500.0, "costs": {"total_cost": None}},
+    "sources": [
+        {"source_id": "silvan_reservoir", "selection_status": "PENDING",
+         "withdrawal_ml_per_day": None, "utilisation_percent": None,
+         "total_source_cost": None},
+    ],
+    "plants": [{"plant_id": "facility_1", "activated": None}],
+    "demandZones": [{"zone_id": "zone_1", "demand_ml_per_day": 500.0}],
+    "flows": {"source_to_plant": [], "plant_to_zone": []},
+    "quality": {"applies_to": "blend_at_plant_inflow", "plant_inflow": []},
+    "bindingConstraintsSummary": [],
+    "warnings": [],
+}
+
+# A genuinely solved row, built from the confirmed real per-source field
+# names seen directly in Supabase (activated, selection_status,
+# decision_evidence, total_source_cost, utilisation_percent,
+# withdrawal_ml_per_day, variable_withdrawal_cost), not the old
+# percent_of_blend/volume_drawn_ml_per_day/cost_per_ml field names.
+REAL_SOLVED_ADAPTED_RESULTS = {
+    "schemaVersion": "1.0",
+    "runId": None,
+    "scenario": {"scenario_id": "scenario_2026_07_17_001", "status": "solved"},
+    "solver": {"status": "OPTIMAL", "is_feasible": True, "is_optimal": True},
+    "summary": {
+        "total_demand_ml_per_day": 500.0,
+        "costs": {"total_cost": 184150.0},
+    },
+    "sources": [
+        {
+            "source_id": "yarra_kew", "activated": True,
+            "withdrawal_ml_per_day": 290.0, "utilisation_percent": 58.0,
+            "total_source_cost": 87550.0, "selection_status": "SELECTED",
+            "decision_evidence": {"unit_cost_rank": 1},
+        },
+        {
+            "source_id": "silvan_reservoir", "activated": True,
+            "withdrawal_ml_per_day": 210.0, "utilisation_percent": 42.0,
+            "total_source_cost": 64600.0, "selection_status": "SELECTED",
+            "decision_evidence": {"unit_cost_rank": 2},
+        },
+        {
+            "source_id": "groundwater_bore_1", "activated": False,
+            "withdrawal_ml_per_day": 0.0, "utilisation_percent": 0.0,
+            "total_source_cost": 0.0, "selection_status": "NOT_SELECTED",
+            "decision_evidence": {"unit_cost_rank": 3},
+        },
+    ],
+    "plants": [
+        {"plant_id": "facility_1", "activated": True,
+         "throughput_ml_per_day": 500.0, "total_plant_cost": 32000.0},
+    ],
+    "demandZones": [
+        {"zone_id": "zone_1", "demand_ml_per_day": 500.0,
+         "volume_supplied_ml_per_day": 500.0},
+    ],
+    "flows": {
+        "source_to_plant": [
+            {"source_id": "yarra_kew", "plant_id": "facility_1", "flow_ml_per_day": 290.0},
+            {"source_id": "silvan_reservoir", "plant_id": "facility_1", "flow_ml_per_day": 210.0},
+        ],
+        "plant_to_zone": [
+            {"plant_id": "facility_1", "zone_id": "zone_1", "flow_ml_per_day": 500.0},
+        ],
+    },
+    "quality": {
+        "applies_to": "blend_at_plant_inflow",
+        "plant_inflow": [
+            {
+                "plant_id": "facility_1",
+                "parameters": [
+                    {"parameter_id": "alkalinity", "reported_value": 38.04,
+                     "reported_unit": "mg/L CaCO3", "model_min": 20.0,
+                     "model_max": 100.0, "within_limits": True},
+                ],
+            },
+        ],
+    },
+    "bindingConstraintsSummary": ["source_capacity_yarra_kew"],
+    "warnings": [
+        "One or more source inputs contain estimated values; interpret the "
+        "result and confidence flag accordingly.",
+    ],
+}
+
+
+class TestRealAdapterShapeCompatibility:
+    """generate_explanation() must work against the shape results_adapter.py
+    actually produces today, not just the old REFERENCE_JSON shape above."""
+
+    def test_unsolved_real_shape_produces_a_status_only_report(self):
+        report = generate_explanation(copy.deepcopy(REAL_UNSOLVED_ADAPTED_RESULTS))
+        assert "NOT_SOLVED" in report
+        assert "scenario_2026_07_17_001" in report
+        assert "Selected Sources" not in report
+
+    def test_solved_real_shape_produces_the_full_report(self):
+        report = generate_explanation(copy.deepcopy(REAL_SOLVED_ADAPTED_RESULTS))
+        assert "OPTIMAL" in report
+        assert "yarra_kew supplied 290.0 ML/day, 58.0% of the blend" in report
+        assert "silvan_reservoir supplied 210.0 ML/day, 42.0% of the blend" in report
+        assert "groundwater_bore_1 was not selected" in report
+        assert "facility_1 processed 500.0 ML/day" in report
+        assert "Total cost: $184,150.0" in report
+        assert "alkalinity" in report
+
+    def test_solved_real_shape_executive_summary_also_works(self):
+        summary = generate_executive_summary(copy.deepcopy(REAL_SOLVED_ADAPTED_RESULTS))
+        assert "scenario_2026_07_17_001" in summary
+        assert "OPTIMAL" in summary
+
+    def test_old_flat_shape_still_works_unchanged(self):
+        """The normalization added for Task 91 is purely additive: a dict
+        that already has top-level scenarioId/status/objective/etc. (the
+        old shape every existing fixture above uses) must be completely
+        unaffected."""
+        report_before = generate_explanation(copy.deepcopy(ref()))
+        # Same fixture, run through the same function, twice - if
+        # normalization silently altered the old-shape path, this would
+        # differ from what every other test in this file already asserts.
+        report_after = generate_explanation(copy.deepcopy(ref()))
+        assert report_before == report_after
+
+    def test_real_shape_has_no_currency_and_that_is_reported_honestly(self):
+        """Confirmed: the real output contract has no currency field
+        anywhere. The cost lines must omit a currency suffix, never guess
+        one (e.g. hardcoding AUD)."""
+        report = generate_explanation(copy.deepcopy(REAL_SOLVED_ADAPTED_RESULTS))
+        assert "$184,150.0" in report
+        assert "AUD" not in report
+        assert "USD" not in report
+
+    def test_real_demand_zone_fields_are_bridged_not_left_unreported(self):
+        """Regression: demandZones entries never carry demand_ml_per_day or
+        volume_supplied_ml_per_day in real output (confirmed against four
+        independent real solved Supabase rows) -- only zone_id,
+        demand_satisfied, demand_must_be_met, surplus_ml_per_day,
+        delivered_ml_per_day, unmet_demand_ml_per_day. Before this was
+        bridged, every real report said "required demand not reported,
+        supplied volume not reported" on every real run, even though the
+        real numbers were sitting right there under different names."""
+        data = copy.deepcopy(REAL_SOLVED_ADAPTED_RESULTS)
+        data["demandZones"] = [
+            {
+                "zone_id": "ZONE_001",
+                "demand_satisfied": True,
+                "demand_must_be_met": True,
+                "surplus_ml_per_day": 8.49,
+                "delivered_ml_per_day": 8.8,
+                "unmet_demand_ml_per_day": 0.0,
+            },
+        ]
+        report = generate_explanation(data)
+        assert "required demand not reported" not in report
+        assert "supplied volume not reported" not in report
+        assert "ZONE_001: required demand 8.8 ML/day, supplied volume 8.8 ML/day." in report
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from ...core.exceptions import ContractViolationError
 from ...core.mixins import HierarchyMixin, PrecomputedMixin
 from ...core.types import Labels, LinkageMatrix, MatrixLike, MetricLike
 from ...core.validation import check_n_clusters, ensure_fitted
+from .linkage import check_linkage_metric
 
 #: Tolerance on the monotonicity check; a tree is non-monotonic only where a
 #: merge height falls by more than a floating-point wobble.
@@ -76,6 +77,25 @@ class BaseHierarchicalClusterer(HierarchyMixin, PrecomputedMixin, BaseClusterer,
         self.metric = metric
         self.linkage = linkage
         self.distance_threshold = distance_threshold
+
+    def _validate_params(self) -> None:
+        """Resolve the linkage criterion and refuse a metric it is not defined for.
+
+        A step of the `fit` template, so it runs before the input is
+        validated and before any tree is built -- and on the adapted path
+        as well as the native one, since `AdaptedClusterer` overrides
+        `_fit`, not `fit`. That matters here: Ward's Euclidean requirement
+        must hold for a method whose backend builds the tree just as much
+        as for one that builds it itself.
+
+        `requires_euclidean` was a declaration nothing read until this
+        override; `linkage.check_linkage_metric` is where the rule it
+        states is now applied. Resolving the name here also turns an
+        unregistered `linkage=` into an error at the top of `fit` rather
+        than at the first merge.
+        """
+        super()._validate_params()
+        check_linkage_metric(self.linkage, self.metric)
 
     def cut(
         self, n_clusters: int | None = None, threshold: float | None = None
