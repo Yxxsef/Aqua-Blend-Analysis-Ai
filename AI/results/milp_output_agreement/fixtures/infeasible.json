@@ -1,0 +1,284 @@
+{
+  "schema_version": "0.1",
+  "run_id": "demo-infeasible",
+  "scenario": {
+    "scenario_id": "base_scenarios_test_v1",
+    "status": "draft",
+    "data_source": {
+      "type": "placeholder",
+      "view": "placeholder",
+      "allow_estimated_values": null
+    }
+  },
+  "validation": {
+    "input_policy": {
+      "fail_if_source_missing_from_database": true,
+      "fail_if_daily_availability_missing": true,
+      "fail_if_required_quality_value_missing": true,
+      "fail_if_demand_missing": true
+    },
+    "loader": {
+      "status": "PASSED",
+      "scenario_ready": true,
+      "validation_issues": [],
+      "checks": []
+    },
+    "preprocessing": {
+      "status": "PASSED",
+      "warnings": [],
+      "checks": [
+        {
+          "check": "model_parameter_completeness",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "source_lower_upper_bound_consistency",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "plant_lower_upper_bound_consistency",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "capacity_feasibility",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "necessary_quality_feasibility",
+          "enabled": false,
+          "passed": true
+        }
+      ]
+    },
+    "output_consistency": {
+      "status": "FAILED",
+      "tolerance": 1e-06,
+      "checks": [
+        {
+          "check": "decision_values_non_negative",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "source_activation_and_withdrawal_bounds",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "plant_activation_and_throughput_bounds",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "source_flow_conservation",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "plant_flow_conservation",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "source_to_plant_link_capacity",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "plant_to_zone_link_capacity",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "demand_satisfaction",
+          "enabled": true,
+          "passed": false
+        },
+        {
+          "check": "plant_inflow_quality_limits",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "objective_cost_reconciliation",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "summary_total_reconciliation",
+          "enabled": true,
+          "passed": true
+        },
+        {
+          "check": "reported_ids_and_arcs_match_model_parameters",
+          "enabled": true,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "solver": {
+    "status": "infeasible",
+    "is_feasible": false,
+    "is_optimal": false,
+    "objective_value": null,
+    "version": "0.1"
+  },
+  "summary": {
+    "total_demand_ml_per_day": 1200.0,
+    "total_withdrawal_ml_per_day": 0.0,
+    "total_treated_ml_per_day": 0.0,
+    "total_delivered_ml_per_day": 0.0,
+    "selected_source_count": 0,
+    "active_plant_count": 0,
+    "costs": {
+      "total_source_fixed_cost": 0.0,
+      "total_source_variable_cost": 0.0,
+      "total_plant_fixed_cost": 0.0,
+      "total_plant_variable_cost": 0.0,
+      "reconstructed_total_cost": 0.0,
+      "total_cost": 0.0,
+      "cost_reconciles": true
+    }
+  },
+  "sources": [
+    {
+      "source_id": "225103",
+      "model_included": true,
+      "activated": false,
+      "withdrawal_ml_per_day": 0.0,
+      "utilisation_percent": 0.0,
+      "blend_ratio": null,
+      "variable_withdrawal_cost": 0.0,
+      "total_source_cost": 0.0,
+      "selection_status": "NOT_SELECTED",
+      "exclusion_reason_code": "N/A",
+      "decision_evidence": {
+        "unit_cost_rank": 2,
+        "binding_lower": false,
+        "binding_upper": false
+      }
+    },
+    {
+      "source_id": "229421",
+      "model_included": true,
+      "activated": false,
+      "withdrawal_ml_per_day": 0.0,
+      "utilisation_percent": 0.0,
+      "blend_ratio": null,
+      "variable_withdrawal_cost": 0.0,
+      "total_source_cost": 0.0,
+      "selection_status": "NOT_SELECTED",
+      "exclusion_reason_code": "N/A",
+      "decision_evidence": {
+        "unit_cost_rank": 1,
+        "binding_lower": false,
+        "binding_upper": false
+      }
+    },
+    {
+      "source_id": "233217",
+      "model_included": true,
+      "activated": false,
+      "withdrawal_ml_per_day": 0.0,
+      "utilisation_percent": 0.0,
+      "blend_ratio": null,
+      "variable_withdrawal_cost": 0.0,
+      "total_source_cost": 0.0,
+      "selection_status": "NOT_SELECTED",
+      "exclusion_reason_code": "N/A",
+      "decision_evidence": {
+        "unit_cost_rank": 3,
+        "binding_lower": false,
+        "binding_upper": false
+      }
+    }
+  ],
+  "plants": [
+    {
+      "plant_id": "plant_1",
+      "activated": false,
+      "throughput_ml_per_day": 0.0,
+      "utilisation_percent": 0.0,
+      "variable_treatment_cost": 0.0,
+      "total_plant_cost": 0.0
+    }
+  ],
+  "demand_zones": [
+    {
+      "zone_id": "zone_1",
+      "delivered_ml_per_day": 0.0,
+      "surplus_ml_per_day": 0.0,
+      "demand_satisfied": false,
+      "demand_must_be_met": true,
+      "unmet_demand_ml_per_day": 1200.0
+    }
+  ],
+  "flows": {
+    "source_to_plant": [
+      {
+        "source_id": "225103",
+        "plant_id": "plant_1",
+        "activated": false,
+        "flow_ml_per_day": 0.0,
+        "utilisation_percent": 0.0
+      },
+      {
+        "source_id": "229421",
+        "plant_id": "plant_1",
+        "activated": false,
+        "flow_ml_per_day": 0.0,
+        "utilisation_percent": 0.0
+      },
+      {
+        "source_id": "233217",
+        "plant_id": "plant_1",
+        "activated": false,
+        "flow_ml_per_day": 0.0,
+        "utilisation_percent": 0.0
+      }
+    ],
+    "plant_to_zone": [
+      {
+        "plant_id": "plant_1",
+        "zone_id": "zone_1",
+        "activated": false,
+        "flow_ml_per_day": 0.0,
+        "utilisation_percent": 0.0
+      }
+    ]
+  },
+  "quality": {
+    "applies_to": "blend_at_plant_inflow",
+    "plant_inflow": [
+      {
+        "plant_id": "plant_1",
+        "flow_ml_per_day": 0.0,
+        "parameters": []
+      }
+    ]
+  },
+  "binding_constraints_summary": [],
+  "warnings": [
+    "Source-to-plant flow 225103 -> plant_1 was unset by the solver (None); treated as 0.0.",
+    "Source-to-plant flow 229421 -> plant_1 was unset by the solver (None); treated as 0.0.",
+    "Source-to-plant flow 233217 -> plant_1 was unset by the solver (None); treated as 0.0.",
+    "Plant-to-zone flow plant_1 -> zone_1 was unset by the solver (None); treated as 0.0.",
+    "Source '225103' withdrawal was unset by the solver (None); treated as 0.0.",
+    "Source '225103' activation indicator was unset by the solver (None); treated as inactive.",
+    "Source '229421' withdrawal was unset by the solver (None); treated as 0.0.",
+    "Source '229421' activation indicator was unset by the solver (None); treated as inactive.",
+    "Source '233217' withdrawal was unset by the solver (None); treated as 0.0.",
+    "Source '233217' activation indicator was unset by the solver (None); treated as inactive.",
+    "Plant 'plant_1' activation indicator was unset by the solver (None); treated as inactive.",
+    "Demand zone 'zone_1' delivered volume (0 ML/day) is short of its demand (1200 ML/day) by 1200 ML/day.",
+    "Plant 'plant_1' has no inflow; blended 'ph' quality could not be computed and was omitted.",
+    "Plant 'plant_1' has no inflow; blended 'alkalinity' quality could not be computed and was omitted.",
+    "Plant 'plant_1' has no inflow; blended 'turbidity' quality could not be computed and was omitted.",
+    "Output-consistency check 'demand_satisfaction' failed."
+  ]
+}
